@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppShell, WorkspaceUser, getClientUser } from "./Dashboard";
+import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { UserPlus, Key, Trash2, X, Check, Building2, Shield, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
@@ -134,15 +134,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       if (local.role) setCurrentUserRole(local.role);
     }
 
-    fetch("/api/auth/session")
-      .then((res) => res.json())
+    fetchLatestSession()
       .then((data) => {
         if (data?.success && data?.user) {
           setActiveUser(data.user);
           if (data.user.role) setCurrentUserRole(data.user.role);
-          try {
-            localStorage.setItem("vistora-user", JSON.stringify(data.user));
-          } catch {}
         }
       })
       .catch(() => {})

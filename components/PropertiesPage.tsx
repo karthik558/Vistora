@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppShell, WorkspaceUser, getClientUser } from "./Dashboard";
+import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { Building2, Plus, Trash2, X, Check, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -91,8 +91,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
       if (local.role) setCurrentUserRole(local.role);
     }
 
-    fetch("/api/auth/session")
-      .then((res) => res.json())
+    fetchLatestSession()
       .then((data) => {
         if (data?.success && data?.user) {
           setActiveUser(data.user);

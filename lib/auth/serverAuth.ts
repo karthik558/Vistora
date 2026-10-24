@@ -21,6 +21,48 @@ function getAdminClient() {
   });
 }
 
+interface CachedVerifiedUser {
+  user: VerifiedUser;
+  timestamp: number;
+}
+const verifiedUserCache = new Map<string, CachedVerifiedUser>();
+const AUTH_CACHE_TTL = 30_000; // 30 seconds
+
+export function invalidateAuthCache(email?: string) {
+  if (email) {
+    verifiedUserCache.delete(email.toLowerCase());
+  } else {
+    verifiedUserCache.clear();
+  }
+}
+
+interface CachedProfile {
+  profile: any;
+  timestamp: number;
+}
+const sessionProfileCache = new Map<string, CachedProfile>();
+const SESSION_CACHE_TTL = 30_000;
+
+export function getCachedProfile(email: string): any | null {
+  const cached = sessionProfileCache.get(email.toLowerCase());
+  if (cached && Date.now() - cached.timestamp < SESSION_CACHE_TTL) {
+    return cached.profile;
+  }
+  return null;
+}
+
+export function setCachedProfile(email: string, profile: any) {
+  sessionProfileCache.set(email.toLowerCase(), { profile, timestamp: Date.now() });
+}
+
+export function invalidateSessionCache(email?: string) {
+  if (email) {
+    sessionProfileCache.delete(email.toLowerCase());
+  } else {
+    sessionProfileCache.clear();
+  }
+}
+
 /**
  * Extracts and securely verifies the session user from cookies and tokens.
  * Always validates against the database public.profiles record.
@@ -70,6 +112,13 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
     try {
       const parsed = JSON.parse(userCookie);
       if (parsed?.email) {
+        const cacheKey = parsed.email.toLowerCase();
+        const now = Date.now();
+        const cached = verifiedUserCache.get(cacheKey);
+        if (cached && (now - cached.timestamp) < AUTH_CACHE_TTL) {
+          return cached.user;
+        }
+
         const { data: profile } = await adminClient
           .from("profiles")
           .select("*")
@@ -83,7 +132,7 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
             ? [profile.property_id]
             : [];
 
-          return {
+          const verified: VerifiedUser = {
             id: profile.id,
             email: profile.email,
             fullName: profile.full_name,
@@ -92,6 +141,8 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
             propertyIds,
             rights: profile.rights || [],
           };
+          verifiedUserCache.set(cacheKey, { user: verified, timestamp: now });
+          return verified;
         }
       }
     } catch {}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUser, requireAdmin, requireAdminOrRight } from "../../../lib/auth/serverAuth";
 import { sanitizeString } from "../../../lib/security/sanitize";
+import { invalidateDashboardCache } from "../../../lib/services/guestExperienceService";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
         .neq("role", "admin");
     }
 
+    invalidateDashboardCache();
     return NextResponse.json({ success: true, property }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json(
@@ -128,6 +130,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
+    invalidateDashboardCache();
     return NextResponse.json({ success: true, message: "Property removed successfully." });
   } catch (err: any) {
     return NextResponse.json(

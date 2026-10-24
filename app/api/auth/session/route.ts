@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCachedProfile, setCachedProfile } from "../../../../lib/auth/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -14,29 +15,37 @@ export async function GET(request: NextRequest) {
       try {
         const parsed = JSON.parse(userCookie);
         if (parsed && parsed.email) {
-          // Query Supabase profiles table for latest role and name
-          try {
-            const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-              auth: { persistSession: false },
-            });
-            const { data: profile } = await adminClient
-              .from("profiles")
-              .select("*")
-              .ilike("email", parsed.email)
-              .maybeSingle();
+          let profile = getCachedProfile(parsed.email);
+          if (!profile) {
+            // Query Supabase profiles table for latest role and name
+            try {
+              const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+                auth: { persistSession: false },
+              });
+              const { data: dbProfile } = await adminClient
+                .from("profiles")
+                .select("*")
+                .ilike("email", parsed.email)
+                .maybeSingle();
 
-            if (profile) {
-              parsed.fullName = profile.full_name;
-              parsed.role = profile.role;
-              parsed.propertyId = profile.property_id || null;
-              parsed.propertyIds = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
-                ? profile.property_ids
-                : profile.property_id
-                ? [profile.property_id]
-                : [];
-              parsed.rights = profile.rights || [];
-            }
-          } catch {}
+              if (dbProfile) {
+                profile = dbProfile;
+                setCachedProfile(parsed.email, dbProfile);
+              }
+            } catch {}
+          }
+
+          if (profile) {
+            parsed.fullName = profile.full_name;
+            parsed.role = profile.role;
+            parsed.propertyId = profile.property_id || null;
+            parsed.propertyIds = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
+              ? profile.property_ids
+              : profile.property_id
+              ? [profile.property_id]
+              : [];
+            parsed.rights = profile.rights || [];
+          }
 
           const response = NextResponse.json({
             success: true,

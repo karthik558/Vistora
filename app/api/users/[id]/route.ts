@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAdminOrRight } from "../../../../lib/auth/serverAuth";
+import { requireAdminOrRight, invalidateAuthCache, invalidateSessionCache } from "../../../../lib/auth/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -42,6 +42,9 @@ export async function DELETE(
 
     // Explicitly delete from profiles table
     await adminClient.from("profiles").delete().eq("id", userId);
+
+    invalidateAuthCache();
+    invalidateSessionCache();
 
     return NextResponse.json({ success: true, message: "User removed successfully." });
   } catch (err: any) {

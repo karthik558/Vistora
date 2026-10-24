@@ -104,6 +104,40 @@ export function getClientUser(): WorkspaceUser | null {
   return null;
 }
 
+let lastSessionFetchTime = 0;
+let inflightSessionPromise: Promise<any> | null = null;
+
+export function fetchLatestSession(force = false): Promise<any> {
+  const now = Date.now();
+  if (!force && now - lastSessionFetchTime < 30_000) {
+    const local = getClientUser();
+    if (local) return Promise.resolve({ success: true, user: local });
+  }
+
+  if (inflightSessionPromise) {
+    return inflightSessionPromise;
+  }
+
+  inflightSessionPromise = fetch("/api/auth/session")
+    .then((res) => res.json())
+    .then((data) => {
+      lastSessionFetchTime = Date.now();
+      inflightSessionPromise = null;
+      if (data?.success && data?.user && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("vistora-user", JSON.stringify(data.user));
+        } catch {}
+      }
+      return data;
+    })
+    .catch((err) => {
+      inflightSessionPromise = null;
+      throw err;
+    });
+
+  return inflightSessionPromise;
+}
+
 export function AppShell({
   children,
   active = "Dashboard",
@@ -132,15 +166,11 @@ export function AppShell({
       }
     }
 
-    // Always fetch latest session data from Supabase to guarantee rights freshness
-    fetch("/api/auth/session")
-      .then((res) => res.json())
+    // Deduplicated session verification: skips redundant network calls within 30s
+    fetchLatestSession()
       .then((data) => {
         if (data?.success && data?.user) {
           setCurrentUser(data.user);
-          try {
-            localStorage.setItem("vistora-user", JSON.stringify(data.user));
-          } catch { }
         }
       })
       .catch(() => { });
@@ -256,6 +286,7 @@ export function AppShell({
                       <Link
                         key={item.href}
                         href={item.href}
+                        prefetch={true}
                         className={`nav-item ${isActive ? "active" : ""}`}
                         onClick={() => setMobileNavOpen(false)}
                       >
@@ -409,8 +440,7 @@ export default function Dashboard({
     const local = getClientUser();
     if (local) setUser(local);
 
-    fetch("/api/auth/session")
-      .then((res) => res.json())
+    fetchLatestSession()
       .then((data) => {
         if (data?.success && data?.user) {
           setUser(data.user);

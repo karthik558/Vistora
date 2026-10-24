@@ -18,7 +18,7 @@ import {
   FileText,
   Search,
 } from "lucide-react";
-import { AppShell, FeedbackTable, WorkspaceUser, getClientUser } from "./Dashboard";
+import { AppShell, FeedbackTable, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { DashboardData, PropertyRow } from "../types/experience";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
@@ -49,14 +49,10 @@ export default function OperationsPage({
     const local = getClientUser();
     if (local && !user) setUser(local);
 
-    fetch("/api/auth/session")
-      .then((res) => res.json())
+    fetchLatestSession()
       .then((resData) => {
         if (resData?.success && resData?.user) {
           setUser(resData.user);
-          try {
-            localStorage.setItem("vistora-user", JSON.stringify(resData.user));
-          } catch {}
         }
       })
       .catch(() => {});

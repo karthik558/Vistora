@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAdmin, requireAdminOrRight, getAuthenticatedUser } from "../../../lib/auth/serverAuth";
+import { requireAdmin, requireAdminOrRight, getAuthenticatedUser, invalidateAuthCache, invalidateSessionCache } from "../../../lib/auth/serverAuth";
 import { sanitizeString, sanitizeEmail } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -202,6 +202,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
 
+    invalidateAuthCache(cleanEmail);
+    invalidateSessionCache(cleanEmail);
+
     return NextResponse.json({
       success: true,
       user: {
@@ -308,6 +311,11 @@ export async function PATCH(request: NextRequest) {
         },
       });
     } catch {}
+
+    if (data?.email) {
+      invalidateAuthCache(data.email);
+      invalidateSessionCache(data.email);
+    }
 
     return NextResponse.json({
       success: true,
