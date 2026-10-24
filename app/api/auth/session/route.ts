@@ -3,23 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-function formatUserDisplayName(email: string): string {
-  const clean = email.trim();
-  const [localPart, domainPart = ""] = clean.toLowerCase().split("@");
-  if (clean.toLowerCase() === "dev@karthiklal.in" || domainPart.includes("karthiklal")) {
-    return "Karthik Lal";
-  }
-  const parts = localPart
-    .replace(/[._\-+]/g, " ")
-    .split(/\s+/)
-    .map((p) => p.replace(/\d+/g, "").trim())
-    .filter(Boolean);
-  if (parts.length > 0) {
-    return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
-  }
-  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
-}
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,9 +14,23 @@ export async function GET(request: NextRequest) {
       try {
         const parsed = JSON.parse(userCookie);
         if (parsed && parsed.email) {
-          if (!parsed.fullName || parsed.fullName === "Operations User") {
-            parsed.fullName = formatUserDisplayName(parsed.email);
-          }
+          // Query Supabase profiles table for latest role and name
+          try {
+            const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+              auth: { persistSession: false },
+            });
+            const { data: profile } = await adminClient
+              .from("profiles")
+              .select("*")
+              .ilike("email", parsed.email)
+              .maybeSingle();
+
+            if (profile) {
+              parsed.fullName = profile.full_name;
+              parsed.role = profile.role;
+            }
+          } catch {}
+
           return NextResponse.json({
             success: true,
             user: parsed,
@@ -51,13 +50,19 @@ export async function GET(request: NextRequest) {
         });
         const { data, error } = await supabase.auth.getUser(token);
         if (!error && data?.user) {
-          const rawRole = data.user.user_metadata?.role;
-          const role =
-            rawRole === "admin" || !rawRole ? "admin" : rawRole === "visitor" ? "visitor" : "staff";
-          const fullName =
-            data.user.user_metadata?.full_name ||
-            data.user.user_metadata?.name ||
-            (data.user.email ? formatUserDisplayName(data.user.email) : "Operations User");
+          // Look up profile in Supabase
+          const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { persistSession: false },
+          });
+          const { data: profile } = await adminClient
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
+          const role = profile?.role || data.user.user_metadata?.role || "staff";
+          const fullName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email?.split("@")[0];
+
           return NextResponse.json({
             success: true,
             user: {
@@ -69,7 +74,7 @@ export async function GET(request: NextRequest) {
           });
         }
       } catch {
-        // Return default guest session
+        // Return null session
       }
     }
 

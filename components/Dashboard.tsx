@@ -4,6 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  LayoutDashboard,
+  BarChart3,
+  MessageSquare,
+  AlertCircle,
+  Users,
+  FileText,
+  QrCode,
+  FileSpreadsheet,
+  ExternalLink,
+} from "lucide-react";
 import { DashboardData, FeedbackViewModel } from "../types/experience";
 import { FeedbackStatus } from "../types/database";
 
@@ -15,14 +26,14 @@ export interface WorkspaceUser {
 }
 
 const nav = [
-  ["Dashboard", "/dashboard", "Overview"],
-  ["Analytics", "/dashboard/analytics", "Overview"],
-  ["All feedback", "/dashboard/feedback", "Guest experience"],
-  ["Complaints", "/dashboard/complaints", "Guest experience"],
-  ["Guest directory", "/dashboard/directory", "Guest experience"],
-  ["Feedback forms", "/dashboard/forms", "Collection"],
-  ["QR codes", "/dashboard/qr-codes", "Collection"],
-  ["Reports", "/dashboard/reports", "Reporting"],
+  { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard },
+  { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3 },
+  { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare },
+  { label: "Complaints", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle },
+  { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users },
+  { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText },
+  { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode },
+  { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet },
 ] as const;
 
 function getUserInitials(name?: string, email?: string): string {
@@ -41,13 +52,12 @@ function getUserInitials(name?: string, email?: string): string {
   if (email && email.trim()) {
     return email.trim().slice(0, 2).toUpperCase();
   }
-  return "U";
+  return "OP";
 }
 
 function getClientUser(): WorkspaceUser | null {
   if (typeof window === "undefined") return null;
 
-  // 1. Try localStorage
   try {
     const saved = localStorage.getItem("vistora-user");
     if (saved) {
@@ -56,7 +66,6 @@ function getClientUser(): WorkspaceUser | null {
     }
   } catch {}
 
-  // 2. Try cookie
   if (typeof document !== "undefined") {
     const match = document.cookie.match(/(?:^|;\s*)vistora-user=([^;]+)/);
     if (match) {
@@ -120,7 +129,7 @@ export function AppShell({
     router.refresh();
   };
 
-  const groups = [...new Set(nav.map((item) => item[2]))];
+  const groups = [...new Set(nav.map((item) => item.group))];
   const displayName =
     currentUser?.fullName ||
     (currentUser?.email ? currentUser.email.split("@")[0] : "Operations User");
@@ -131,7 +140,7 @@ export function AppShell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        {/* Vistora Logo in Sidebar */}
+        {/* Vistora Official Logo in Sidebar */}
         <Link
           href="/"
           className="brand"
@@ -148,38 +157,48 @@ export function AppShell({
           />
         </Link>
 
-        {/* Workspace navigation */}
+        {/* Workspace Navigation with Monochrome Lucide Icons */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           {groups.map((group) => (
             <div className="nav-group" key={group}>
               <p>{group}</p>
               {nav
-                .filter((item) => item[2] === group)
-                .map(([label, href]) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`nav-item ${active === label ? "active" : ""}`}
-                  >
-                    <span className="nav-glyph" aria-hidden="true">
-                      {label === "Complaints" ? "!" : "·"}
-                    </span>
-                    {label}
-                    {label === "Complaints" && complaints > 0 && (
-                      <span className="nav-count">{complaints}</span>
-                    )}
-                  </Link>
-                ))}
+                .filter((item) => item.group === group)
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = active === item.label;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`nav-item ${isActive ? "active" : ""}`}
+                    >
+                      <Icon
+                        size={16}
+                        strokeWidth={1.75}
+                        style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }}
+                        aria-hidden="true"
+                      />
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.label === "Complaints" && complaints > 0 && (
+                        <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
+                          {complaints}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
             </div>
           ))}
         </nav>
 
         <div className="sidebar-bottom">
           <Link href="/feedback/demo-stay" className="sidebar-guest-link">
-            Open guest feedback form <span>↗</span>
+            <span>Open guest feedback form</span>
+            <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />
           </Link>
 
-          {/* Dynamic logged-in user display */}
+          {/* Dynamic Authenticated User Profile */}
           <div className="user-row" title={`Role: ${roleLabel}`}>
             <span className="user-avatar">{initials}</span>
             <div style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
@@ -195,28 +214,12 @@ export function AppShell({
       </aside>
 
       <main className="main-content">
+        {/* Topbar: clean breadcrumbs, NO duplicate logo */}
         <header className="topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            {/* Vistora Logo in Header */}
-            <Link
-              href="/"
-              title="Vistora Home"
-              style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}
-            >
-              <Image
-                src="/logo.webp"
-                alt="Vistora"
-                width={105}
-                height={26}
-                priority
-                style={{ height: "22px", width: "auto", objectFit: "contain" }}
-              />
-            </Link>
-            <div className="breadcrumbs">
-              <span>Workspace</span>
-              <b>/</b>
-              <strong>{active}</strong>
-            </div>
+          <div className="breadcrumbs">
+            <span>Workspace</span>
+            <b>/</b>
+            <strong>{active}</strong>
           </div>
 
           <div className="top-actions">

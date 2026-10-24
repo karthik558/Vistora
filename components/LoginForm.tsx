@@ -7,16 +7,10 @@ import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<"admin" | "staff" | "visitor">("admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleRoleSelect = (role: "admin" | "staff" | "visitor") => {
-    setSelectedRole(role);
-    setError(null);
-  };
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -29,15 +23,14 @@ export default function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
-          password: password.trim() || "Password123!",
-          role: selectedRole,
+          password: password.trim(),
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Authentication failed. Please verify your credentials.");
+        throw new Error(data.error || "Authentication failed. Please check your credentials.");
       }
 
       if (typeof window !== "undefined" && data.user) {
@@ -77,78 +70,12 @@ export default function LoginForm() {
 
         <h1 className="auth-title">Operations Workspace</h1>
         <p className="auth-sub">
-          Select your operational role and sign in to manage guest experience and service recovery.
+          Sign in with your verified workspace credentials to access guest experience and service recovery.
         </p>
 
         {error && <div className="auth-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          {/* Role selector */}
-          <div className="auth-field">
-            <label className="field-label">Select Workspace Role</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "6px" }}>
-              <button
-                type="button"
-                onClick={() => handleRoleSelect("admin")}
-                style={{
-                  padding: "12px 6px",
-                  borderRadius: "6px",
-                  border: selectedRole === "admin" ? "2px solid #254230" : "1px solid var(--line)",
-                  background: selectedRole === "admin" ? "#edf4ed" : "#fafbfa",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <div style={{ fontSize: "18px" }}>👑</div>
-                <strong style={{ display: "block", fontSize: "11px", color: "#254230", marginTop: "4px" }}>
-                  Admin
-                </strong>
-                <small style={{ fontSize: "9px", color: "var(--muted)" }}>General Manager</small>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRoleSelect("staff")}
-                style={{
-                  padding: "12px 6px",
-                  borderRadius: "6px",
-                  border: selectedRole === "staff" ? "2px solid #c59b58" : "1px solid var(--line)",
-                  background: selectedRole === "staff" ? "#fbf5e6" : "#fafbfa",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <div style={{ fontSize: "18px" }}>🛎️</div>
-                <strong style={{ display: "block", fontSize: "11px", color: "#8c6827", marginTop: "4px" }}>
-                  Staff
-                </strong>
-                <small style={{ fontSize: "9px", color: "var(--muted)" }}>Operations Lead</small>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRoleSelect("visitor")}
-                style={{
-                  padding: "12px 6px",
-                  borderRadius: "6px",
-                  border: selectedRole === "visitor" ? "2px solid #4a7590" : "1px solid var(--line)",
-                  background: selectedRole === "visitor" ? "#eef4f8" : "#fafbfa",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <div style={{ fontSize: "18px" }}>👁️</div>
-                <strong style={{ display: "block", fontSize: "11px", color: "#3b5f75", marginTop: "4px" }}>
-                  Visitor
-                </strong>
-                <small style={{ fontSize: "9px", color: "var(--muted)" }}>Read-Only Preview</small>
-              </button>
-            </div>
-          </div>
-
           <div className="auth-field">
             <label className="field-label" htmlFor="auth-email">
               Work Email
@@ -159,8 +86,9 @@ export default function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email ID (e.g. you@company.com)"
+              placeholder="name@company.com"
               required
+              autoComplete="email"
             />
           </div>
 
@@ -174,8 +102,9 @@ export default function LoginForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="••••••••"
               required
+              autoComplete="current-password"
             />
           </div>
 
@@ -183,9 +112,9 @@ export default function LoginForm() {
             type="submit"
             className="button button-dark"
             disabled={loading}
-            style={{ width: "100%", marginTop: "12px", padding: "13px", fontSize: "12px" }}
+            style={{ width: "100%", marginTop: "16px", padding: "13px", fontSize: "12px" }}
           >
-            {loading ? "Authenticating…" : `Enter as ${selectedRole.toUpperCase()} →`}
+            {loading ? "Verifying with Supabase…" : "Sign In to Workspace →"}
           </button>
         </form>
       </div>
