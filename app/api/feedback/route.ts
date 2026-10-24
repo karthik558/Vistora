@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchFeedbackList, createFeedback, deleteFeedback } from "../../../lib/services/guestExperienceService";
+import {
+  fetchFeedbackList,
+  createFeedback,
+  deleteFeedback,
+  updateFeedbackProperty,
+} from "../../../lib/services/guestExperienceService";
 import { FeedbackStatus } from "../../../types/database";
 
 export async function GET(request: NextRequest) {
@@ -22,9 +27,43 @@ export async function POST(request: NextRequest) {
     if (!body.rating) {
       return NextResponse.json({ success: false, error: "Rating is required" }, { status: 400 });
     }
+    if (!body.propertyId) {
+      return NextResponse.json({ success: false, error: "Property selection is mandatory." }, { status: 400 });
+    }
 
     const created = await createFeedback(body);
     return NextResponse.json({ success: true, data: created }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const userCookie = request.cookies.get("vistora-user")?.value;
+    let userRole = "visitor";
+    if (userCookie) {
+      try {
+        const u = JSON.parse(userCookie);
+        userRole = u?.role || "visitor";
+      } catch {}
+    }
+
+    if (userRole !== "admin") {
+      return NextResponse.json(
+        { success: false, error: "Access Restricted: Only workspace administrators can assign or change feedback properties." },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { id, propertyId } = body;
+    if (!id || !propertyId) {
+      return NextResponse.json({ success: false, error: "Feedback ID and Property ID are required." }, { status: 400 });
+    }
+
+    await updateFeedbackProperty(id, propertyId);
+    return NextResponse.json({ success: true, message: "Property assigned successfully." });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

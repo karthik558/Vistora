@@ -323,6 +323,26 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
   return toViewModel(fallbackRecord);
 }
 
+export async function updateFeedbackProperty(id: string, propertyId: string): Promise<boolean> {
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("feedback")
+      .update({ property_id: propertyId, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      console.error("[Supabase Error] updateFeedbackProperty failed:", error);
+      throw new Error(`Failed to assign property: ${error.message}`);
+    }
+    return true;
+  }
+  const item = memoryFeedbackStore.find((f) => f.id === id);
+  if (item) {
+    item.property_id = propertyId;
+  }
+  return true;
+}
+
 export async function updateFeedbackStatus(
   id: string,
   newStatus: FeedbackStatus,

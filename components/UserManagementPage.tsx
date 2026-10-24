@@ -5,6 +5,28 @@ import { AppShell, WorkspaceUser } from "./Dashboard";
 import { UserPlus, Key, Trash2, X, Check, Building2, Shield, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+export interface UserRight {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const SYSTEM_RIGHTS: UserRight[] = [
+  { id: "view_feedback", name: "View Guest Feedback", description: "Read reviews, ratings, and guest sentiment" },
+  { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
+  { id: "reassign_property", name: "Reassign Feedback Property", description: "Change hotel property assignment on feedback records" },
+  { id: "manage_properties", name: "Manage Hotel Properties", description: "Create new hotel locations and assign staff access" },
+  { id: "manage_questionnaire", name: "Manage Questionnaire", description: "Design custom feedback questions and survey options" },
+  { id: "export_reports", name: "Export Operational Reports", description: "Download date-wise CSV, Excel and PDF executive audits" },
+  { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members and assign permissions" },
+];
+
+export const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
+  admin: SYSTEM_RIGHTS.map((r) => r.id),
+  staff: ["view_feedback", "manage_complaints", "manage_questionnaire", "export_reports"],
+  visitor: ["view_feedback"],
+};
+
 interface WorkspaceUserItem {
   id: string;
   email: string;
@@ -12,6 +34,7 @@ interface WorkspaceUserItem {
   role: "admin" | "staff" | "visitor";
   property_id?: string | null;
   properties?: { id: string; name: string; code: string } | null;
+  rights?: string[];
   created_at?: string;
 }
 
@@ -45,6 +68,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<"admin" | "staff" | "visitor">("staff");
   const [addPropertyId, setAddPropertyId] = useState("");
+  const [addRights, setAddRights] = useState<string[]>(ROLE_DEFAULT_RIGHTS.staff);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states for Change Password
@@ -63,6 +87,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   // Form states for Edit Access
   const [editRole, setEditRole] = useState<"admin" | "staff" | "visitor">("staff");
   const [editPropertyId, setEditPropertyId] = useState("");
+  const [editRights, setEditRights] = useState<string[]>([]);
   const [savingAccess, setSavingAccess] = useState(false);
 
   async function loadData() {
@@ -128,6 +153,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
           password: addPassword.trim(),
           role: addRole,
           propertyId: addPropertyId || null,
+          rights: addRights,
         }),
       });
 
@@ -136,13 +162,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to create user.");
       }
 
-      setSuccess(`User ${data.user.full_name} added successfully.`);
+      setSuccess(`User ${data.user.full_name} added successfully with assigned rights.`);
       setShowAddModal(false);
       setAddName("");
       setAddEmail("");
       setAddPassword("");
       setAddRole("staff");
       setAddPropertyId("");
+      setAddRights(ROLE_DEFAULT_RIGHTS.staff);
       await loadData();
     } catch (err: any) {
       setError(err.message || "Failed to create user.");
@@ -240,6 +267,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
           userId: editAccessUser.id,
           role: editRole,
           propertyId: editPropertyId || null,
+          rights: editRights,
         }),
       });
 
@@ -248,7 +276,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to update access.");
       }
 
-      setSuccess(`Access updated for ${editAccessUser.full_name}.`);
+      setSuccess(`Access and rights updated for ${editAccessUser.full_name}.`);
       setEditAccessUser(null);
       await loadData();
     } catch (err: any) {
@@ -405,20 +433,35 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               </span>
                             </td>
                             <td>
-                              <span
-                                className="status"
-                                style={{
-                                  background: user.role === "admin" ? "#254230" : "var(--line)",
-                                  color: user.role === "admin" ? "#fff" : "var(--ink)",
-                                  fontFamily: "var(--font-dm-mono)",
-                                  fontSize: "9px",
-                                  letterSpacing: "0.08em",
-                                  textTransform: "uppercase",
-                                  padding: "2px 7px",
-                                }}
-                              >
-                                {user.role}
-                              </span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                                <span
+                                  className="status"
+                                  style={{
+                                    background: user.role === "admin" ? "#254230" : "var(--line)",
+                                    color: user.role === "admin" ? "#fff" : "var(--ink)",
+                                    fontFamily: "var(--font-dm-mono)",
+                                    fontSize: "9px",
+                                    letterSpacing: "0.08em",
+                                    textTransform: "uppercase",
+                                    padding: "2px 7px",
+                                  }}
+                                >
+                                  {user.role}
+                                </span>
+                                <span
+                                  title={(user.rights || []).join(", ") || "Standard access"}
+                                  style={{
+                                    fontSize: "10px",
+                                    color: "var(--muted)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                >
+                                  <Shield size={10} strokeWidth={1.75} />
+                                  {user.rights?.length ? `${user.rights.length} rights active` : "Role default"}
+                                </span>
+                              </div>
                             </td>
                             <td>
                               {user.properties?.name ? (
@@ -459,13 +502,18 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     setEditAccessUser(user);
                                     setEditRole(user.role);
                                     setEditPropertyId(user.property_id || "");
+                                    setEditRights(
+                                      user.rights && user.rights.length > 0
+                                        ? user.rights
+                                        : ROLE_DEFAULT_RIGHTS[user.role] || []
+                                    );
                                     setError(null);
                                     setSuccess(null);
                                   }}
-                                  title="Edit role and property access"
+                                  title="Edit role, rights and property access"
                                 >
                                   <Settings2 size={12} strokeWidth={1.75} />
-                                  Access
+                                  Access & Rights
                                 </button>
                                 <button
                                   type="button"
@@ -560,7 +608,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         <select
                           className="auth-input"
                           value={addRole}
-                          onChange={(e) => setAddRole(e.target.value as any)}
+                          onChange={(e) => {
+                            const newRole = e.target.value as any;
+                            setAddRole(newRole);
+                            setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
+                          }}
                         >
                           <option value="visitor">Visitor (Standard User - View-only)</option>
                           <option value="staff">Staff (Operations Lead)</option>
@@ -596,6 +648,82 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           minLength={6}
                         />
                       </label>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span className="field-label" style={{ margin: 0 }}>
+                            Assigned Rights & Capabilities ({addRights.length} active)
+                          </span>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              type="button"
+                              className="button button-outline compact"
+                              style={{ padding: "2px 7px", fontSize: "10px" }}
+                              onClick={() => setAddRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                            >
+                              All
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-outline compact"
+                              style={{ padding: "2px 7px", fontSize: "10px" }}
+                              onClick={() => setAddRights([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                            maxHeight: "180px",
+                            overflowY: "auto",
+                            border: "1px solid var(--line)",
+                            borderRadius: "6px",
+                            padding: "10px 12px",
+                            background: "#fafbfa",
+                          }}
+                        >
+                          {SYSTEM_RIGHTS.map((right) => {
+                            const checked = addRights.includes(right.id);
+                            return (
+                              <label
+                                key={right.id}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  gap: "10px",
+                                  fontSize: "12px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setAddRights([...addRights, right.id]);
+                                    } else {
+                                      setAddRights(addRights.filter((id) => id !== right.id));
+                                    }
+                                  }}
+                                  style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                />
+                                <div>
+                                  <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
+                                    {right.name}
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
+                                    {right.description}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       <button
                         type="submit"
@@ -644,7 +772,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         <select
                           className="auth-input"
                           value={editRole}
-                          onChange={(e) => setEditRole(e.target.value as any)}
+                          onChange={(e) => {
+                            const newRole = e.target.value as any;
+                            setEditRole(newRole);
+                          }}
                         >
                           <option value="visitor">Visitor (View-only)</option>
                           <option value="staff">Staff (Operations Lead)</option>
@@ -667,6 +798,82 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           ))}
                         </select>
                       </label>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span className="field-label" style={{ margin: 0 }}>
+                            Assigned Rights & Capabilities ({editRights.length} active)
+                          </span>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              type="button"
+                              className="button button-outline compact"
+                              style={{ padding: "2px 7px", fontSize: "10px" }}
+                              onClick={() => setEditRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                            >
+                              All
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-outline compact"
+                              style={{ padding: "2px 7px", fontSize: "10px" }}
+                              onClick={() => setEditRights([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                            maxHeight: "180px",
+                            overflowY: "auto",
+                            border: "1px solid var(--line)",
+                            borderRadius: "6px",
+                            padding: "10px 12px",
+                            background: "#fafbfa",
+                          }}
+                        >
+                          {SYSTEM_RIGHTS.map((right) => {
+                            const checked = editRights.includes(right.id);
+                            return (
+                              <label
+                                key={right.id}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  gap: "10px",
+                                  fontSize: "12px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setEditRights([...editRights, right.id]);
+                                    } else {
+                                      setEditRights(editRights.filter((id) => id !== right.id));
+                                    }
+                                  }}
+                                  style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                />
+                                <div>
+                                  <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
+                                    {right.name}
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
+                                    {right.description}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       <button
                         type="submit"

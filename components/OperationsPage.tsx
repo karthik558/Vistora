@@ -58,8 +58,25 @@ export default function OperationsPage({ section, data }: { section: string; dat
     reports: "Export operational records for reviews and follow-up.",
   };
 
+  const navLabel =
+    section === "complaints"
+      ? "Complaints"
+      : section === "feedback"
+      ? "All feedback"
+      : section === "analytics"
+      ? "Analytics"
+      : section === "directory"
+      ? "Guest directory"
+      : section === "questionnaire"
+      ? "Questionnaire"
+      : section === "forms"
+      ? "Feedback forms"
+      : section === "qr-codes"
+      ? "QR codes"
+      : "Reports";
+
   return (
-    <AppShell active={title} complaints={Number(data.metrics.openComplaints.value)}>
+    <AppShell active={navLabel} complaints={Number(data.metrics.openComplaints.value)}>
       <div className="content-wrap">
         <div className="page-heading">
           <div>

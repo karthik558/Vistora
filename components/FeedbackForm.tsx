@@ -32,6 +32,12 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [guestName, setGuestName] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
 
+  // Mandatory Property Selection
+  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string }>>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [propertyError, setPropertyError] = useState<string | null>(null);
+  const [isUrlPreselected, setIsUrlPreselected] = useState(false);
+
   // Dynamic Questionnaire from Supabase
   const [questions, setQuestions] = useState<Array<{
     id: string;
@@ -44,11 +50,44 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
   useEffect(() => {
     let mounted = true;
+
+    // Fetch properties and check for URL pre-selection
+    fetch("/api/properties", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (mounted && json.success && json.properties) {
+          setProperties(json.properties);
+
+          if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const propParam = params.get("property") || params.get("propertyId") || params.get("p");
+            if (propParam) {
+              const cleanParam = propParam.trim().toLowerCase();
+              const match = json.properties.find(
+                (p: any) =>
+                  p.id.toLowerCase() === cleanParam ||
+                  p.code.toLowerCase() === cleanParam ||
+                  p.name.toLowerCase().includes(cleanParam)
+              );
+              if (match) {
+                setSelectedPropertyId(match.id);
+                setIsUrlPreselected(true);
+              }
+            }
+          }
+        }
+      })
+      .catch(() => {});
+
     fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((json) => {
         if (mounted && json.success && json.data) {
           setStay(json.data);
+          if (json.data.propertyId) {
+            setSelectedPropertyId(json.data.propertyId);
+            setIsUrlPreselected(true);
+          }
           setLoading(false);
         }
       })
@@ -74,6 +113,12 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setPropertyError(null);
+
+    if (!selectedPropertyId) {
+      setPropertyError("Please select the hotel property location of your stay.");
+      return;
+    }
     if (!rating) return;
 
     setSubmitting(true);
@@ -91,7 +136,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publicToken,
-          propertyId: stay?.propertyId,
+          propertyId: selectedPropertyId,
           guestName: guestName.trim() || undefined,
           roomNumber: roomNumber.trim() || undefined,
           department,
@@ -175,6 +220,52 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         </p>
 
         <form onSubmit={handleSubmit}>
+          {/* Mandatory Property Selection */}
+          <div style={{ marginBottom: "22px", padding: "14px 16px", background: "#f8faf8", border: propertyError ? "1px solid #8b261a" : "1px solid #e1e7e1", borderRadius: "6px" }}>
+            <label className="field-label" htmlFor="property-select" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span>Which Vistora property are you reviewing? <strong style={{ color: "#8b261a" }}>*</strong></span>
+              {selectedPropertyId && isUrlPreselected && (
+                <span style={{ fontSize: "11px", color: "#254230", fontWeight: 600 }}>
+                  ✓ Pre-selected
+                </span>
+              )}
+            </label>
+
+            <select
+              id="property-select"
+              value={selectedPropertyId}
+              onChange={(e) => {
+                setSelectedPropertyId(e.target.value);
+                setPropertyError(null);
+              }}
+              required
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "4px",
+                border: "1px solid #c8d3c8",
+                background: "#ffffff",
+                color: selectedPropertyId ? "var(--ink)" : "var(--muted)",
+                fontSize: "12px",
+                fontWeight: selectedPropertyId ? 500 : 400,
+                outline: "none",
+              }}
+            >
+              <option value="" disabled>-- Select property location (Required) --</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.code}) · {p.location}
+                </option>
+              ))}
+            </select>
+
+            {propertyError && (
+              <p style={{ color: "#8b261a", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
+                {propertyError}
+              </p>
+            )}
+          </div>
+
           {/* Rating */}
           <fieldset>
             <legend>How would you rate your experience overall?</legend>
@@ -458,9 +549,17 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             </div>
           )}
 
-          <button className="button button-dark submit-button" disabled={!rating || submitting}>
+          <button
+            className="button button-dark submit-button"
+            disabled={!rating || !selectedPropertyId || submitting}
+          >
             {submitting ? "Submitting..." : "Send feedback"} <span>→</span>
           </button>
+          {(!selectedPropertyId || !rating) && (
+            <p style={{ textAlign: "center", fontSize: "11px", color: "var(--muted)", margin: "8px 0 0 0" }}>
+              {!selectedPropertyId ? "Please select a hotel property location above to proceed." : "Please select an overall rating (1-5) above."}
+            </p>
+          )}
         </form>
 
         <p className="privacy-note">

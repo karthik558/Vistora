@@ -12,23 +12,52 @@ function hashPassword(password: string): string {
   return "pwd:" + crypto.createHash("sha256").update(password + SALT).digest("hex");
 }
 
+export const DEFAULT_RIGHTS = {
+  admin: ["manage_feedback", "manage_questionnaire", "export_reports", "manage_properties", "manage_users"],
+  staff: ["manage_feedback", "manage_questionnaire", "export_reports"],
+  visitor: [],
+};
+
 export async function GET() {
   try {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
     });
 
-    // Fetch workspace members from public.profiles with associated property details
     const { data: profiles, error } = await adminClient
       .from("profiles")
-      .select("id, email, full_name, role, property_id, properties(id, name, code), created_at, updated_at")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), avatar_url, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, users: profiles || [] });
+    // Parse rights from profile metadata / avatar_url
+    const usersWithRights = (profiles || []).map((p: any) => {
+      let rights = DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
+      if (p.avatar_url && p.avatar_url.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(p.avatar_url);
+          if (Array.isArray(parsed.rights)) {
+            rights = parsed.rights;
+          }
+        } catch {}
+      }
+      return {
+        id: p.id,
+        email: p.email,
+        full_name: p.full_name,
+        role: p.role,
+        property_id: p.property_id,
+        properties: p.properties,
+        rights,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+      };
+    });
+
+    return NextResponse.json({ success: true, users: usersWithRights });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to fetch users" },
@@ -39,7 +68,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, role = "visitor", password, propertyId } = await request.json();
+    const { email, fullName, role = "visitor", password, propertyId, rights } = await request.json();
 
     if (!email || !email.trim()) {
       return NextResponse.json({ success: false, error: "Email is required." }, { status: 400 });
@@ -66,6 +95,9 @@ export async function POST(request: NextRequest) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = fullName.trim();
     const passwordHash = hashPassword(password.trim());
+    const assignedRights = Array.isArray(rights)
+      ? rights
+      : DEFAULT_RIGHTS[role as keyof typeof DEFAULT_RIGHTS] || [];
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
@@ -93,6 +125,7 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         full_name: cleanName,
         role,
+        rights: assignedRights,
       },
     });
 
@@ -105,7 +138,13 @@ export async function POST(request: NextRequest) {
 
     const newUserId = authData.user.id;
 
-    // Upsert into public.profiles with optional property_id assignment
+    // Encode password hash and assigned rights together
+    const metadataPayload = JSON.stringify({
+      pwd: passwordHash,
+      rights: assignedRights,
+    });
+
+    // Upsert into public.profiles with optional property_id and rights assignment
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
       .upsert({
@@ -114,7 +153,7 @@ export async function POST(request: NextRequest) {
         full_name: cleanName,
         role,
         property_id: propertyId || null,
-        avatar_url: passwordHash,
+        avatar_url: metadataPayload,
         updated_at: new Date().toISOString(),
       })
       .select("id, email, full_name, role, property_id, properties(id, name, code), created_at")
@@ -124,7 +163,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, user: profileInsert });
+    return NextResponse.json({
+      success: true,
+      user: {
+        ...profileInsert,
+        rights: assignedRights,
+      },
+    });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to create user" },
@@ -135,7 +180,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { userId, role, propertyId } = await request.json();
+    const { userId, role, propertyId, rights } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
@@ -145,8 +190,31 @@ export async function PATCH(request: NextRequest) {
       auth: { persistSession: false },
     });
 
+    // Retrieve existing profile
+    const { data: currentProfile } = await adminClient
+      .from("profiles")
+      .select("avatar_url, role")
+      .eq("id", userId)
+      .single();
+
+    let existingMeta: Record<string, any> = {};
+    if (currentProfile?.avatar_url) {
+      if (currentProfile.avatar_url.startsWith("{")) {
+        try {
+          existingMeta = JSON.parse(currentProfile.avatar_url);
+        } catch {}
+      } else {
+        existingMeta = { pwd: currentProfile.avatar_url };
+      }
+    }
+
+    if (Array.isArray(rights)) {
+      existingMeta.rights = rights;
+    }
+
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
+      avatar_url: JSON.stringify(existingMeta),
     };
 
     if (role && ["admin", "staff", "visitor"].includes(role)) {
@@ -168,7 +236,23 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, user: data });
+    // Also update Supabase auth metadata
+    try {
+      await adminClient.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          role: updatePayload.role || currentProfile?.role,
+          rights: existingMeta.rights,
+        },
+      });
+    } catch {}
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        ...data,
+        rights: existingMeta.rights || [],
+      },
+    });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to update user" },

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BarChart3,
@@ -104,6 +104,7 @@ export function AppShell({
   user?: WorkspaceUser | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(propUser || null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -144,14 +145,8 @@ export function AppShell({
     router.refresh();
   };
 
-  // Filter navigation for visitor role
-  const visibleNav = nav.filter((item) => {
-    if ((item as any).adminOnly && currentUser?.role === "visitor") {
-      return false;
-    }
-    return true;
-  });
-
+  // Keep navigation visible for all users
+  const visibleNav = nav;
   const groups = [...new Set(visibleNav.map((item) => item.group))];
   const displayName =
     currentUser?.fullName ||
@@ -217,7 +212,13 @@ export function AppShell({
                 .filter((item) => item.group === group)
                 .map((item) => {
                   const Icon = item.icon;
-                  const isActive = active === item.label;
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
+                    active === item.label ||
+                    (active && item.label.toLowerCase() === active.toLowerCase()) ||
+                    (item.label === "Complaints" && (active?.toLowerCase().includes("complaint") || pathname?.includes("/complaints"))) ||
+                    (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
                   return (
                     <Link
                       key={item.href}
@@ -595,6 +596,12 @@ export function FeedbackTable({
   const [deleting, setDeleting] = useState(false);
   const [userRole, setUserRole] = useState<string>("visitor");
 
+  // Property assignment for admins
+  const [allProperties, setAllProperties] = useState<Array<{ id: string; name: string; code: string }>>([]);
+  const [feedbackPropertyId, setFeedbackPropertyId] = useState<string>("");
+  const [reassigningProperty, setReassigningProperty] = useState(false);
+  const [propertyAssignSuccess, setPropertyAssignSuccess] = useState(false);
+
   // Selection state for admins
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Comments visibility toggle and filter
@@ -613,6 +620,14 @@ export function FeedbackTable({
     if (user?.role) {
       setUserRole(user.role);
     }
+    fetch("/api/properties")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.properties) {
+          setAllProperties(data.properties);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const isAdmin = userRole === "admin";
@@ -799,6 +814,8 @@ export function FeedbackTable({
                     setSelected(item);
                     setStatus(item.status);
                     setNotes(item.resolutionNotes || "");
+                    setFeedbackPropertyId(item.propertyId || "");
+                    setPropertyAssignSuccess(false);
                   }}
                 >
                   {isAdmin && (
@@ -819,7 +836,26 @@ export function FeedbackTable({
                     <div className="guest-cell">
                       <span className="mini-avatar">{item.initials}</span>
                       <div>
-                        <strong>{item.name}</strong>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <strong>{item.name}</strong>
+                          {item.propertyId && (
+                            <span
+                              style={{
+                                fontSize: "9px",
+                                fontFamily: "var(--font-dm-mono)",
+                                background: "var(--line)",
+                                color: "var(--ink)",
+                                padding: "1px 5px",
+                                borderRadius: "3px",
+                                fontWeight: 600,
+                                letterSpacing: "0.04em",
+                              }}
+                              title={allProperties.find((p) => p.id === item.propertyId)?.name || "Hotel location"}
+                            >
+                              {allProperties.find((p) => p.id === item.propertyId)?.code || "HOTEL"}
+                            </span>
+                          )}
+                        </div>
                         <small>{item.roomNumber || "Suite"}</small>
                       </div>
                     </div>
@@ -904,6 +940,80 @@ export function FeedbackTable({
                   <span className="drawer-chip-label">Logged</span>
                   <strong className="drawer-chip-value">{selected.timeAgo}</strong>
                 </div>
+              </div>
+
+              {/* Property Assignment Section (Admin can change property) */}
+              <div style={{ margin: "14px 0", padding: "12px 14px", background: "#f8faf8", border: "1px solid #e1e7e1", borderRadius: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Property Location
+                  </span>
+                  {isAdmin && (
+                    <span style={{ fontSize: "10px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
+                      Admin configurable
+                    </span>
+                  )}
+                </div>
+
+                {isAdmin ? (
+                  <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                    <select
+                      className="auth-input"
+                      value={feedbackPropertyId}
+                      onChange={(e) => {
+                        setFeedbackPropertyId(e.target.value);
+                        setPropertyAssignSuccess(false);
+                      }}
+                      style={{ flex: 1, fontSize: "12px", background: "#fff", padding: "7px 10px" }}
+                    >
+                      <option value="" disabled>-- Select property location --</option>
+                      {allProperties.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.code})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="button button-dark compact"
+                      disabled={reassigningProperty || !feedbackPropertyId || feedbackPropertyId === selected.propertyId}
+                      onClick={async () => {
+                        setReassigningProperty(true);
+                        try {
+                          const res = await fetch("/api/feedback", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: selected.id, propertyId: feedbackPropertyId }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            selected.propertyId = feedbackPropertyId;
+                            setPropertyAssignSuccess(true);
+                            router.refresh();
+                          } else {
+                            alert(data.error || "Failed to reassign property.");
+                          }
+                        } catch {
+                          alert("Failed to update property assignment.");
+                        } finally {
+                          setReassigningProperty(false);
+                        }
+                      }}
+                    >
+                      {reassigningProperty ? "Saving…" : "Save property"}
+                    </button>
+                  </div>
+                ) : (
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--ink)", fontWeight: 500 }}>
+                    {allProperties.find((p) => p.id === selected.propertyId)?.name || "General / Unassigned"}
+                  </p>
+                )}
+
+                {propertyAssignSuccess && (
+                  <p style={{ color: "#254230", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
+                    ✓ Property reassigned successfully.
+                  </p>
+                )}
               </div>
 
               {/* Guest Statement Card with generous breathing room */}
