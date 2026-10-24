@@ -1,11 +1,14 @@
 -- ==============================================================================
--- VISTORA GUEST EXPERIENCE OPERATIONS - SUPABASE SCHEMA
+-- VISTORA GUEST EXPERIENCE OPERATIONS - COMPREHENSIVE SUPABASE SCHEMA
 -- ==============================================================================
-
+-- ------------------------------------------------------------------------------
 -- 1. EXTENSIONS
+-- ------------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ------------------------------------------------------------------------------
 -- 2. ENUM TYPES
+-- ------------------------------------------------------------------------------
 DO $$ BEGIN
     CREATE TYPE feedback_status AS ENUM ('needs_attention', 'under_review', 'resolved', 'escalated');
 EXCEPTION
@@ -25,6 +28,7 @@ DO $$ BEGIN
         'Food & Beverage',
         'Concierge',
         'Facilities & Room',
+        'Spa & Wellness',
         'Valet & Transfers'
     );
 EXCEPTION
@@ -37,22 +41,12 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+-- ------------------------------------------------------------------------------
 -- 3. TABLES
-
--- Profiles (Role-based access control for users)
-CREATE TABLE IF NOT EXISTS profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    full_name TEXT NOT NULL,
-    role user_role NOT NULL DEFAULT 'staff',
-    property_id UUID,
-    avatar_url TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- ------------------------------------------------------------------------------
 
 -- Properties (Hotels / Resorts)
-CREATE TABLE IF NOT EXISTS properties (
+CREATE TABLE IF NOT EXISTS public.properties (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -65,8 +59,20 @@ CREATE TABLE IF NOT EXISTS properties (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Guests
-CREATE TABLE IF NOT EXISTS guests (
+-- Profiles (Role-based access control linked to Supabase auth.users)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    full_name TEXT NOT NULL DEFAULT 'Operations User',
+    role user_role NOT NULL DEFAULT 'visitor',
+    property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
+    avatar_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Guests (Guest directory)
+CREATE TABLE IF NOT EXISTS public.guests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     full_name TEXT NOT NULL,
     email TEXT,
@@ -77,10 +83,10 @@ CREATE TABLE IF NOT EXISTS guests (
 );
 
 -- Guest Stays (Sessions for feedback tokens)
-CREATE TABLE IF NOT EXISTS stays (
+CREATE TABLE IF NOT EXISTS public.stays (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-    guest_id UUID NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+    property_id UUID NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+    guest_id UUID NOT NULL REFERENCES public.guests(id) ON DELETE CASCADE,
     room_number TEXT NOT NULL,
     check_in_date DATE NOT NULL,
     check_out_date DATE NOT NULL,
@@ -90,10 +96,10 @@ CREATE TABLE IF NOT EXISTS stays (
 );
 
 -- Guest Feedback Submissions
-CREATE TABLE IF NOT EXISTS feedback (
+CREATE TABLE IF NOT EXISTS public.feedback (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-    stay_id UUID REFERENCES stays(id) ON DELETE SET NULL,
+    property_id UUID NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+    stay_id UUID REFERENCES public.stays(id) ON DELETE SET NULL,
     guest_name TEXT NOT NULL,
     guest_email TEXT,
     guest_phone TEXT,
@@ -113,56 +119,155 @@ CREATE TABLE IF NOT EXISTS feedback (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------------------------
 -- 4. INDEXES
-CREATE INDEX IF NOT EXISTS idx_feedback_property_id ON feedback(property_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
-CREATE INDEX IF NOT EXISTS idx_feedback_rating ON feedback(rating);
-CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_stays_public_token ON stays(public_token);
+-- ------------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_feedback_property_id ON public.feedback(property_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_status ON public.feedback(status);
+CREATE INDEX IF NOT EXISTS idx_feedback_rating ON public.feedback(rating);
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON public.feedback(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stays_public_token ON public.stays(public_token);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
--- 5. ROW LEVEL SECURITY (RLS)
-ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
-ALTER TABLE guests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE stays ENABLE ROW LEVEL SECURITY;
-ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+-- ------------------------------------------------------------------------------
+-- 5. ROW LEVEL SECURITY (RLS) & POLICIES
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.guests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stays ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Anonymous public users can read stays via token to submit feedback
-CREATE POLICY "Public can view stay by token"
-    ON stays FOR SELECT
+-- Properties Policies
+DROP POLICY IF EXISTS "Anyone can view properties" ON public.properties;
+CREATE POLICY "Anyone can view properties"
+    ON public.properties FOR SELECT
     TO anon, authenticated
     USING (true);
 
--- Anonymous public users can insert feedback
+-- Stays Policies: Anonymous public users can read stays via token to submit feedback
+DROP POLICY IF EXISTS "Public can view stay by token" ON public.stays;
+CREATE POLICY "Public can view stay by token"
+    ON public.stays FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+-- Feedback Policies: Anyone can submit feedback; authenticated users can read/update
+DROP POLICY IF EXISTS "Public can insert guest feedback" ON public.feedback;
 CREATE POLICY "Public can insert guest feedback"
-    ON feedback FOR INSERT
+    ON public.feedback FOR INSERT
     TO anon, authenticated
     WITH CHECK (true);
 
--- Authenticated staff can read and manage all records
-CREATE POLICY "Staff can view properties"
-    ON properties FOR SELECT
-    TO authenticated, anon
+DROP POLICY IF EXISTS "Users can view feedback" ON public.feedback;
+CREATE POLICY "Users can view feedback"
+    ON public.feedback FOR SELECT
+    TO anon, authenticated
     USING (true);
 
-CREATE POLICY "Staff can view feedback"
-    ON feedback FOR SELECT
-    TO authenticated, anon
+DROP POLICY IF EXISTS "Users can update feedback" ON public.feedback;
+CREATE POLICY "Users can update feedback"
+    ON public.feedback FOR UPDATE
+    TO anon, authenticated
     USING (true);
 
-CREATE POLICY "Staff can update feedback"
-    ON feedback FOR UPDATE
-    TO authenticated, anon
+-- Guests Policies
+DROP POLICY IF EXISTS "Users can view guests" ON public.guests;
+CREATE POLICY "Users can view guests"
+    ON public.guests FOR SELECT
+    TO anon, authenticated
     USING (true);
 
--- 6. SEED DATA FOR DEVELOPMENT & INITIAL LOAD
-INSERT INTO properties (id, name, slug, code, brand, location, country, timezone, total_rooms)
+-- Profiles Policies (RBAC)
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
+CREATE POLICY "Public profiles are viewable by everyone"
+    ON public.profiles FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+CREATE POLICY "Users can update their own profile"
+    ON public.profiles FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile"
+    ON public.profiles FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Service role has full access to profiles" ON public.profiles;
+CREATE POLICY "Service role has full access to profiles"
+    ON public.profiles FOR ALL
+    USING (auth.role() = 'service_role');
+
+-- ------------------------------------------------------------------------------
+-- 6. AUTOMATED USER PROFILE SYNCHRONIZATION TRIGGER
+-- ------------------------------------------------------------------------------
+-- When a user registers or updates in auth.users, automatically maintain their public profile
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    assigned_role user_role := 'visitor';
+    meta_role text;
+BEGIN
+    meta_role := NEW.raw_user_meta_data->>'role';
+    IF meta_role = 'admin' THEN
+        assigned_role := 'admin';
+    ELSIF meta_role = 'staff' THEN
+        assigned_role := 'staff';
+    ELSE
+        assigned_role := 'visitor';
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, role)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
+        assigned_role
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT OR UPDATE ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill any existing auth.users into public.profiles
+INSERT INTO public.profiles (id, email, full_name, role)
+SELECT 
+    id, 
+    email, 
+    COALESCE(raw_user_meta_data->>'full_name', SPLIT_PART(email, '@', 1)),
+    CASE 
+        WHEN raw_user_meta_data->>'role' = 'staff' THEN 'staff'::user_role
+        WHEN raw_user_meta_data->>'role' = 'admin' THEN 'admin'::user_role
+        ELSE 'visitor'::user_role
+    END
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
+-- ------------------------------------------------------------------------------
+-- 7. SEED DATA FOR DEVELOPMENT & INITIAL LOAD
+-- ------------------------------------------------------------------------------
+INSERT INTO public.properties (id, name, slug, code, brand, location, country, timezone, total_rooms)
 VALUES
     ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Anantara Riverside Bangkok', 'anantara-riverside-bangkok', 'ARB', 'Anantara Hotels', 'Bangkok', 'Thailand', 'Asia/Bangkok', 376),
     ('b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Anantara Siam Bangkok', 'anantara-siam-bangkok', 'ASB', 'Anantara Hotels', 'Bangkok', 'Thailand', 'Asia/Bangkok', 354),
     ('c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33', 'Anantara Chiang Mai Resort', 'anantara-chiang-mai', 'ACM', 'Anantara Hotels', 'Chiang Mai', 'Thailand', 'Asia/Bangkok', 84)
 ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO guests (id, full_name, email, phone, vip_tier, total_stays)
+INSERT INTO public.guests (id, full_name, email, phone, vip_tier, total_stays)
 VALUES
     ('11111111-1111-1111-1111-111111111111', 'Aisha Khan', 'aisha.khan@luxurytravel.com', '+65 9123 4567', 'VIP Gold', 4),
     ('22222222-2222-2222-2222-222222222222', 'James Morrison', 'j.morrison@oxfordcap.co.uk', '+44 7700 900123', 'Standard', 1),
@@ -172,7 +277,7 @@ VALUES
     ('66666666-6666-6666-6666-666666666666', 'Marcus Vance', 'marcus.v@seattleventures.io', '+1 206 555 0199', 'Standard', 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO stays (id, property_id, guest_id, room_number, check_in_date, check_out_date, public_token, status)
+INSERT INTO public.stays (id, property_id, guest_id, room_number, check_in_date, check_out_date, public_token, status)
 VALUES
     ('a1111111-0000-0000-0000-000000000001', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '11111111-1111-1111-1111-111111111111', '602', '2024-06-14', '2024-06-18', 'demo-stay', 'active'),
     ('a2222222-0000-0000-0000-000000000002', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '22222222-2222-2222-2222-222222222222', '314', '2024-06-15', '2024-06-19', 'stay-jm-314', 'active'),
@@ -180,7 +285,7 @@ VALUES
     ('a4444444-0000-0000-0000-000000000004', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '44444444-4444-4444-4444-444444444444', '818', '2024-06-16', '2024-06-20', 'stay-dl-818', 'active')
 ON CONFLICT (public_token) DO NOTHING;
 
-INSERT INTO feedback (id, property_id, stay_id, guest_name, guest_email, guest_phone, room_number, department, rating, comment, wants_contact, contact_preference, status, tone, sla_deadline, assigned_to, resolution_notes, resolved_at, created_at)
+INSERT INTO public.feedback (id, property_id, stay_id, guest_name, guest_email, guest_phone, room_number, department, rating, comment, wants_contact, contact_preference, status, tone, sla_deadline, assigned_to, resolution_notes, resolved_at, created_at)
 VALUES
     (
         'f0000001-0000-0000-0000-000000000001',
@@ -200,8 +305,8 @@ VALUES
         null,
         'Housekeeping Lead',
         'Commended room attendant Somchai for exceptional detail.',
-        NOW() - INTERVAL '10 minutes',
-        NOW() - INTERVAL '14 minutes'
+        NOW() - INTERVAL '45 minutes',
+        NOW() - INTERVAL '1 hour'
     ),
     (
         'f0000002-0000-0000-0000-000000000002',
@@ -218,11 +323,11 @@ VALUES
         'phone',
         'needs_attention',
         'urgent',
-        NOW() + INTERVAL '2 hours',
+        NOW() + INTERVAL '12 minutes',
         'Front Office Manager',
         null,
         null,
-        NOW() - INTERVAL '38 minutes'
+        NOW() - INTERVAL '1 hour 15 minutes'
     ),
     (
         'f0000003-0000-0000-0000-000000000003',
@@ -239,11 +344,11 @@ VALUES
         null,
         'under_review',
         'review',
-        NOW() + INTERVAL '4 hours',
+        NOW() + INTERVAL '2 hours',
         'F&B Operations',
         null,
         null,
-        NOW() - INTERVAL '1 hour'
+        NOW() - INTERVAL '1 hour 45 minutes'
     ),
     (
         'f0000004-0000-0000-0000-000000000004',
