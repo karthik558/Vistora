@@ -4,9 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { motion } from "framer-motion";
-import { Download } from "lucide-react";
+import {
+  Download,
+  Printer,
+  Copy,
+  Check,
+  ExternalLink,
+  FileSpreadsheet,
+  AlertTriangle,
+  Users,
+  BarChart3,
+  Building2,
+  FileText,
+  Search,
+} from "lucide-react";
 import { AppShell, FeedbackTable } from "./Dashboard";
-import { DashboardData } from "../types/experience";
+import { DashboardData, PropertyRow } from "../types/experience";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
@@ -96,12 +109,12 @@ export default function OperationsPage({ section, data }: { section: string; dat
             />
             {section === "reports" && (
               <button
-                className="button button-dark compact"
-                onClick={() => downloadCsv(data)}
+                className="button button-outline compact"
+                onClick={() => window.print()}
                 style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
-                <Download size={13} />
-                <span>Download CSV</span>
+                <Printer size={13} />
+                <span>Print / Save PDF</span>
               </button>
             )}
           </div>
@@ -126,9 +139,9 @@ export default function OperationsPage({ section, data }: { section: string; dat
           ) : section === "questionnaire" ? (
             <QuestionnaireBuilder />
           ) : section === "qr-codes" ? (
-            <QrCodes />
+            <QrCodes properties={data.properties} />
           ) : section === "reports" ? (
-            <Reports data={data} />
+            <Reports data={data} selectedProperty={selectedProperty} dateFilter={dateFilter} />
           ) : (
             <>
               <div className="table-toolbar page-toolbar">
@@ -367,15 +380,48 @@ function Forms() {
   );
 }
 
-function QrCodes() {
-  const [label, setLabel] = useState("Lobby feedback");
+function exportToExcelCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const escapeCell = (val: string | number) => {
+    const str = val === null || val === undefined ? "" : String(val);
+    return `"${str.replaceAll('"', '""')}"`;
+  };
+
+  const csvContent = [
+    headers.map(escapeCell).join(","),
+    ...rows.map((row) => row.map(escapeCell).join(",")),
+  ].join("\r\n");
+
+  // UTF-8 BOM \uFEFF ensures Microsoft Excel recognizes UTF-8 properly across Mac & Windows
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
+  const [label, setLabel] = useState("Guest Room Key Card");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(properties[0]?.id || "");
+  const [isDemoLink, setIsDemoLink] = useState(true);
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
-  const url =
-    typeof window === "undefined"
-      ? "https://vistora.app/feedback"
-      : `${window.location.origin}/feedback`;
+  const selectedProp = properties.find((p) => p.id === selectedPropertyId);
+
+  const url = useMemo(() => {
+    const origin = typeof window === "undefined" ? "https://vistora.app" : window.location.origin;
+    const params = new URLSearchParams();
+    if (selectedPropertyId) {
+      params.set("property", selectedPropertyId);
+    }
+    if (isDemoLink) {
+      params.set("demo", "true");
+    }
+    const query = params.toString();
+    return `${origin}/feedback${query ? `?${query}` : ""}`;
+  }, [selectedPropertyId, isDemoLink]);
 
   useEffect(() => {
     QRCode.toDataURL(url, {
@@ -394,28 +440,62 @@ function QrCodes() {
     if (!qrDataUrl) return;
     const link = document.createElement("a");
     link.href = qrDataUrl;
-    link.download = `vistora-qr-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`;
+    const propCode = selectedProp?.code?.toLowerCase() || "vistora";
+    link.download = `vistora-qr-${propCode}-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`;
     link.click();
   }
 
   return (
     <div className="qr-layout">
       <div className="panel qr-card">
-        <p className="eyebrow">Create a trackable touchpoint</p>
-        <h2>Guest feedback QR code</h2>
-        <p>Use this QR code on room key cards, tent cards, or service recovery follow-up notes.</p>
+        <p className="eyebrow">Direct guest touchpoint & demo links</p>
+        <h2>Guest feedback & demo link generator</h2>
+        <p>
+          Send an instant link or place a QR code. When sending a link from your side, the selected property will be automatically pre-selected for the guest.
+        </p>
+
+        <label className="field-label" style={{ marginTop: "16px" }}>
+          Target Property (Pre-selects for Guest)
+          <select
+            className="auth-input"
+            value={selectedPropertyId}
+            onChange={(e) => setSelectedPropertyId(e.target.value)}
+          >
+            <option value="">-- No pre-selection (guest chooses) --</option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.code}) — {p.location}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="field-label">
-          Placement Label
+          Placement / Campaign Label
           <input className="auth-input" value={label} onChange={(event) => setLabel(event.target.value)} />
         </label>
 
+        <div style={{ margin: "14px 0", padding: "12px 14px", background: "#f8faf8", border: "1px solid var(--line)", borderRadius: "6px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", cursor: "pointer", fontWeight: 500 }}>
+            <input
+              type="checkbox"
+              checked={isDemoLink}
+              onChange={(e) => setIsDemoLink(e.target.checked)}
+              style={{ accentColor: "#0b100f" }}
+            />
+            <span>Send as demo link (pre-loads verified hotel stay)</span>
+          </label>
+          <p style={{ margin: "4px 0 0 24px", color: "var(--muted)", fontSize: "11px" }}>
+            The guest opens the link with {selectedProp ? selectedProp.name : "the selected property"} automatically locked in.
+          </p>
+        </div>
+
         <label className="field-label">
-          Target Link
+          Generated Link (Share with Guest or Prospect)
           <input className="auth-input" value={url} readOnly />
         </label>
 
-        <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
+        <div style={{ display: "flex", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
           <button
             type="button"
             className="button button-dark"
@@ -424,9 +504,21 @@ function QrCodes() {
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
           >
-            {copied ? "Link copied!" : "Copy link"}
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copied ? "Link copied!" : "Copy link"}</span>
           </button>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="button button-outline"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <ExternalLink size={14} />
+            <span>Open preview ↗</span>
+          </a>
           <button
             type="button"
             className="button button-outline"
@@ -445,62 +537,681 @@ function QrCodes() {
           <img
             src={qrDataUrl}
             alt={`QR Code for ${label}`}
-            style={{ width: "190px", height: "190px", borderRadius: "8px", border: "1px solid var(--line)", background: "#fff", padding: "8px", boxShadow: "var(--shadow-xs)" }}
+            style={{ width: "200px", height: "200px", borderRadius: "8px", border: "1px solid var(--line)", background: "#fff", padding: "8px", boxShadow: "var(--shadow-xs)" }}
           />
         ) : (
-          <div style={{ width: "190px", height: "190px", display: "grid", placeItems: "center", border: "1px solid var(--line)", borderRadius: "8px" }}>
+          <div style={{ width: "200px", height: "200px", display: "grid", placeItems: "center", border: "1px solid var(--line)", borderRadius: "8px" }}>
             Generating QR…
           </div>
         )}
-        <strong style={{ marginTop: "16px", fontSize: "13px" }}>{label}</strong>
-        <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "11px" }}>Scan with camera to open guest feedback</p>
+        <strong style={{ marginTop: "16px", fontSize: "14px" }}>{label}</strong>
+        {selectedProp && (
+          <span style={{ fontSize: "11px", color: "var(--sage-deep)", background: "#edf4ed", padding: "2px 8px", borderRadius: "4px", marginTop: "4px" }}>
+            {selectedProp.name} ({selectedProp.code})
+          </span>
+        )}
+        <p style={{ margin: "6px 0 0", color: "var(--muted)", fontSize: "11px" }}>Scan with camera or mobile device to open feedback</p>
       </div>
     </div>
   );
 }
 
-function Reports({ data }: { data: DashboardData }) {
+function Reports({
+  data,
+  selectedProperty,
+  dateFilter,
+}: {
+  data: DashboardData;
+  selectedProperty: string | "all";
+  dateFilter: DateRangeFilter;
+}) {
+  const [activeTab, setActiveTab] = useState<"feedback" | "complaints" | "directory" | "scorecard">("feedback");
+  const [reportSearch, setReportSearch] = useState("");
+
+  // Base feedback matching property filter and date filter
+  const baseFeedback = useMemo(() => {
+    return data.recentFeedback
+      .filter((item) => selectedProperty === "all" || !item.propertyId || item.propertyId === selectedProperty)
+      .filter((item) => isDateInRange(item.createdAt, dateFilter));
+  }, [data.recentFeedback, selectedProperty, dateFilter]);
+
+  // Complaints dataset (<= 2 stars or needs_attention)
+  const complaintsData = useMemo(() => {
+    return baseFeedback.filter((item) => item.rating <= 2 || item.status === "needs_attention");
+  }, [baseFeedback]);
+
+  // Guest directory dataset (deduplicated by guest name & room)
+  const guestDirectoryData = useMemo(() => {
+    const map = new Map<string, typeof baseFeedback[0]>();
+    for (const item of baseFeedback) {
+      const key = `${item.name.toLowerCase()}-${item.roomNumber}`;
+      if (!map.has(key)) map.set(key, item);
+    }
+    return Array.from(map.values());
+  }, [baseFeedback]);
+
+  // Department Scorecard
+  const departmentScorecard = useMemo(() => {
+    const depts = ["Front Desk", "Housekeeping", "Dining", "Spa & Wellness", "Facilities", "Concierge"];
+    return depts.map((d) => {
+      const items = baseFeedback.filter((f) => f.department.toLowerCase() === d.toLowerCase());
+      const total = items.length;
+      const avg = total > 0 ? (items.reduce((acc, cur) => acc + cur.rating, 0) / total).toFixed(1) : "—";
+      const complaintCount = items.filter((f) => f.rating <= 2).length;
+      const recoveryRate = total > 0 ? Math.round(((total - complaintCount) / total) * 100) : 100;
+      return { department: d, total, avgRating: avg, complaintCount, recoveryRate };
+    });
+  }, [baseFeedback]);
+
+  // Filtered views by search query
+  const displayedFeedback = useMemo(() => {
+    if (!reportSearch) return baseFeedback;
+    const q = reportSearch.toLowerCase();
+    return baseFeedback.filter((item) =>
+      `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(q)
+    );
+  }, [baseFeedback, reportSearch]);
+
+  const displayedComplaints = useMemo(() => {
+    if (!reportSearch) return complaintsData;
+    const q = reportSearch.toLowerCase();
+    return complaintsData.filter((item) =>
+      `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(q)
+    );
+  }, [complaintsData, reportSearch]);
+
+  const displayedGuests = useMemo(() => {
+    if (!reportSearch) return guestDirectoryData;
+    const q = reportSearch.toLowerCase();
+    return guestDirectoryData.filter((item) =>
+      `${item.name} ${item.roomNumber} ${item.guestEmail || ""} ${item.guestPhone || ""}`.toLowerCase().includes(q)
+    );
+  }, [guestDirectoryData, reportSearch]);
+
+  // Export handlers
+  function exportDatewiseFeedback() {
+    const headers = [
+      "Guest Name",
+      "Room Number",
+      "Property Name",
+      "Property Code",
+      "Department",
+      "Rating (1-5)",
+      "Resolution Status",
+      "Guest Email",
+      "Guest Phone",
+      "Manager Contact Requested",
+      "Guest Commentary",
+      "Submission Date",
+    ];
+    const rows = baseFeedback.map((f) => {
+      const prop = data.properties.find((p) => p.id === f.propertyId);
+      return [
+        f.name,
+        f.roomNumber,
+        prop?.name || "General Property",
+        prop?.code || "GEN",
+        f.department,
+        f.rating,
+        f.statusLabel,
+        f.guestEmail || "",
+        f.guestPhone || "",
+        f.wantsContact ? `Yes (${f.contactPreference || "email"})` : "No",
+        f.comment || "",
+        f.createdAt,
+      ];
+    });
+    exportToExcelCsv("vistora-datewise-feedback-report", headers, rows);
+  }
+
+  function exportComplaints() {
+    const headers = [
+      "Guest Name",
+      "Room Number",
+      "Property Name",
+      "Property Code",
+      "Department",
+      "Rating",
+      "Status",
+      "Assigned Duty Staff",
+      "Resolution Notes",
+      "Guest Contact",
+      "Incident Detail / Comment",
+      "Logged Date",
+    ];
+    const rows = complaintsData.map((f) => {
+      const prop = data.properties.find((p) => p.id === f.propertyId);
+      return [
+        f.name,
+        f.roomNumber,
+        prop?.name || "General Property",
+        prop?.code || "GEN",
+        f.department,
+        f.rating,
+        f.statusLabel,
+        f.assignedTo || "Unassigned",
+        f.resolutionNotes || "Pending review",
+        f.guestEmail || f.guestPhone || "No contact",
+        f.comment || f.detail || "",
+        f.createdAt,
+      ];
+    });
+    exportToExcelCsv("vistora-complaint-recovery-report", headers, rows);
+  }
+
+  function exportGuestDirectory() {
+    const headers = [
+      "Guest Name",
+      "Room Number",
+      "Property Name",
+      "Contact Email",
+      "Contact Phone",
+      "Latest Rating Given",
+      "Latest Department",
+      "Last Visit / Stay Date",
+    ];
+    const rows = guestDirectoryData.map((g) => {
+      const prop = data.properties.find((p) => p.id === g.propertyId);
+      return [
+        g.name,
+        g.roomNumber,
+        prop?.name || "General Property",
+        g.guestEmail || "N/A",
+        g.guestPhone || "N/A",
+        g.rating,
+        g.department,
+        g.createdAt,
+      ];
+    });
+    exportToExcelCsv("vistora-guest-directory-report", headers, rows);
+  }
+
+  function exportScorecard() {
+    const headers = ["Department", "Total Feedback Records", "Average Star Rating", "Complaint Count", "Satisfaction / Recovery Rate (%)"];
+    const rows = departmentScorecard.map((s) => [
+      s.department,
+      s.total,
+      s.avgRating,
+      s.complaintCount,
+      `${s.recoveryRate}%`,
+    ]);
+    exportToExcelCsv("vistora-department-scorecard", headers, rows);
+  }
+
+  const selectedPropObj = data.properties.find((p) => p.id === selectedProperty);
+  const activePropertyLabel = selectedProperty === "all" ? "All Properties (Portfolio)" : `${selectedPropObj?.name} (${selectedPropObj?.code})`;
+
   return (
-    <div className="report-grid">
-      <div className="panel report-card">
-        <span className="eyebrow">Operational export</span>
-        <h2>Guest feedback report</h2>
-        <p>Download a CSV containing guest, room, department, rating, status, comments, and timestamps.</p>
-        <button
-          className="button button-dark compact"
-          onClick={() => downloadCsv(data)}
-          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* 4 Report Category Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        {/* Card 1: Date-wise Feedback Report */}
+        <div
+          className="panel"
+          style={{
+            padding: "18px 20px",
+            border: activeTab === "feedback" ? "2px solid var(--ink)" : "1px solid var(--line)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onClick={() => setActiveTab("feedback")}
         >
-          <Download size={13} />
-          <span>Download CSV</span>
-        </button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <span className="eyebrow" style={{ margin: 0 }}>Date-wise Report</span>
+            <FileSpreadsheet size={16} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
+          </div>
+          <h3 style={{ fontSize: "16px", margin: "4px 0" }}>Guest Feedback Audit</h3>
+          <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 14px", lineHeight: "1.4" }}>
+            Complete submissions, ratings, and questionnaire answers for the selected dates.
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600 }}>{baseFeedback.length} records</span>
+            <button
+              className="button button-dark compact"
+              onClick={(e) => {
+                e.stopPropagation();
+                exportDatewiseFeedback();
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 9px", fontSize: "11px" }}
+              title="Download Excel CSV"
+            >
+              <Download size={12} />
+              Excel / CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Complaints & Recovery Report */}
+        <div
+          className="panel"
+          style={{
+            padding: "18px 20px",
+            border: activeTab === "complaints" ? "2px solid var(--ink)" : "1px solid var(--line)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onClick={() => setActiveTab("complaints")}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <span className="eyebrow" style={{ margin: 0 }}>Escalation Audit</span>
+            <AlertTriangle size={16} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
+          </div>
+          <h3 style={{ fontSize: "16px", margin: "4px 0" }}>Complaints & Recovery</h3>
+          <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 14px", lineHeight: "1.4" }}>
+            Low scores (≤2 stars), recovery assignees, SLA turnarounds, and resolution notes.
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: complaintsData.length > 0 ? "var(--ink)" : "var(--muted)" }}>
+              {complaintsData.length} complaints
+            </span>
+            <button
+              className="button button-dark compact"
+              onClick={(e) => {
+                e.stopPropagation();
+                exportComplaints();
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 9px", fontSize: "11px" }}
+              title="Download Excel CSV"
+            >
+              <Download size={12} />
+              Excel / CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Card 3: Guest Directory Report */}
+        <div
+          className="panel"
+          style={{
+            padding: "18px 20px",
+            border: activeTab === "directory" ? "2px solid var(--ink)" : "1px solid var(--line)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onClick={() => setActiveTab("directory")}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <span className="eyebrow" style={{ margin: 0 }}>Guest Intelligence</span>
+            <Users size={16} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
+          </div>
+          <h3 style={{ fontSize: "16px", margin: "4px 0" }}>Guest Directory</h3>
+          <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 14px", lineHeight: "1.4" }}>
+            Unique guest profiles, verified contact emails, phone numbers, and stay history.
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600 }}>{guestDirectoryData.length} guests</span>
+            <button
+              className="button button-dark compact"
+              onClick={(e) => {
+                e.stopPropagation();
+                exportGuestDirectory();
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 9px", fontSize: "11px" }}
+              title="Download Excel CSV"
+            >
+              <Download size={12} />
+              Excel / CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Card 4: Department Scorecard */}
+        <div
+          className="panel"
+          style={{
+            padding: "18px 20px",
+            border: activeTab === "scorecard" ? "2px solid var(--ink)" : "1px solid var(--line)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onClick={() => setActiveTab("scorecard")}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <span className="eyebrow" style={{ margin: 0 }}>Executive KPI</span>
+            <BarChart3 size={16} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
+          </div>
+          <h3 style={{ fontSize: "16px", margin: "4px 0" }}>Department Scorecard</h3>
+          <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 14px", lineHeight: "1.4" }}>
+            Satisfaction scores, review volumes, and recovery rates broken down by department.
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600 }}>6 departments</span>
+            <button
+              className="button button-dark compact"
+              onClick={(e) => {
+                e.stopPropagation();
+                exportScorecard();
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 9px", fontSize: "11px" }}
+              title="Download Excel CSV"
+            >
+              <Download size={12} />
+              Excel / CSV
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="panel report-card">
-        <span className="eyebrow">Verified records</span>
-        <h2>Live operational data</h2>
-        <p>This report reflects verified operational guest feedback records captured across properties.</p>
-        <Link className="panel-action" href="/dashboard/analytics">
-          Review analytics ↗
-        </Link>
+
+      {/* Filter / Scope Summary Badge */}
+      <div
+        className="panel"
+        style={{
+          padding: "12px 18px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+          background: "#f9faf8",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+            <Building2 size={13} style={{ color: "var(--muted)" }} />
+            <span>Property Scope:</span>
+            <strong>{activePropertyLabel}</strong>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+            <FileText size={13} style={{ color: "var(--muted)" }} />
+            <span>Date Range:</span>
+            <strong>
+              {dateFilter.preset === "all"
+                ? "All Recorded Time"
+                : `${dateFilter.startDate || ""} to ${dateFilter.endDate || ""}`}
+            </strong>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            className="button button-outline compact"
+            onClick={() => window.print()}
+            style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+          >
+            <Printer size={13} />
+            Print / PDF Audit
+          </button>
+          {activeTab === "feedback" && (
+            <button
+              className="button button-dark compact"
+              onClick={exportDatewiseFeedback}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+            >
+              <Download size={13} />
+              Export Feedback CSV
+            </button>
+          )}
+          {activeTab === "complaints" && (
+            <button
+              className="button button-dark compact"
+              onClick={exportComplaints}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+            >
+              <Download size={13} />
+              Export Complaints CSV
+            </button>
+          )}
+          {activeTab === "directory" && (
+            <button
+              className="button button-dark compact"
+              onClick={exportGuestDirectory}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+            >
+              <Download size={13} />
+              Export Directory CSV
+            </button>
+          )}
+          {activeTab === "scorecard" && (
+            <button
+              className="button button-dark compact"
+              onClick={exportScorecard}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+            >
+              <Download size={13} />
+              Export Scorecard CSV
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Live Preview Table */}
+      <section className="panel table-panel">
+        <div className="panel-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2>
+              {activeTab === "feedback"
+                ? "Date-wise guest feedback records"
+                : activeTab === "complaints"
+                ? "Complaints & service recovery audit"
+                : activeTab === "directory"
+                ? "Guest directory records"
+                : "Departmental performance scorecard"}
+            </h2>
+            <p>Interactive table preview of records included in the exported report</p>
+          </div>
+          {activeTab !== "scorecard" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                className="compact-input"
+                placeholder="Search report…"
+                value={reportSearch}
+                onChange={(e) => setReportSearch(e.target.value)}
+                style={{ width: "220px" }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="table-wrap">
+          {activeTab === "feedback" && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest</th>
+                  <th>Room</th>
+                  <th>Department</th>
+                  <th>Rating</th>
+                  <th>Status</th>
+                  <th>Comments</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedFeedback.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                      No feedback records found for this date range or search.
+                    </td>
+                  </tr>
+                ) : (
+                  displayedFeedback.map((f) => (
+                    <tr key={f.id}>
+                      <td>
+                        <strong>{f.name}</strong>
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "12px" }}>{f.roomNumber}</span>
+                      </td>
+                      <td>{f.department}</td>
+                      <td>
+                        <span className={`status ${f.tone}`}>{f.rating} / 5</span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--muted)" }}>{f.statusLabel}</span>
+                      </td>
+                      <td style={{ maxWidth: "260px" }}>
+                        <span style={{ fontSize: "12px", color: f.comment ? "var(--ink)" : "var(--muted)" }}>
+                          {f.comment || "No written comment"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                          {new Date(f.createdAt).toLocaleDateString()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "complaints" && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest</th>
+                  <th>Room</th>
+                  <th>Department</th>
+                  <th>Rating</th>
+                  <th>Issue / Comment</th>
+                  <th>Recovery Assignee</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedComplaints.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                      No complaint records found for this date range.
+                    </td>
+                  </tr>
+                ) : (
+                  displayedComplaints.map((f) => (
+                    <tr key={f.id}>
+                      <td>
+                        <strong>{f.name}</strong>
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "12px" }}>{f.roomNumber}</span>
+                      </td>
+                      <td>{f.department}</td>
+                      <td>
+                        <span className="status critical">{f.rating} / 5</span>
+                      </td>
+                      <td style={{ maxWidth: "280px" }}>
+                        <span style={{ fontSize: "12px" }}>{f.comment || f.detail || "Direct complaint logged"}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--ink-light)" }}>
+                          {f.assignedTo || "Unassigned"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--muted)" }}>{f.statusLabel}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                          {new Date(f.createdAt).toLocaleDateString()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "directory" && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest Name</th>
+                  <th>Room</th>
+                  <th>Contact Email</th>
+                  <th>Phone Number</th>
+                  <th>Last Score</th>
+                  <th>Department</th>
+                  <th>Last Visit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedGuests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                      No guest directory profiles found for this date range.
+                    </td>
+                  </tr>
+                ) : (
+                  displayedGuests.map((g) => (
+                    <tr key={g.id}>
+                      <td>
+                        <strong>{g.name}</strong>
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "12px" }}>{g.roomNumber}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", color: "var(--ink-light)" }}>
+                          {g.guestEmail || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", color: "var(--ink-light)" }}>
+                          {g.guestPhone || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status ${g.tone}`}>{g.rating} / 5</span>
+                      </td>
+                      <td>{g.department}</td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                          {new Date(g.createdAt).toLocaleDateString()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "scorecard" && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Operational Department</th>
+                  <th>Total Feedback Recorded</th>
+                  <th>Average Rating</th>
+                  <th>Complaint Incidents</th>
+                  <th>Service Satisfaction Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departmentScorecard.map((s) => (
+                  <tr key={s.department}>
+                    <td>
+                      <strong>{s.department}</strong>
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: 600 }}>{s.total}</span> responses
+                    </td>
+                    <td>
+                      <span className="status" style={{ background: "#edf4ed", color: "#1c3825" }}>
+                        {s.avgRating} / 5.0
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ color: s.complaintCount > 0 ? "#8b261a" : "var(--muted)" }}>
+                        {s.complaintCount}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "90px", height: "6px", background: "var(--line)", borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{ width: `${s.recoveryRate}%`, height: "100%", background: "#254230" }} />
+                        </div>
+                        <span style={{ fontSize: "11px", fontWeight: 600 }}>{s.recoveryRate}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
-}
-
-function downloadCsv(data: DashboardData) {
-  const headers = ["Guest", "Room", "Department", "Rating", "Status", "Comment", "Created at"];
-  const rows = data.recentFeedback.map((item) => [
-    item.name,
-    item.roomNumber,
-    item.department,
-    String(item.rating),
-    item.statusLabel,
-    item.comment || "",
-    item.createdAt,
-  ]);
-  const csv = [headers, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
-  const link = document.createElement("a");
-  link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
-  link.download = `vistora-feedback-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
 }

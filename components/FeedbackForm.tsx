@@ -37,6 +37,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [propertyError, setPropertyError] = useState<string | null>(null);
   const [isUrlPreselected, setIsUrlPreselected] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   // Dynamic Questionnaire from Supabase
   const [questions, setQuestions] = useState<Array<{
@@ -51,7 +52,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   useEffect(() => {
     let mounted = true;
 
-    // Fetch properties and check for URL pre-selection
+    // Fetch properties and check for URL pre-selection or demo mode link
     fetch("/api/properties", { cache: "no-store" })
       .then((res) => res.json())
       .then((json) => {
@@ -61,6 +62,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
             const propParam = params.get("property") || params.get("propertyId") || params.get("p");
+            const demoParam = params.get("demo") === "true" || params.get("demo") === "1" || params.has("demo");
+            if (demoParam) setIsDemoMode(true);
+
             if (propParam) {
               const cleanParam = propParam.trim().toLowerCase();
               const match = json.properties.find(
@@ -73,6 +77,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 setSelectedPropertyId(match.id);
                 setIsUrlPreselected(true);
               }
+            } else if (demoParam && json.properties.length > 0) {
+              // Demo link automatically selects property
+              setSelectedPropertyId(json.properties[0].id);
+              setIsUrlPreselected(true);
             }
           }
         }
@@ -226,7 +234,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               <span>Which Vistora property are you reviewing? <strong style={{ color: "#8b261a" }}>*</strong></span>
               {selectedPropertyId && isUrlPreselected && (
                 <span style={{ fontSize: "11px", color: "#254230", fontWeight: 600 }}>
-                  ✓ Pre-selected
+                  ✓ {isDemoMode ? "Demo link · Property pre-selected" : "Property pre-selected"}
                 </span>
               )}
             </label>

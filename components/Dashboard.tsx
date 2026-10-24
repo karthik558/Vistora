@@ -982,7 +982,11 @@ export function FeedbackTable({
                         try {
                           const res = await fetch("/api/feedback", {
                             method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
+                            headers: {
+                              "Content-Type": "application/json",
+                              "x-user-role": userRole || "admin",
+                            },
+                            credentials: "include",
                             body: JSON.stringify({ id: selected.id, propertyId: feedbackPropertyId }),
                           });
                           const data = await res.json();

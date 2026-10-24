@@ -41,11 +41,12 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const userCookie = request.cookies.get("vistora-user")?.value;
-    let userRole = "visitor";
+    const headerRole = request.headers.get("x-user-role");
+    let userRole = headerRole || "visitor";
     if (userCookie) {
       try {
         const u = JSON.parse(userCookie);
-        userRole = u?.role || "visitor";
+        if (u?.role) userRole = u.role;
       } catch {}
     }
 

@@ -2634,3 +2634,64 @@ tr:last-child td {
     animation: none !important;
   }
 }
+
+/* ==============================================================================
+   EXECUTIVE AUDIT & REPORT PRINT / PDF STYLING
+   ============================================================================== */
+@media print {
+  .sidebar,
+  .mobile-menu-btn,
+  .drawer-backdrop,
+  .drawer-close,
+  .page-heading-actions,
+  button,
+  input,
+  .qr-card,
+  .auth-input,
+  .compact-input {
+    display: none !important;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #0b100f !important;
+    font-size: 11pt !important;
+  }
+
+  .app-shell,
+  .app-layout {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .main-content,
+  .content-wrap {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12pt !important;
+  }
+
+  .panel {
+    box-shadow: none !important;
+    border: 1px solid #dcdcdc !important;
+    page-break-inside: avoid;
+    margin-bottom: 14pt !important;
+  }
+
+  .table-wrap {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border-bottom: 1px solid #e0e0e0 !important;
+    padding: 6pt 8pt !important;
+    font-size: 9pt !important;
+  }
+}

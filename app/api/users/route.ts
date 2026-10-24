@@ -12,7 +12,7 @@ function hashPassword(password: string): string {
   return "pwd:" + crypto.createHash("sha256").update(password + SALT).digest("hex");
 }
 
-export const DEFAULT_RIGHTS = {
+const DEFAULT_RIGHTS = {
   admin: ["manage_feedback", "manage_questionnaire", "export_reports", "manage_properties", "manage_users"],
   staff: ["manage_feedback", "manage_questionnaire", "export_reports"],
   visitor: [],
