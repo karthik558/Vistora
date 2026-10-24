@@ -68,6 +68,7 @@ export interface DashboardData {
   attentionItems: AttentionItemViewModel[];
   properties: PropertyRow[];
   activePropertyId: string | "all";
+  source: "supabase" | "local";
 }
 
 export interface SubmitFeedbackPayload {

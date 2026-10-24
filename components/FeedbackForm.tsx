@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchStayByToken, createFeedback } from "../lib/services/guestExperienceService";
 import { DepartmentType } from "../types/database";
 import { GuestStayDetails } from "../types/experience";
 
@@ -34,14 +33,20 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
 
   useEffect(() => {
     let mounted = true;
-    fetchStayByToken(publicToken).then((details) => {
-      if (mounted && details) {
-        setStay(details);
-        setGuestName(details.guestName);
-        setRoomNumber(details.roomNumber);
-        setLoading(false);
-      }
-    });
+    fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (mounted && json.success && json.data) {
+          setStay(json.data);
+          setGuestName(json.data.guestName);
+          setRoomNumber(json.data.roomNumber);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching stay from Supabase", err);
+        if (mounted) setLoading(false);
+      });
     return () => {
       mounted = false;
     };
@@ -53,22 +58,29 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
 
     setSubmitting(true);
     try {
-      await createFeedback({
-        publicToken,
-        propertyId: stay?.propertyId,
-        guestName: guestName.trim() || stay?.guestName || "Guest",
-        roomNumber: roomNumber.trim() || stay?.roomNumber || "Suite",
-        department,
-        rating,
-        comment: comment.trim() || undefined,
-        wantsContact,
-        contactPreference: wantsContact ? contactPreference : undefined,
-        guestEmail: wantsContact && contactPreference === "email" ? contactValue : undefined,
-        guestPhone: wantsContact && contactPreference === "phone" ? contactValue : undefined,
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicToken,
+          propertyId: stay?.propertyId,
+          guestName: guestName.trim() || stay?.guestName || "Guest",
+          roomNumber: roomNumber.trim() || stay?.roomNumber || "Suite",
+          department,
+          rating,
+          comment: comment.trim() || undefined,
+          wantsContact,
+          contactPreference: wantsContact ? contactPreference : undefined,
+          guestEmail: wantsContact && contactPreference === "email" ? contactValue : undefined,
+          guestPhone: wantsContact && contactPreference === "phone" ? contactValue : undefined,
+        }),
       });
-      setSubmitted(true);
+      const json = await res.json();
+      if (json.success) {
+        setSubmitted(true);
+      }
     } catch (err) {
-      console.error("Failed to submit feedback", err);
+      console.error("Failed to submit feedback to Supabase", err);
     } finally {
       setSubmitting(false);
     }

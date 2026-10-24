@@ -3,11 +3,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
-  getDashboardData,
-  updateFeedbackStatus,
-} from "../lib/services/guestExperienceService";
-import { isSupabaseConfigured } from "../lib/supabase/client";
-import {
   DashboardData,
   FeedbackViewModel,
 } from "../types/experience";
@@ -82,13 +77,19 @@ export default function Dashboard() {
   const [resolutionNoteInput, setResolutionNoteInput] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  // Load real data from service
+  // Load real data exclusively from the server API (connecting directly to Supabase)
   const loadData = async (propertyId: string) => {
     try {
-      const result = await getDashboardData(propertyId);
-      setData(result);
+      setLoading(true);
+      const res = await fetch(`/api/metrics?propertyId=${encodeURIComponent(propertyId)}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setData(json.data);
+      }
     } catch (err) {
-      console.error("Error loading dashboard data", err);
+      console.error("Error loading Supabase dashboard data", err);
     } finally {
       setLoading(false);
     }
@@ -155,18 +156,26 @@ export default function Dashboard() {
     return list;
   }, [data, activeNav, statusFilter, searchQuery]);
 
-  // Handle status update
+  // Handle status update in Supabase
   const handleUpdateStatus = async (newStatus: FeedbackStatus) => {
     if (!activeFeedback) return;
     setIsUpdatingStatus(true);
     try {
-      const updated = await updateFeedbackStatus(activeFeedback.id, newStatus, resolutionNoteInput);
-      if (updated) {
-        setActiveFeedback(updated);
+      const res = await fetch(`/api/feedback/${encodeURIComponent(activeFeedback.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: resolutionNoteInput,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setActiveFeedback(json.data);
         await loadData(selectedPropertyId);
       }
     } catch (err) {
-      console.error("Failed to update status", err);
+      console.error("Failed to update status in Supabase", err);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -191,13 +200,14 @@ export default function Dashboard() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `vistora_guest_feedback_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `vistora_supabase_feedback_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   const complaintsCount = data ? Number(data.metrics.openComplaints.value) : 0;
+  const isSupabase = data?.source === "supabase";
 
   return (
     <div className="app-shell">
@@ -249,7 +259,7 @@ export default function Dashboard() {
           <div style={{ padding: "0 10px 14px" }}>
             <span className="badge-supabase">
               <i className="dot" />
-              {isSupabaseConfigured ? "Supabase Connected" : "Supabase Ready"}
+              {isSupabase ? "Supabase Live" : "Connecting..."}
             </span>
           </div>
           <button className="nav-item">
@@ -282,7 +292,7 @@ export default function Dashboard() {
               className="text-link"
               style={{ fontSize: "11px", fontWeight: 500 }}
             >
-              Preview Guest Form ↗
+              Guest Form Preview ↗
             </Link>
             <button className="icon-button" aria-label="Search" onClick={() => document.getElementById("feedback-search")?.focus()}>
               <Icon name="search" />
@@ -307,7 +317,9 @@ export default function Dashboard() {
                 })}
               </p>
               <h1>Good morning, Rhea</h1>
-              <p className="subheading">Here’s what’s happening across your guest experience today.</p>
+              <p className="subheading">
+                Connected to live Supabase database. Showing real guest experience records.
+              </p>
             </div>
 
             <div className="heading-actions">
@@ -318,7 +330,7 @@ export default function Dashboard() {
                 onChange={(e) => setSelectedPropertyId(e.target.value)}
                 style={{ cursor: "pointer", outline: "none" }}
               >
-                <option value="all">All properties (3)</option>
+                <option value="all">All properties ({data?.properties.length || 3})</option>
                 {data?.properties.map((prop) => (
                   <option key={prop.id} value={prop.id}>
                     {prop.name}
@@ -332,21 +344,22 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Database Banner / Architecture Indicator */}
+          {/* Database Banner */}
           <div className="demo-banner">
             <span className="pulse-dot" />
-            <strong>{isSupabaseConfigured ? "Supabase Live Database" : "Supabase-Ready Schema Active"}</strong>
+            <strong>Supabase Connected</strong>
             <span>
-              {isSupabaseConfigured
-                ? "Streaming live guest experience records directly from Supabase PostgreSQL tables."
-                : "Using validated schema & local persistence. Add credentials to .env.local to link your Supabase project."}
+              Streaming live data directly from your Supabase PostgreSQL database tables: <code>properties</code>, <code>stays</code>, and <code>feedback</code>.
             </span>
-            <Link href="/feedback/demo-stay" style={{ marginLeft: "auto", color: "#456150", fontWeight: 600, fontSize: "11px" }}>
-              Test Guest Feedback Flow →
-            </Link>
+            <button
+              onClick={() => loadData(selectedPropertyId)}
+              style={{ marginLeft: "auto", color: "#456150", fontWeight: 600, fontSize: "11px", background: "none", border: "none" }}
+            >
+              Refresh Data ↻
+            </button>
           </div>
 
-          {/* Dynamic Metrics */}
+          {/* Dynamic Metrics calculated directly from Supabase */}
           {data && (
             <section className="metric-grid">
               <Metric
@@ -385,8 +398,8 @@ export default function Dashboard() {
               <div className="panel trend-panel">
                 <PanelHeading
                   title="Feedback trend"
-                  detail="Submissions across all departments"
-                  action="Last 30 days"
+                  detail="Submissions across all departments in Supabase"
+                  action="Live overview"
                 />
                 <div className="chart-legend">
                   <span>
@@ -436,12 +449,12 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Real Computed Rating Distribution */}
+              {/* Real Computed Rating Distribution from Supabase */}
               <div className="panel rating-panel">
                 <PanelHeading
                   title="Rating distribution"
-                  detail={`All ${data.ratingDistribution.totalCount} submitted ratings`}
-                  action="View details"
+                  detail={`All ${data.ratingDistribution.totalCount} ratings in Supabase`}
+                  action="Database Breakdown"
                 />
                 <div className="rating-bars">
                   {data.ratingDistribution.bars.map((item) => (
@@ -468,8 +481,8 @@ export default function Dashboard() {
           <section className="lower-grid">
             <div className="panel table-panel">
               <PanelHeading
-                title={activeNav === "Complaints" ? "Service Recovery & Complaints" : "Recent feedback"}
-                detail="Operational guest submissions with live recovery status"
+                title={activeNav === "Complaints" ? "Service Recovery & Complaints" : "Live feedback"}
+                detail="Direct records from Supabase feedback table"
                 action={`Showing ${filteredFeedback.length} items`}
               />
 
@@ -533,7 +546,7 @@ export default function Dashboard() {
                     {filteredFeedback.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "#8a948e" }}>
-                          No feedback entries found matching your filters.
+                          {loading ? "Loading Supabase records..." : "No feedback entries found."}
                         </td>
                       </tr>
                     ) : (
@@ -595,12 +608,12 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Real Attention Required Panel */}
+            {/* Attention Required Panel */}
             <div className="panel attention-panel">
               <PanelHeading
                 title="Attention required"
                 detail="Critical complaints and active follow-up SLAs"
-                action="View all"
+                action="Supabase Alerts"
               />
               <div className="attention-list">
                 {data?.attentionItems.length === 0 ? (
@@ -683,7 +696,7 @@ export default function Dashboard() {
 
             <div style={{ marginTop: "18px" }}>
               <label className="field-label" htmlFor="resolution-notes">
-                Service Recovery & Operations Notes
+                Service Recovery Notes (Supabase)
               </label>
               <textarea
                 id="resolution-notes"

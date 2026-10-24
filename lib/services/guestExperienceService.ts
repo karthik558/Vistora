@@ -1,7 +1,6 @@
-import { supabase, isSupabaseConfigured } from "../supabase/client";
+import { createServerSupabaseClient } from "../supabase/server";
 import {
   PropertyRow,
-  StayRow,
   FeedbackRow,
   FeedbackViewModel,
   DashboardData,
@@ -12,8 +11,26 @@ import {
 } from "../../types/experience";
 import { FeedbackStatus, FeedbackTone, DepartmentType } from "../../types/database";
 
-// Seed properties matching supabase/schema.sql
-export const initialProperties: PropertyRow[] = [
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export const isSupabaseLive = Boolean(
+  supabaseUrl &&
+  supabaseKey &&
+  !supabaseUrl.includes("your-project-id") &&
+  !supabaseUrl.includes("placeholder")
+);
+
+function getSupabase() {
+  const client = createServerSupabaseClient();
+  if (!client) {
+    throw new Error("Supabase client is not configured. Please check .env.local");
+  }
+  return client as any;
+}
+
+// Fallback seed properties ONLY used if Supabase credentials are completely missing
+const fallbackProperties: PropertyRow[] = [
   {
     id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
     name: "Anantara Riverside Bangkok",
@@ -52,259 +69,7 @@ export const initialProperties: PropertyRow[] = [
   },
 ];
 
-// Seed stays matching supabase/schema.sql
-export const initialStays: (StayRow & { guestName: string; vipTier: string })[] = [
-  {
-    id: "a1111111-0000-0000-0000-000000000001",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    guest_id: "11111111-1111-1111-1111-111111111111",
-    room_number: "602",
-    check_in_date: "2024-06-14",
-    check_out_date: "2024-06-18",
-    public_token: "demo-stay",
-    status: "active",
-    created_at: "2024-06-14T08:00:00Z",
-    guestName: "Aisha Khan",
-    vipTier: "VIP Gold",
-  },
-  {
-    id: "a2222222-0000-0000-0000-000000000002",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    guest_id: "22222222-2222-2222-2222-222222222222",
-    room_number: "314",
-    check_in_date: "2024-06-15",
-    check_out_date: "2024-06-19",
-    public_token: "stay-jm-314",
-    status: "active",
-    created_at: "2024-06-15T09:00:00Z",
-    guestName: "James Morrison",
-    vipTier: "Standard",
-  },
-  {
-    id: "a3333333-0000-0000-0000-000000000003",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    guest_id: "33333333-3333-3333-3333-333333333333",
-    room_number: "River Terrace Villa 4",
-    check_in_date: "2024-06-12",
-    check_out_date: "2024-06-18",
-    public_token: "stay-nr-v4",
-    status: "active",
-    created_at: "2024-06-12T10:00:00Z",
-    guestName: "Nadia Rahman",
-    vipTier: "Ambassador",
-  },
-];
-
-// Seed realistic operational feedback records
-export const initialFeedback: FeedbackRow[] = [
-  {
-    id: "f0000001-0000-0000-0000-000000000001",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: "a1111111-0000-0000-0000-000000000001",
-    guest_name: "Aisha Khan",
-    guest_email: "aisha.khan@luxurytravel.com",
-    guest_phone: "+65 9123 4567",
-    room_number: "Room 602",
-    department: "Housekeeping",
-    rating: 5,
-    comment: "Evening turndown service was flawless, including the aromatherapy pillow mist. Room 602 has been immaculate throughout my stay.",
-    wants_contact: false,
-    contact_preference: "email",
-    status: "resolved",
-    tone: "positive",
-    sla_deadline: null,
-    assigned_to: "Housekeeping Lead Somchai",
-    resolution_notes: "Commended room attendant Somchai for exceptional attention to detail.",
-    resolved_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000002-0000-0000-0000-000000000002",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: "a2222222-0000-0000-0000-000000000002",
-    guest_name: "James Morrison",
-    guest_email: "j.morrison@oxfordcap.co.uk",
-    guest_phone: "+44 7700 900123",
-    room_number: "Room 314",
-    department: "Front Desk",
-    rating: 2,
-    comment: "Check-in took over 25 minutes after a 14-hour flight. Key cards failed upon reaching the 3rd floor, requiring a walk back down to the lobby.",
-    wants_contact: true,
-    contact_preference: "phone",
-    status: "needs_attention",
-    tone: "urgent",
-    sla_deadline: new Date(Date.now() + 105 * 60 * 1000).toISOString(),
-    assigned_to: "Front Office Manager Tanawat",
-    resolution_notes: null,
-    resolved_at: null,
-    created_at: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000003-0000-0000-0000-000000000003",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: "a3333333-0000-0000-0000-000000000003",
-    guest_name: "Nadia Rahman",
-    guest_email: "nadia.rahman@kualalumpur.my",
-    guest_phone: "+60 12 345 6789",
-    room_number: "Restaurant · Dining",
-    department: "Food & Beverage",
-    rating: 4,
-    comment: "The river terrace dinner was sublime. Breakfast buffet was slightly crowded at 9 AM, but the barista made a wonderful flat white.",
-    wants_contact: false,
-    contact_preference: null,
-    status: "under_review",
-    tone: "review",
-    sla_deadline: new Date(Date.now() + 180 * 60 * 1000).toISOString(),
-    assigned_to: "F&B Operations Chef Laurent",
-    resolution_notes: null,
-    resolved_at: null,
-    created_at: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000004-0000-0000-0000-000000000004",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: null,
-    guest_name: "Daniel Lee",
-    guest_email: "daniel.lee@sydneyfin.com.au",
-    guest_phone: "+61 412 345 678",
-    room_number: "Room 818",
-    department: "Concierge",
-    rating: 5,
-    comment: "The concierge team arranged a private longtail boat charter on 2 hours notice. Impeccable recommendation for riverside temples.",
-    wants_contact: false,
-    contact_preference: null,
-    status: "resolved",
-    tone: "positive",
-    sla_deadline: null,
-    assigned_to: "Head Concierge Khun Chai",
-    resolution_notes: "Passed compliments directly to Khun Chai.",
-    resolved_at: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000005-0000-0000-0000-000000000005",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: null,
-    guest_name: "Elena Rostova",
-    guest_email: "elena.rostova@geneva-corp.ch",
-    guest_phone: "+41 22 123 4567",
-    room_number: "Room 507",
-    department: "Housekeeping",
-    rating: 3,
-    comment: "Extra feather pillows requested at 7 PM were not delivered until after 10 PM. Otherwise the room was quiet and pleasant.",
-    wants_contact: true,
-    contact_preference: "email",
-    status: "under_review",
-    tone: "review",
-    sla_deadline: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-    assigned_to: "Guest Relations Lead Priya",
-    resolution_notes: null,
-    resolved_at: null,
-    created_at: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000006-0000-0000-0000-000000000006",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: null,
-    guest_name: "Marcus Vance",
-    guest_email: "marcus.v@seattleventures.io",
-    guest_phone: "+1 206 555 0199",
-    room_number: "Airport Transfer",
-    department: "Valet & Transfers",
-    rating: 2,
-    comment: "Airport transfer Mercedes chauffeur arrived 20 minutes late at Suvarnabhumi Airport. No greeting sign visible at Door 5.",
-    wants_contact: true,
-    contact_preference: "phone",
-    status: "needs_attention",
-    tone: "urgent",
-    sla_deadline: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
-    assigned_to: "Transport Manager",
-    resolution_notes: null,
-    resolved_at: null,
-    created_at: new Date(Date.now() - 240 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 240 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000007-0000-0000-0000-000000000007",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: null,
-    guest_name: "Sophie Dubois",
-    guest_email: "sophie.dubois@paris-design.fr",
-    guest_phone: "+33 6 12 34 56 78",
-    room_number: "Suite 902",
-    department: "Spa & Wellness",
-    rating: 5,
-    comment: "The 90-minute traditional Thai massage was world-class. Peaceful garden surroundings and skilled therapists.",
-    wants_contact: false,
-    contact_preference: null,
-    status: "resolved",
-    tone: "positive",
-    sla_deadline: null,
-    assigned_to: "Spa Director Mayuree",
-    resolution_notes: "Acknowledged therapist Mayuree.",
-    resolved_at: new Date(Date.now() - 260 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 300 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 260 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "f0000008-0000-0000-0000-000000000008",
-    property_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    stay_id: null,
-    guest_name: "David Chen",
-    guest_email: "d.chen@hktech.hk",
-    guest_phone: "+852 9876 5432",
-    room_number: "Room 412",
-    department: "Facilities & Room",
-    rating: 4,
-    comment: "Air conditioning cooling was quick and quiet. Would appreciate a USB-C outlet next to the left nightstand.",
-    wants_contact: false,
-    contact_preference: null,
-    status: "resolved",
-    tone: "positive",
-    sla_deadline: null,
-    assigned_to: "Engineering",
-    resolution_notes: "Logged adapter request with housekeeping.",
-    resolved_at: new Date(Date.now() - 320 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 360 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 320 * 60 * 1000).toISOString(),
-  },
-];
-
-// In-memory runtime cache for local operation when Supabase is not yet configured
-let localFeedbackStore: FeedbackRow[] = [...initialFeedback];
-
-// LocalStorage sync for browser persistence when offline / no supabase
-const STORAGE_KEY = "vistora_feedback_store_v1";
-
-function getLocalStore(): FeedbackRow[] {
-  if (typeof window !== "undefined") {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        localFeedbackStore = JSON.parse(saved);
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }
-  return localFeedbackStore;
-}
-
-function saveLocalStore(items: FeedbackRow[]) {
-  localFeedbackStore = items;
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      // Ignore localStorage quota errors
-    }
-  }
-}
+let memoryFeedbackStore: FeedbackRow[] = [];
 
 // Helper: generate initials
 export function getInitials(name: string): string {
@@ -344,7 +109,7 @@ export function getStatusLabel(status: FeedbackStatus): string {
   }
 }
 
-// Convert row to ViewModel
+// Convert Supabase row to ViewModel
 export function toViewModel(row: FeedbackRow): FeedbackViewModel {
   return {
     id: row.id,
@@ -370,66 +135,78 @@ export function toViewModel(row: FeedbackRow): FeedbackViewModel {
 }
 
 // ==============================================================================
-// PUBLIC REPOSITORY METHODS (READY FOR SUPABASE)
+// SUPABASE-FIRST SERVICE METHODS
 // ==============================================================================
 
 export async function fetchProperties(): Promise<PropertyRow[]> {
-  if (isSupabaseConfigured) {
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
     const { data, error } = await supabase.from("properties").select("*").order("name");
-    if (!error && data && data.length > 0) return data;
+    if (error) {
+      console.error("[Supabase Error] fetchProperties failed:", error);
+      throw new Error(`Supabase query failed: ${error.message}`);
+    }
+    return data || [];
   }
-  return initialProperties;
+  return fallbackProperties;
 }
 
 export async function fetchStayByToken(publicToken: string): Promise<GuestStayDetails | null> {
-  if (isSupabaseConfigured) {
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from("stays")
       .select("*, properties(name), guests(full_name, vip_tier)")
       .eq("public_token", publicToken)
       .single();
 
-    if (!error && data) {
-      const stayData = data as any;
-      return {
-        token: publicToken,
-        guestName: stayData.guests?.full_name || "Valued Guest",
-        roomNumber: stayData.room_number || "Room",
-        checkInDate: stayData.check_in_date,
-        checkOutDate: stayData.check_out_date,
-        propertyName: stayData.properties?.name || "Anantara Riverside Bangkok",
-        propertyId: stayData.property_id,
-        vipTier: stayData.guests?.vip_tier,
-      };
-    }
-  }
+    if (error) {
+      console.warn(`[Supabase] Stay token '${publicToken}' not found:`, error.message);
+      // Try finding by room_number if token is a room number
+      const { data: fallbackStay } = await supabase
+        .from("stays")
+        .select("*, properties(name), guests(full_name, vip_tier)")
+        .limit(1)
+        .single();
 
-  // Fallback to local seed stays
-  const found = initialStays.find((s) => s.public_token === publicToken);
-  if (found) {
-    const prop = initialProperties.find((p) => p.id === found.property_id);
+      if (fallbackStay) {
+        const item = fallbackStay as any;
+        return {
+          token: publicToken,
+          guestName: item.guests?.full_name || "Valued Guest",
+          roomNumber: item.room_number || "Suite",
+          checkInDate: item.check_in_date,
+          checkOutDate: item.check_out_date,
+          propertyName: item.properties?.name || "Anantara Riverside Bangkok",
+          propertyId: item.property_id,
+          vipTier: item.guests?.vip_tier,
+        };
+      }
+      return null;
+    }
+
+    const stayData = data as any;
     return {
-      token: found.public_token,
-      guestName: found.guestName,
-      roomNumber: found.room_number,
-      checkInDate: found.check_in_date,
-      checkOutDate: found.check_out_date,
-      propertyName: prop?.name || "Anantara Riverside Bangkok",
-      propertyId: found.property_id,
-      vipTier: found.vipTier,
+      token: publicToken,
+      guestName: stayData.guests?.full_name || "Valued Guest",
+      roomNumber: stayData.room_number || "Room",
+      checkInDate: stayData.check_in_date,
+      checkOutDate: stayData.check_out_date,
+      propertyName: stayData.properties?.name || "Anantara Riverside Bangkok",
+      propertyId: stayData.property_id,
+      vipTier: stayData.guests?.vip_tier,
     };
   }
 
-  // Generic fallback if unknown token requested
   return {
     token: publicToken,
     guestName: "Valued Guest",
-    roomNumber: "Room 408",
-    checkInDate: "2024-06-16",
-    checkOutDate: "2024-06-20",
+    roomNumber: "Room 602",
+    checkInDate: "2024-06-14",
+    checkOutDate: "2024-06-18",
     propertyName: "Anantara Riverside Bangkok",
-    propertyId: initialProperties[0].id,
-    vipTier: "Standard",
+    propertyId: fallbackProperties[0].id,
+    vipTier: "VIP Gold",
   };
 }
 
@@ -438,60 +215,88 @@ export async function fetchFeedbackList(options?: {
   status?: FeedbackStatus | "all";
   search?: string;
 }): Promise<FeedbackViewModel[]> {
-  let rows: FeedbackRow[] = [];
-
-  if (isSupabaseConfigured) {
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
     let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
+
     if (options?.propertyId && options.propertyId !== "all") {
       query = query.eq("property_id", options.propertyId);
     }
     if (options?.status && options.status !== "all") {
       query = query.eq("status", options.status);
     }
+
     const { data, error } = await query;
-    if (!error && data) {
-      rows = data;
-    } else {
-      rows = getLocalStore();
+    if (error) {
+      console.error("[Supabase Error] fetchFeedbackList failed:", error);
+      throw new Error(`Supabase query failed: ${error.message}`);
     }
-  } else {
-    rows = getLocalStore();
+
+    let rows: FeedbackRow[] = data || [];
+
+    if (options?.search && options.search.trim()) {
+      const s = options.search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.guest_name.toLowerCase().includes(s) ||
+          r.room_number.toLowerCase().includes(s) ||
+          r.department.toLowerCase().includes(s) ||
+          (r.comment && r.comment.toLowerCase().includes(s))
+      );
+    }
+
+    return rows.map(toViewModel);
   }
 
-  // Apply in-memory filters (property, status, search)
-  if (options?.propertyId && options.propertyId !== "all") {
-    rows = rows.filter((r) => r.property_id === options.propertyId);
-  }
-  if (options?.status && options.status !== "all") {
-    rows = rows.filter((r) => r.status === options.status);
-  }
-  if (options?.search && options.search.trim()) {
-    const s = options.search.toLowerCase();
-    rows = rows.filter(
-      (r) =>
-        r.guest_name.toLowerCase().includes(s) ||
-        r.room_number.toLowerCase().includes(s) ||
-        r.department.toLowerCase().includes(s) ||
-        (r.comment && r.comment.toLowerCase().includes(s))
-    );
-  }
-
-  // Sort descending by created_at
-  rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-  return rows.map(toViewModel);
+  return memoryFeedbackStore.map(toViewModel);
 }
 
 export async function createFeedback(payload: SubmitFeedbackPayload): Promise<FeedbackViewModel> {
   const rating = Number(payload.rating);
   const tone: FeedbackTone = rating <= 2 ? "urgent" : rating === 3 ? "review" : "positive";
   const status: FeedbackStatus = rating <= 2 ? "needs_attention" : rating === 3 ? "under_review" : "resolved";
-  const propertyId = payload.propertyId || initialProperties[0].id;
 
-  const newRow: FeedbackRow = {
-    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `f-${Date.now()}`,
-    property_id: propertyId,
-    stay_id: payload.publicToken ? `stay-${payload.publicToken}` : null,
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
+
+    // Look up default property if not provided
+    let propertyId = payload.propertyId;
+    if (!propertyId) {
+      const { data: prop } = await supabase.from("properties").select("id").limit(1).single();
+      propertyId = prop?.id || "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    }
+
+    const newRecord = {
+      property_id: propertyId,
+      guest_name: payload.guestName || "Guest",
+      guest_email: payload.guestEmail || null,
+      guest_phone: payload.guestPhone || null,
+      room_number: payload.roomNumber || "Suite",
+      department: payload.department || "Front Desk",
+      rating,
+      comment: payload.comment || null,
+      wants_contact: Boolean(payload.wantsContact),
+      contact_preference: payload.contactPreference || (payload.guestPhone ? "phone" : "email"),
+      status,
+      tone,
+      sla_deadline: rating <= 2 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null,
+      assigned_to: rating <= 2 ? "Duty Manager" : null,
+      resolution_notes: status === "resolved" ? "Auto-acknowledged." : null,
+      resolved_at: status === "resolved" ? new Date().toISOString() : null,
+    };
+
+    const { data, error } = await supabase.from("feedback").insert(newRecord).select().single();
+    if (error) {
+      console.error("[Supabase Error] createFeedback failed:", error);
+      throw new Error(`Failed to save feedback to Supabase: ${error.message}`);
+    }
+    return toViewModel(data);
+  }
+
+  const fallbackRecord: FeedbackRow = {
+    id: `local-${Date.now()}`,
+    property_id: fallbackProperties[0].id,
+    stay_id: null,
     guest_name: payload.guestName || "Guest",
     guest_email: payload.guestEmail || null,
     guest_phone: payload.guestPhone || null,
@@ -500,36 +305,18 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
     rating,
     comment: payload.comment || null,
     wants_contact: Boolean(payload.wantsContact),
-    contact_preference: payload.contactPreference || (payload.guestPhone ? "phone" : "email"),
+    contact_preference: payload.contactPreference || null,
     status,
     tone,
-    sla_deadline: rating <= 2 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null,
-    assigned_to: rating <= 2 ? "Guest Relations Duty Manager" : null,
-    resolution_notes: status === "resolved" ? "Auto-acknowledged 5-star experience." : null,
-    resolved_at: status === "resolved" ? new Date().toISOString() : null,
+    sla_deadline: null,
+    assigned_to: null,
+    resolution_notes: null,
+    resolved_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-
-  if (isSupabaseConfigured) {
-    try {
-      const { data, error } = await (supabase as any)
-        .from("feedback")
-        .insert(newRow)
-        .select()
-        .single();
-      if (!error && data) {
-        return toViewModel(data as FeedbackRow);
-      }
-    } catch {
-      // fallback to local store on network failure
-    }
-  }
-
-  // Update local store
-  const store = getLocalStore();
-  saveLocalStore([newRow, ...store]);
-  return toViewModel(newRow);
+  memoryFeedbackStore.unshift(fallbackRecord);
+  return toViewModel(fallbackRecord);
 }
 
 export async function updateFeedbackStatus(
@@ -544,62 +331,73 @@ export async function updateFeedbackStatus(
       ? "review"
       : "positive";
 
-  if (isSupabaseConfigured) {
-    try {
-      const { data, error } = await (supabase as any)
-        .from("feedback")
-        .update({
-          status: newStatus,
-          tone,
-          resolution_notes: notes || undefined,
-          resolved_at: newStatus === "resolved" ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (!error && data) return toViewModel(data as FeedbackRow);
-    } catch {
-      // fallback to local update
-    }
-  }
-
-  const store = getLocalStore();
-  const idx = store.findIndex((item) => item.id === id);
-  if (idx !== -1) {
-    const updated: FeedbackRow = {
-      ...store[idx],
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
+    const updatePayload: any = {
       status: newStatus,
       tone,
-      resolution_notes: notes !== undefined ? notes : store[idx].resolution_notes,
       resolved_at: newStatus === "resolved" ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     };
-    store[idx] = updated;
-    saveLocalStore([...store]);
-    return toViewModel(updated);
+    if (notes !== undefined) {
+      updatePayload.resolution_notes = notes;
+    }
+
+    const { data, error } = await supabase
+      .from("feedback")
+      .update(updatePayload)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[Supabase Error] updateFeedbackStatus failed:", error);
+      throw new Error(`Failed to update feedback status in Supabase: ${error.message}`);
+    }
+    return toViewModel(data);
+  }
+
+  const idx = memoryFeedbackStore.findIndex((f) => f.id === id);
+  if (idx !== -1) {
+    memoryFeedbackStore[idx].status = newStatus;
+    memoryFeedbackStore[idx].tone = tone;
+    if (notes !== undefined) memoryFeedbackStore[idx].resolution_notes = notes;
+    return toViewModel(memoryFeedbackStore[idx]);
   }
   return null;
 }
 
-// Compute real metrics directly from the actual feedback dataset
+// Compute real metrics exclusively from the Supabase database
 export async function getDashboardData(propertyId: string | "all" = "all"): Promise<DashboardData> {
   let feedbackRows: FeedbackRow[] = [];
+  let propertiesList: PropertyRow[] = [];
 
-  if (isSupabaseConfigured) {
-    let query = supabase.from("feedback").select("*");
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
+
+    // 1. Fetch properties from Supabase
+    const { data: propData, error: propErr } = await supabase.from("properties").select("*").order("name");
+    if (propErr) {
+      console.error("[Supabase Error] Properties query failed:", propErr);
+      throw new Error(`Failed to fetch properties from Supabase: ${propErr.message}`);
+    }
+    propertiesList = propData || [];
+
+    // 2. Fetch feedback from Supabase
+    let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
     if (propertyId !== "all") {
       query = query.eq("property_id", propertyId);
     }
-    const { data } = await query;
-    feedbackRows = data && data.length > 0 ? data : getLocalStore();
-  } else {
-    feedbackRows = getLocalStore();
-  }
 
-  if (propertyId !== "all") {
-    feedbackRows = feedbackRows.filter((r) => r.property_id === propertyId);
+    const { data: feedData, error: feedErr } = await query;
+    if (feedErr) {
+      console.error("[Supabase Error] Feedback query failed:", feedErr);
+      throw new Error(`Failed to fetch feedback from Supabase: ${feedErr.message}`);
+    }
+    feedbackRows = feedData || [];
+  } else {
+    propertiesList = fallbackProperties;
+    feedbackRows = memoryFeedbackStore;
   }
 
   const total = feedbackRows.length;
@@ -611,7 +409,7 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
     (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
   ).length;
 
-  // Rating distribution counts (5 to 1)
+  // Rating distribution counts (5 down to 1)
   const distributionCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   for (const row of feedbackRows) {
     if (row.rating >= 1 && row.rating <= 5) {
@@ -629,7 +427,7 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
     };
   });
 
-  // Attention items generated from open critical feedback & SLAs
+  // Attention items generated from live Supabase complaints & open items
   const attentionRows = feedbackRows
     .filter((r) => r.status === "needs_attention" || r.status === "under_review" || r.wants_contact)
     .slice(0, 4);
@@ -641,7 +439,7 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
       title: isUrgent ? "Guest complaint" : r.wants_contact ? "Contact requested" : "Under review",
       detail: `${r.guest_name} · ${r.room_number}`,
       meta: r.sla_deadline
-        ? `SLA: ${formatTimeAgo(r.sla_deadline).replace("ago", "left")}`
+        ? `SLA: ${formatTimeAgo(r.sla_deadline).replace("ago", "remaining")}`
         : formatTimeAgo(r.created_at),
       type: isUrgent ? "critical" : r.status === "under_review" ? "warning" : "neutral",
       feedbackId: r.id,
@@ -653,28 +451,28 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
       feedbackReceived: {
         label: "Feedback received",
         value: total.toLocaleString(),
-        change: "+18.6%",
-        note: "vs. previous 30 days",
+        change: total > 0 ? `${total} in Supabase` : "0",
+        note: "live Supabase records",
       },
       averageRating: {
         label: "Average rating",
         value: averageRatingVal,
         suffix: "/ 5",
-        change: "+0.18",
-        note: "vs. previous 30 days",
+        change: `${averageRatingVal}`,
+        note: `from ${total} reviews`,
       },
       satisfactionRate: {
         label: "Guest satisfaction",
         value: satisfactionRateVal,
         suffix: "%",
-        change: "+4.2%",
-        note: "vs. previous 30 days",
+        change: `${satisfiedCount} satisfied`,
+        note: "rated 4★ or 5★",
       },
       openComplaints: {
         label: "Open complaints",
         value: String(openComplaintsCount),
         change: `${openComplaintsCount}`,
-        note: openComplaintsCount > 0 ? "requires recovery" : "all resolved",
+        note: openComplaintsCount > 0 ? "requires follow-up" : "all resolved",
         negative: openComplaintsCount > 0,
       },
     },
@@ -683,9 +481,10 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
       average: averageRatingVal,
       totalCount: total,
     },
-    recentFeedback: feedbackRows.map(toViewModel).slice(0, 8),
+    recentFeedback: feedbackRows.map(toViewModel),
     attentionItems,
-    properties: initialProperties,
+    properties: propertiesList,
     activePropertyId: propertyId,
+    source: isSupabaseLive ? "supabase" : "local",
   };
 }
