@@ -67,9 +67,35 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     role user_role NOT NULL DEFAULT 'visitor',
     property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
     avatar_url TEXT,
+    rights TEXT[] DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Dedicated User Rights Table (Stores granular capabilities and assigned rights)
+CREATE TABLE IF NOT EXISTS public.user_rights (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    rights TEXT[] NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT user_rights_user_id_key UNIQUE (user_id)
+);
+
+-- Dedicated User Credentials Table (Stores password hashes separately from profiles)
+CREATE TABLE IF NOT EXISTS public.user_credentials (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT user_credentials_user_id_key UNIQUE (user_id)
+);
+
+-- Cleanup: ensure avatar_url contains only legitimate image URLs and never JSON or password hashes
+UPDATE public.profiles
+SET avatar_url = NULL
+WHERE avatar_url LIKE '{"%' OR avatar_url LIKE 'pwd:%';
 
 -- Guests (Guest directory)
 CREATE TABLE IF NOT EXISTS public.guests (
@@ -200,6 +226,28 @@ CREATE POLICY "Users can insert their own profile"
 DROP POLICY IF EXISTS "Service role has full access to profiles" ON public.profiles;
 CREATE POLICY "Service role has full access to profiles"
     ON public.profiles FOR ALL
+    USING (auth.role() = 'service_role');
+
+-- RLS for user_rights
+ALTER TABLE public.user_rights ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read user_rights" ON public.user_rights;
+CREATE POLICY "Authenticated users can read user_rights"
+    ON public.user_rights FOR SELECT
+    TO authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "Service role has full access to user_rights" ON public.user_rights;
+CREATE POLICY "Service role has full access to user_rights"
+    ON public.user_rights FOR ALL
+    USING (auth.role() = 'service_role');
+
+-- RLS for user_credentials
+ALTER TABLE public.user_credentials ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Service role has full access to user_credentials" ON public.user_credentials;
+CREATE POLICY "Service role has full access to user_credentials"
+    ON public.user_credentials FOR ALL
     USING (auth.role() = 'service_role');
 
 -- ------------------------------------------------------------------------------

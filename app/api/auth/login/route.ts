@@ -89,33 +89,54 @@ export async function POST(request: NextRequest) {
       // Fall through to hash verification
     }
 
-    // B. Check profile password hash
+    // B. Check credentials in user_credentials table (fallback if Supabase Auth wasn't used)
     const inputHash = hashPassword(cleanPassword);
     if (!passwordValid && profile) {
-      if (profile.avatar_url && profile.avatar_url.startsWith("pwd:")) {
-        if (profile.avatar_url === inputHash) {
+      try {
+        const { data: cred } = await adminClient
+          .from("user_credentials")
+          .select("password_hash")
+          .eq("user_id", profile.id)
+          .maybeSingle();
+
+        if (cred?.password_hash === inputHash) {
           passwordValid = true;
         }
-      } else {
-        // First login: store this password hash for future logins
+      } catch {}
+
+      // One-time legacy migration fallback if user previously had hash in avatar_url
+      if (!passwordValid && profile.avatar_url) {
+        if (
+          profile.avatar_url === inputHash ||
+          profile.avatar_url.includes(inputHash)
+        ) {
+          passwordValid = true;
+          // Clean avatar_url and migrate hash to user_credentials
+          try {
+            await adminClient.from("user_credentials").upsert({
+              user_id: profile.id,
+              password_hash: inputHash,
+              updated_at: new Date().toISOString(),
+            });
+            await adminClient.from("profiles").update({ avatar_url: null }).eq("id", profile.id);
+          } catch {}
+        }
+      } else if (!passwordValid) {
+        // First login: store this password hash in user_credentials
         passwordValid = true;
-        await adminClient
-          .from("profiles")
-          .update({ avatar_url: inputHash, updated_at: new Date().toISOString() })
-          .eq("id", profile.id);
+        try {
+          await adminClient.from("user_credentials").upsert({
+            user_id: profile.id,
+            password_hash: inputHash,
+            updated_at: new Date().toISOString(),
+          });
+        } catch {}
       }
     } else if (!passwordValid && guest) {
       if (guest.phone && guest.phone.startsWith("pwd:")) {
         if (guest.phone === inputHash) {
           passwordValid = true;
         }
-      } else {
-        // First login: store this password hash for future logins
-        passwordValid = true;
-        await adminClient
-          .from("guests")
-          .update({ phone: inputHash })
-          .eq("id", guest.id);
       }
     }
 

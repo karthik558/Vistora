@@ -33,17 +33,45 @@ export async function GET() {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // Parse rights from profile metadata / avatar_url
-    const usersWithRights = (profiles || []).map((p: any) => {
-      let rights = DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
-      if (p.avatar_url && p.avatar_url.startsWith("{")) {
-        try {
-          const parsed = JSON.parse(p.avatar_url);
-          if (Array.isArray(parsed.rights)) {
-            rights = parsed.rights;
+    // Try to load rights from dedicated public.user_rights table
+    const rightsMap = new Map<string, string[]>();
+    try {
+      const { data: rightsRows } = await adminClient
+        .from("user_rights")
+        .select("user_id, rights");
+      if (rightsRows) {
+        for (const row of rightsRows) {
+          if (row.user_id && Array.isArray(row.rights)) {
+            rightsMap.set(row.user_id, row.rights);
           }
-        } catch {}
+        }
       }
+    } catch {}
+
+    const usersWithRights = (profiles || []).map((p: any) => {
+      let rights = rightsMap.get(p.id);
+
+      // Fallback check: profile direct rights or legacy avatar_url migration
+      if (!rights || rights.length === 0) {
+        if (Array.isArray(p.rights) && p.rights.length > 0) {
+          rights = p.rights;
+        } else if (p.avatar_url && p.avatar_url.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(p.avatar_url);
+            if (Array.isArray(parsed.rights)) {
+              rights = parsed.rights;
+            }
+          } catch {}
+        }
+      }
+
+      if (!rights || rights.length === 0) {
+        rights = DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
+      }
+
+      // Clean avatar_url: if it ever contained JSON or password hash, return null
+      const cleanAvatar = p.avatar_url && (p.avatar_url.startsWith("{") || p.avatar_url.startsWith("pwd:")) ? null : p.avatar_url;
+
       return {
         id: p.id,
         email: p.email,
@@ -52,6 +80,7 @@ export async function GET() {
         property_id: p.property_id,
         properties: p.properties,
         rights,
+        avatar_url: cleanAvatar,
         created_at: p.created_at,
         updated_at: p.updated_at,
       };
@@ -138,13 +167,7 @@ export async function POST(request: NextRequest) {
 
     const newUserId = authData.user.id;
 
-    // Encode password hash and assigned rights together
-    const metadataPayload = JSON.stringify({
-      pwd: passwordHash,
-      rights: assignedRights,
-    });
-
-    // Upsert into public.profiles with optional property_id and rights assignment
+    // 2. Insert into public.profiles (avatar_url is strictly NULL, never password or JSON!)
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
       .upsert({
@@ -153,7 +176,7 @@ export async function POST(request: NextRequest) {
         full_name: cleanName,
         role,
         property_id: propertyId || null,
-        avatar_url: metadataPayload,
+        avatar_url: null,
         updated_at: new Date().toISOString(),
       })
       .select("id, email, full_name, role, property_id, properties(id, name, code), created_at")
@@ -162,6 +185,24 @@ export async function POST(request: NextRequest) {
     if (profileError) {
       return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
+
+    // 3. Store rights in dedicated public.user_rights table
+    try {
+      await adminClient.from("user_rights").upsert({
+        user_id: newUserId,
+        rights: assignedRights,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {}
+
+    // 4. Store password hash fallback in dedicated public.user_credentials table
+    try {
+      await adminClient.from("user_credentials").upsert({
+        user_id: newUserId,
+        password_hash: passwordHash,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {}
 
     return NextResponse.json({
       success: true,
@@ -197,24 +238,8 @@ export async function PATCH(request: NextRequest) {
       .eq("id", userId)
       .single();
 
-    let existingMeta: Record<string, any> = {};
-    if (currentProfile?.avatar_url) {
-      if (currentProfile.avatar_url.startsWith("{")) {
-        try {
-          existingMeta = JSON.parse(currentProfile.avatar_url);
-        } catch {}
-      } else {
-        existingMeta = { pwd: currentProfile.avatar_url };
-      }
-    }
-
-    if (Array.isArray(rights)) {
-      existingMeta.rights = rights;
-    }
-
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
-      avatar_url: JSON.stringify(existingMeta),
     };
 
     if (role && ["admin", "staff", "visitor"].includes(role)) {
@@ -223,6 +248,14 @@ export async function PATCH(request: NextRequest) {
 
     if (propertyId !== undefined) {
       updatePayload.property_id = propertyId || null;
+    }
+
+    // Clean avatar_url if it had legacy JSON/pwd
+    if (
+      currentProfile?.avatar_url &&
+      (currentProfile.avatar_url.startsWith("{") || currentProfile.avatar_url.startsWith("pwd:"))
+    ) {
+      updatePayload.avatar_url = null;
     }
 
     const { data, error } = await adminClient
@@ -236,12 +269,23 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
+    // Save assigned rights into dedicated public.user_rights table
+    if (Array.isArray(rights)) {
+      try {
+        await adminClient.from("user_rights").upsert({
+          user_id: userId,
+          rights,
+          updated_at: new Date().toISOString(),
+        });
+      } catch {}
+    }
+
     // Also update Supabase auth metadata
     try {
       await adminClient.auth.admin.updateUserById(userId, {
         user_metadata: {
           role: updatePayload.role || currentProfile?.role,
-          rights: existingMeta.rights,
+          rights: rights || [],
         },
       });
     } catch {}
@@ -250,7 +294,7 @@ export async function PATCH(request: NextRequest) {
       success: true,
       user: {
         ...data,
-        rights: existingMeta.rights || [],
+        rights: rights || [],
       },
     });
   } catch (err: any) {

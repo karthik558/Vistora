@@ -45,21 +45,15 @@ export async function POST(request: NextRequest) {
       console.warn("Could not update auth.users password:", e);
     }
 
-    // 2. Update hash in profiles table
-    let profileQuery = adminClient.from("profiles").update({
-      avatar_url: newHash,
-      updated_at: new Date().toISOString(),
-    });
-
+    // 2. Fetch profile to ensure target exists
+    let profileQuery = adminClient.from("profiles").select("id, email, full_name, role, avatar_url");
     if (userId) {
       profileQuery = profileQuery.eq("id", userId);
     } else {
       profileQuery = profileQuery.ilike("email", email.trim().toLowerCase());
     }
 
-    const { data: updatedProfile, error: profileErr } = await profileQuery
-      .select("id, email, full_name, role")
-      .maybeSingle();
+    const { data: updatedProfile, error: profileErr } = await profileQuery.maybeSingle();
 
     if (profileErr || !updatedProfile) {
       return NextResponse.json(
@@ -68,10 +62,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const targetUserId = updatedProfile.id;
+
+    // 3. Store password hash in dedicated user_credentials table
+    try {
+      await adminClient.from("user_credentials").upsert({
+        user_id: targetUserId,
+        password_hash: newHash,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn("Could not upsert into user_credentials:", e);
+    }
+
+    // 4. Clean avatar_url if it had legacy password hash or JSON
+    if (
+      updatedProfile.avatar_url &&
+      (updatedProfile.avatar_url.startsWith("pwd:") || updatedProfile.avatar_url.startsWith("{"))
+    ) {
+      try {
+        await adminClient
+          .from("profiles")
+          .update({ avatar_url: null, updated_at: new Date().toISOString() })
+          .eq("id", targetUserId);
+      } catch {}
+    }
+
     return NextResponse.json({
       success: true,
       message: "Password updated successfully.",
-      user: updatedProfile,
+      user: {
+        id: updatedProfile.id,
+        email: updatedProfile.email,
+        full_name: updatedProfile.full_name,
+        role: updatedProfile.role,
+      },
     });
   } catch (err: any) {
     return NextResponse.json(
