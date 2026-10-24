@@ -177,7 +177,7 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
           roomNumber: item.room_number || "Suite",
           checkInDate: item.check_in_date,
           checkOutDate: item.check_out_date,
-          propertyName: item.properties?.name || "Anantara Riverside Bangkok",
+          propertyName: item.properties?.name || "Vistora Partner Property",
           propertyId: item.property_id,
           vipTier: item.guests?.vip_tier,
         };
@@ -192,7 +192,7 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
       roomNumber: stayData.room_number || "Room",
       checkInDate: stayData.check_in_date,
       checkOutDate: stayData.check_out_date,
-      propertyName: stayData.properties?.name || "Anantara Riverside Bangkok",
+      propertyName: stayData.properties?.name || "Vistora Partner Property",
       propertyId: stayData.property_id,
       vipTier: stayData.guests?.vip_tier,
     };
@@ -204,7 +204,7 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
     roomNumber: "Room 602",
     checkInDate: "2024-06-14",
     checkOutDate: "2024-06-18",
-    propertyName: "Anantara Riverside Bangkok",
+    propertyName: "Vistora Partner Property",
     propertyId: fallbackProperties[0].id,
     vipTier: "VIP Gold",
   };

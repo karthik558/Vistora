@@ -525,6 +525,12 @@ a {
   padding: 14px 0 0;
 }
 
+.signout-button:hover {
+  background: #edf3ee !important;
+  color: var(--ink) !important;
+  border-color: #8da493 !important;
+}
+
 /* ==============================================================================
    MAIN CONTENT & TOPBAR (Dashboard)
    ============================================================================== */

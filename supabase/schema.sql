@@ -207,18 +207,22 @@ CREATE POLICY "Service role has full access to profiles"
 -- ------------------------------------------------------------------------------
 -- When a user registers or updates in auth.users, automatically maintain their public profile
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, auth
+LANGUAGE plpgsql
+AS $$
 DECLARE
-    assigned_role user_role := 'visitor';
+    assigned_role public.user_role := 'visitor'::public.user_role;
     meta_role text;
 BEGIN
     meta_role := NEW.raw_user_meta_data->>'role';
     IF meta_role = 'admin' THEN
-        assigned_role := 'admin';
+        assigned_role := 'admin'::public.user_role;
     ELSIF meta_role = 'staff' THEN
-        assigned_role := 'staff';
+        assigned_role := 'staff'::public.user_role;
     ELSE
-        assigned_role := 'visitor';
+        assigned_role := 'visitor'::public.user_role;
     END IF;
 
     INSERT INTO public.profiles (id, email, full_name, role)
@@ -236,7 +240,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

@@ -14,6 +14,8 @@ import {
   QrCode,
   FileSpreadsheet,
   ExternalLink,
+  ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import { DashboardData, FeedbackViewModel } from "../types/experience";
 import { FeedbackStatus } from "../types/database";
@@ -33,6 +35,7 @@ const nav = [
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode },
+  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet },
 ] as const;
 
@@ -135,7 +138,6 @@ export function AppShell({
     (currentUser?.email ? currentUser.email.split("@")[0] : "Operations User");
   const displayEmail = currentUser?.email || "Connected";
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
-  const roleLabel = currentUser?.role ? currentUser.role.toUpperCase() : "ADMIN";
 
   return (
     <div className="app-shell">
@@ -193,13 +195,13 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
-          <Link href="/feedback/demo-stay" className="sidebar-guest-link">
+          <Link href="/feedback" className="sidebar-guest-link">
             <span>Open guest feedback form</span>
             <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />
           </Link>
 
-          {/* Dynamic Authenticated User Profile */}
-          <div className="user-row" title={`Role: ${roleLabel}`}>
+          {/* Dynamic Authenticated User Profile without hover tooltip */}
+          <div className="user-row">
             <span className="user-avatar">{initials}</span>
             <div style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
               <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -209,37 +211,41 @@ export function AppShell({
                 {displayEmail}
               </small>
             </div>
+            {/* Sign out button moved to sidebar */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="signout-button"
+              aria-label="Sign out"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--line)",
+                borderRadius: "4px",
+                padding: "5px 8px",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "10px",
+                fontFamily: "var(--font-dm-mono)",
+                flexShrink: 0,
+              }}
+            >
+              <LogOut size={12} strokeWidth={1.75} />
+              <span>Exit</span>
+            </button>
           </div>
         </div>
       </aside>
 
       <main className="main-content">
-        {/* Topbar: clean breadcrumbs, NO duplicate logo */}
+        {/* Topbar: clean breadcrumbs, NO duplicate logo, NO Data Connected, NO topbar sign out */}
         <header className="topbar">
           <div className="breadcrumbs">
             <span>Workspace</span>
             <b>/</b>
             <strong>{active}</strong>
-          </div>
-
-          <div className="top-actions">
-            <span className="live-status">
-              <i /> Data connected
-            </span>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="top-signout"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                font: "inherit",
-                padding: "4px 8px",
-              }}
-            >
-              Sign out
-            </button>
           </div>
         </header>
         {children}
@@ -391,7 +397,7 @@ export default function Dashboard({
           </>
         ) : (
           <div className="panel empty-state">
-            Unable to load workspace data. Check the Supabase connection and refresh.
+            Unable to load workspace data. Please refresh.
           </div>
         )}
       </div>

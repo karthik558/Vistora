@@ -16,7 +16,7 @@ const departments: DepartmentType[] = [
   "Valet & Transfers",
 ];
 
-export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToken?: string }) {
+export default function FeedbackForm({ publicToken = "verified" }: { publicToken?: string }) {
   const [stay, setStay] = useState<GuestStayDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -138,7 +138,7 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
               style={{ height: "26px", width: "auto", objectFit: "contain" }}
             />
           </Link>
-          <span className="demo-pill">Verified Stay · {roomNumber || stay?.roomNumber}</span>
+          <span className="verified-stay-pill" style={{ background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", borderRadius: "4px", padding: "4px 10px", fontSize: "10px", fontFamily: "var(--font-dm-mono)", fontWeight: 600 }}>Verified Stay · {roomNumber || stay?.roomNumber}</span>
         </div>
         <div className="guest-progress"><span /><span /><span /></div>
 
