@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
             if (profile) {
               parsed.fullName = profile.full_name;
               parsed.role = profile.role;
+              parsed.propertyId = profile.property_id || null;
+              parsed.rights = profile.rights || [];
             }
           } catch {}
 
@@ -76,6 +78,8 @@ export async function GET(request: NextRequest) {
             email: data.user.email,
             fullName,
             role,
+            propertyId: profile?.property_id || null,
+            rights: profile?.rights || data.user.user_metadata?.rights || [],
           };
           const response = NextResponse.json({
             success: true,

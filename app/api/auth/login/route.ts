@@ -165,6 +165,8 @@ export async function POST(request: NextRequest) {
       email: cleanEmail,
       fullName,
       role: assignedRole,
+      propertyId: profile?.property_id || null,
+      rights: profile?.rights || [],
     };
 
     const response = NextResponse.json({

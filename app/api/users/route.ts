@@ -26,7 +26,7 @@ export async function GET() {
 
     const { data: profiles, error } = await adminClient
       .from("profiles")
-      .select("id, email, full_name, role, property_id, properties(id, name, code), avatar_url, created_at, updated_at")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), rights, avatar_url, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -177,6 +177,7 @@ export async function POST(request: NextRequest) {
         role,
         property_id: propertyId || null,
         avatar_url: null,
+        rights: assignedRights,
         updated_at: new Date().toISOString(),
       })
       .select("id, email, full_name, role, property_id, properties(id, name, code), created_at")
@@ -234,7 +235,7 @@ export async function PATCH(request: NextRequest) {
     // Retrieve existing profile
     const { data: currentProfile } = await adminClient
       .from("profiles")
-      .select("avatar_url, role")
+      .select("avatar_url, role, property_id")
       .eq("id", userId)
       .single();
 
@@ -250,6 +251,10 @@ export async function PATCH(request: NextRequest) {
       updatePayload.property_id = propertyId || null;
     }
 
+    if (Array.isArray(rights)) {
+      updatePayload.rights = rights;
+    }
+
     // Clean avatar_url if it had legacy JSON/pwd
     if (
       currentProfile?.avatar_url &&
@@ -262,7 +267,7 @@ export async function PATCH(request: NextRequest) {
       .from("profiles")
       .update(updatePayload)
       .eq("id", userId)
-      .select("id, email, full_name, role, property_id, properties(id, name, code)")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), rights")
       .single();
 
     if (error) {
@@ -286,6 +291,7 @@ export async function PATCH(request: NextRequest) {
         user_metadata: {
           role: updatePayload.role || currentProfile?.role,
           rights: rights || [],
+          property_id: updatePayload.property_id !== undefined ? updatePayload.property_id : currentProfile?.property_id,
         },
       });
     } catch {}
@@ -294,7 +300,7 @@ export async function PATCH(request: NextRequest) {
       success: true,
       user: {
         ...data,
-        rights: rights || [],
+        rights: data?.rights || rights || [],
       },
     });
   } catch (err: any) {

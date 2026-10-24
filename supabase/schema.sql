@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure profile columns exist even if the table was created earlier without them
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS rights TEXT[] DEFAULT '{}';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL;
+
+-- Automatically assign any profile with NULL property_id to the primary hotel property
+UPDATE public.profiles
+SET property_id = (SELECT id FROM public.properties ORDER BY created_at ASC LIMIT 1)
+WHERE property_id IS NULL;
+
 -- Dedicated User Rights Table (Stores granular capabilities and assigned rights)
 CREATE TABLE IF NOT EXISTS public.user_rights (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

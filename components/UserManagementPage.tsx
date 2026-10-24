@@ -105,6 +105,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       }
       if (propData.success && propData.properties) {
         setProperties(propData.properties);
+        setAddPropertyId((prev) => prev || (propData.properties[0]?.id || ""));
       }
     } catch {
       setError("Failed to load workspace data.");
@@ -501,7 +502,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   onClick={() => {
                                     setEditAccessUser(user);
                                     setEditRole(user.role);
-                                    setEditPropertyId(user.property_id || "");
+                                    setEditPropertyId(user.property_id || properties[0]?.id || "");
                                     setEditRights(
                                       user.rights && user.rights.length > 0
                                         ? user.rights
@@ -627,12 +628,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           value={addPropertyId}
                           onChange={(e) => setAddPropertyId(e.target.value)}
                         >
-                          <option value="">All Properties (Global Access)</option>
                           {properties.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} ({p.code})
+                              {p.name} ({p.code}) — {p.location}
                             </option>
                           ))}
+                          <option value="">All Properties (Global Access)</option>
                         </select>
                       </label>
 
@@ -790,12 +791,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           value={editPropertyId}
                           onChange={(e) => setEditPropertyId(e.target.value)}
                         >
-                          <option value="">All Properties (Global Access)</option>
                           {properties.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} ({p.code})
+                              {p.name} ({p.code}) — {p.location}
                             </option>
                           ))}
+                          <option value="">All Properties (Global Access)</option>
                         </select>
                       </label>
 
