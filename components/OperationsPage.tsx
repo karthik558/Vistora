@@ -4,17 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { motion } from "framer-motion";
+import { Download } from "lucide-react";
 import { AppShell, FeedbackTable } from "./Dashboard";
 import { DashboardData } from "../types/experience";
+import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
+import PropertyFilter from "./PropertyFilter";
 
 export default function OperationsPage({ section, data }: { section: string; data: DashboardData }) {
   const [query, setQuery] = useState("");
+  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
+    preset: "all",
+    startDate: null,
+    endDate: null,
+  });
+
   const feedback = useMemo(
     () =>
       data.recentFeedback
         .filter((item) => section !== "complaints" || item.rating <= 2 || item.status === "needs_attention")
+        .filter((item) => selectedProperty === "all" || !item.propertyId || item.propertyId === selectedProperty)
+        .filter((item) => isDateInRange(item.createdAt, dateFilter))
         .filter((item) => !query || `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [data.recentFeedback, query, section]
+    [data.recentFeedback, query, section, selectedProperty, dateFilter]
   );
 
   const title =
@@ -52,8 +64,13 @@ export default function OperationsPage({ section, data }: { section: string; dat
             <p className="subheading">{descriptions[section]}</p>
           </div>
           {section === "reports" && (
-            <button className="button button-dark compact" onClick={() => downloadCsv(data)}>
-              Download CSV ↧
+            <button
+              className="button button-dark compact"
+              onClick={() => downloadCsv(data)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Download size={13} />
+              <span>Download CSV</span>
             </button>
           )}
         </div>
@@ -82,6 +99,16 @@ export default function OperationsPage({ section, data }: { section: string; dat
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search guest, room, department, or comment…"
+                  style={{ minWidth: "220px", flex: 1 }}
+                />
+                <PropertyFilter
+                  properties={data.properties}
+                  selectedId={selectedProperty}
+                  onChange={setSelectedProperty}
+                />
+                <CustomDatePicker
+                  value={dateFilter}
+                  onChange={setDateFilter}
                 />
                 <span className="toolbar-count">{feedback.length} records</span>
               </div>
@@ -98,34 +125,97 @@ export default function OperationsPage({ section, data }: { section: string; dat
 }
 
 function Analytics({ data }: { data: DashboardData }) {
+  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
+    preset: "all",
+    startDate: null,
+    endDate: null,
+  });
+
+  const filteredFeedback = useMemo(() => {
+    return data.recentFeedback.filter((item) => {
+      if (selectedProperty !== "all" && item.propertyId && item.propertyId !== selectedProperty) {
+        return false;
+      }
+      if (!isDateInRange(item.createdAt, dateFilter)) {
+        return false;
+      }
+      return true;
+    });
+  }, [data.recentFeedback, selectedProperty, dateFilter]);
+
+  const total = filteredFeedback.length;
+  const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);
+  const avgRating = total > 0 ? (totalRatingSum / total).toFixed(2) : "5.00";
+  const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
+  const satisfactionRate = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "100.0";
+  const openComplaintsCount = filteredFeedback.filter(
+    (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
+  ).length;
+
+  const distributionCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  for (const row of filteredFeedback) {
+    if (row.rating >= 1 && row.rating <= 5) {
+      distributionCounts[row.rating] = (distributionCounts[row.rating] || 0) + 1;
+    }
+  }
+
+  const bars = [5, 4, 3, 2, 1].map((stars) => {
+    const count = distributionCounts[stars] || 0;
+    const percentage = total > 0 ? `${Math.round((count / total) * 100)}%` : "0%";
+    return {
+      stars: String(stars),
+      percentage,
+      count,
+    };
+  });
+
+  const departments = Array.from(new Set(filteredFeedback.map((item) => item.department)));
+
   return (
     <>
+      <div className="filter-controls-row">
+        <PropertyFilter
+          properties={data.properties}
+          selectedId={selectedProperty}
+          onChange={setSelectedProperty}
+        />
+        <CustomDatePicker
+          value={dateFilter}
+          onChange={setDateFilter}
+        />
+      </div>
+
       <section className="metric-grid">
         <div className="metric-card">
           <span className="metric-label">Average rating</span>
           <div className="metric-value">
-            {data.metrics.averageRating.value}
+            {avgRating}
             <small>/ 5</small>
           </div>
-          <div className="metric-change">Across {data.ratingDistribution.totalCount} responses</div>
+          <div className="metric-change">Across {total} responses</div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Satisfaction rate</span>
           <div className="metric-value">
-            {data.metrics.satisfactionRate.value}
+            {satisfactionRate}
             <small>%</small>
           </div>
-          <div className="metric-change">4 and 5 star responses</div>
+          <div className="metric-change">{satisfiedCount} satisfied responses (4★ & 5★)</div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Open complaints</span>
-          <div className="metric-value">{data.metrics.openComplaints.value}</div>
-          <div className="metric-change">Require follow-up</div>
+          <div className="metric-value">{openComplaintsCount}</div>
+          <div className="metric-change">{openComplaintsCount > 0 ? "Requires follow-up" : "All resolved"}</div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Properties</span>
-          <div className="metric-value">{data.properties.length}</div>
-          <div className="metric-change">Connected properties</div>
+          <div className="metric-value">
+            {selectedProperty === "all" ? data.properties.length : 1}
+          </div>
+          <div className="metric-change">
+            {selectedProperty === "all" ? "Connected properties" : "Filtered property"}
+          </div>
         </div>
       </section>
 
@@ -135,16 +225,17 @@ function Analytics({ data }: { data: DashboardData }) {
             <h2>Rating distribution</h2>
             <p>Response volume by rating</p>
           </div>
+          <span className="panel-action">{total} responses</span>
         </div>
         <div className="rating-bars analytics-bars">
-          {data.ratingDistribution.bars.map((bar) => (
-            <div className="bar-row" key={bar.stars}>
-              <span>{bar.stars} stars</span>
+          {bars.map((bar) => (
+            <div className="bar-row analytics-bar-row" key={bar.stars}>
+              <span className="bar-label">{bar.stars} stars</span>
               <div className="bar-track">
                 <i style={{ width: bar.percentage }} />
               </div>
-              <strong>
-                {bar.count} <small>{bar.percentage}</small>
+              <strong className="bar-value">
+                {bar.count} <small>({bar.percentage})</small>
               </strong>
             </div>
           ))}
@@ -159,19 +250,24 @@ function Analytics({ data }: { data: DashboardData }) {
           </div>
         </div>
         <div className="department-grid">
-          {Array.from(new Set(data.recentFeedback.map((item) => item.department))).map((department) => (
-            <div className="department-stat" key={department}>
-              <strong>{department}</strong>
-              <span>
-                {data.recentFeedback.filter((item) => item.department === department).length} responses
-              </span>
-            </div>
-          ))}
+          {departments.length > 0 ? (
+            departments.map((department) => (
+              <div className="department-stat" key={department}>
+                <strong>{department}</strong>
+                <span>
+                  {filteredFeedback.filter((item) => item.department === department).length} responses
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="empty-state">No department signal data available for this filter.</p>
+          )}
         </div>
       </div>
     </>
   );
 }
+
 
 function Directory({
   data,
@@ -315,8 +411,10 @@ function QrCodes() {
             className="button button-outline"
             onClick={downloadQr}
             disabled={!qrDataUrl}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
           >
-            Download QR PNG ↧
+            <Download size={14} />
+            <span>Download QR PNG</span>
           </button>
         </div>
       </div>
@@ -347,8 +445,13 @@ function Reports({ data }: { data: DashboardData }) {
         <span className="eyebrow">Operational export</span>
         <h2>Guest feedback report</h2>
         <p>Download a CSV containing guest, room, department, rating, status, comments, and timestamps.</p>
-        <button className="button button-dark compact" onClick={() => downloadCsv(data)}>
-          Download CSV ↧
+        <button
+          className="button button-dark compact"
+          onClick={() => downloadCsv(data)}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <Download size={13} />
+          <span>Download CSV</span>
         </button>
       </div>
       <div className="panel report-card">

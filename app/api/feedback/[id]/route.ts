@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateFeedbackStatus } from "../../../../lib/services/guestExperienceService";
+import { updateFeedbackStatus, deleteFeedback } from "../../../../lib/services/guestExperienceService";
 import { FeedbackStatus } from "../../../../types/database";
 
 export async function PATCH(
@@ -22,6 +22,23 @@ export async function PATCH(
     }
 
     return NextResponse.json({ success: true, data: updated });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = params.id;
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Feedback ID is required" }, { status: 400 });
+    }
+
+    await deleteFeedback([id]);
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

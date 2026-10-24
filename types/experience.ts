@@ -26,6 +26,7 @@ export interface FeedbackViewModel {
   assignedTo: string | null;
   resolutionNotes: string | null;
   createdAt: string;
+  propertyId?: string | null;
 }
 
 export interface MetricSummary {

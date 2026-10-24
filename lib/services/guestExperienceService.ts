@@ -131,6 +131,7 @@ export function toViewModel(row: FeedbackRow): FeedbackViewModel {
     assignedTo: row.assigned_to,
     resolutionNotes: row.resolution_notes,
     createdAt: row.created_at,
+    propertyId: row.property_id,
   };
 }
 
@@ -457,4 +458,26 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
     activePropertyId: propertyId,
     source: isSupabaseLive ? "supabase" : "local",
   };
+}
+
+export async function deleteFeedback(ids: string[]): Promise<{ count: number }> {
+  if (!ids || ids.length === 0) return { count: 0 };
+
+  if (isSupabaseLive) {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("feedback")
+      .delete()
+      .in("id", ids);
+
+    if (error) {
+      console.error("[Supabase Error] deleteFeedback failed:", error);
+      throw new Error(`Failed to delete feedback from Supabase: ${error.message}`);
+    }
+    return { count: ids.length };
+  }
+
+  const initialCount = memoryFeedbackStore.length;
+  memoryFeedbackStore = memoryFeedbackStore.filter((f) => !ids.includes(f.id));
+  return { count: initialCount - memoryFeedbackStore.length };
 }

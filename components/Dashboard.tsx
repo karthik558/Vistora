@@ -18,10 +18,13 @@ import {
   LogOut,
   Menu,
   X,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { DashboardData, FeedbackViewModel } from "../types/experience";
+import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
 import { FeedbackStatus } from "../types/database";
+import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
+import PropertyFilter from "./PropertyFilter";
 
 export interface WorkspaceUser {
   id?: string;
@@ -351,6 +354,12 @@ export default function Dashboard({
   initialUser?: WorkspaceUser | null;
 }) {
   const [user, setUser] = useState<WorkspaceUser | null>(initialUser || null);
+  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
+    preset: "all",
+    startDate: null,
+    endDate: null,
+  });
 
   useEffect(() => {
     if (initialUser) {
@@ -371,7 +380,46 @@ export default function Dashboard({
   }, [initialUser]);
 
   const data = initialData;
-  const complaints = data ? Number(data.metrics.openComplaints.value) : 0;
+
+  // Filter feedback dynamically by selectedProperty and dateFilter
+  const allFeedback = data?.recentFeedback || [];
+  const filteredFeedback = allFeedback.filter((item) => {
+    if (selectedProperty !== "all" && item.propertyId && item.propertyId !== selectedProperty) {
+      return false;
+    }
+    if (!isDateInRange(item.createdAt, dateFilter)) {
+      return false;
+    }
+    return true;
+  });
+
+  const total = filteredFeedback.length;
+  const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);
+  const averageRatingVal = total > 0 ? (totalRatingSum / total).toFixed(2) : "5.00";
+  const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
+  const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "100.0";
+  const openComplaintsCount = filteredFeedback.filter(
+    (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
+  ).length;
+
+  const distributionCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  for (const row of filteredFeedback) {
+    if (row.rating >= 1 && row.rating <= 5) {
+      distributionCounts[row.rating] = (distributionCounts[row.rating] || 0) + 1;
+    }
+  }
+
+  const dynamicBars: RatingBarItem[] = [5, 4, 3, 2, 1].map((stars) => {
+    const count = distributionCounts[stars] || 0;
+    const percentage = total > 0 ? `${Math.round((count / total) * 100)}%` : "0%";
+    return {
+      stars: String(stars),
+      percentage,
+      count,
+    };
+  });
+
+  const complaints = openComplaintsCount;
   const firstName = user?.fullName
     ? user.fullName.split(" ")[0]
     : user?.email
@@ -396,28 +444,40 @@ export default function Dashboard({
 
         {data ? (
           <>
+            <div className="filter-controls-row">
+              <PropertyFilter
+                properties={data.properties}
+                selectedId={selectedProperty}
+                onChange={setSelectedProperty}
+              />
+              <CustomDatePicker
+                value={dateFilter}
+                onChange={setDateFilter}
+              />
+            </div>
+
             <section className="metric-grid">
               <Metric
-                label={data.metrics.feedbackReceived.label}
-                value={data.metrics.feedbackReceived.value}
-                note="verified submissions"
+                label="Feedback received"
+                value={total.toLocaleString()}
+                note={selectedProperty !== "all" || dateFilter.preset !== "all" ? "filtered records" : "verified submissions"}
               />
               <Metric
-                label={data.metrics.averageRating.label}
-                value={data.metrics.averageRating.value}
+                label="Average rating"
+                value={averageRatingVal}
                 suffix="/ 5"
-                note={data.metrics.averageRating.note}
+                note={`from ${total} reviews`}
               />
               <Metric
-                label={data.metrics.satisfactionRate.label}
-                value={data.metrics.satisfactionRate.value}
+                label="Guest satisfaction"
+                value={satisfactionRateVal}
                 suffix="%"
                 note="rated 4 or 5 stars"
               />
               <Metric
-                label={data.metrics.openComplaints.label}
-                value={data.metrics.openComplaints.value}
-                note={data.metrics.openComplaints.note}
+                label="Open complaints"
+                value={String(openComplaintsCount)}
+                note={openComplaintsCount > 0 ? "requires follow-up" : "all caught up"}
               />
             </section>
 
@@ -425,10 +485,10 @@ export default function Dashboard({
               <div className="panel">
                 <PanelHeading
                   title="Rating distribution"
-                  detail="All properties · live feedback"
+                  detail={selectedProperty === "all" ? "All properties · live feedback" : "Filtered property view"}
                   href="/dashboard/analytics"
                 />
-                <RatingBars data={data} />
+                <RatingBars bars={dynamicBars} />
               </div>
               <div className="panel attention-panel">
                 <PanelHeading
@@ -437,27 +497,34 @@ export default function Dashboard({
                   href="/dashboard/complaints"
                 />
                 <div className="attention-list">
-                  {data.attentionItems.length ? (
-                    data.attentionItems.map((item) => (
-                      <Link className="attention-item" href="/dashboard/complaints" key={item.id}>
-                        <span className={`attention-dot ${item.type}`} />
-                        <div>
-                          <strong>{item.title}</strong>
-                          <p>{item.detail}</p>
-                          <small>{item.meta}</small>
-                        </div>
-                        <span>→</span>
-                      </Link>
-                    ))
+                  {filteredFeedback.filter(
+                    (r) => r.status === "needs_attention" || r.status === "under_review" || r.wantsContact
+                  ).length ? (
+                    filteredFeedback
+                      .filter(
+                        (r) => r.status === "needs_attention" || r.status === "under_review" || r.wantsContact
+                      )
+                      .slice(0, 4)
+                      .map((item) => (
+                        <Link className="attention-item" href="/dashboard/complaints" key={item.id}>
+                          <span className={`attention-dot ${item.tone === "urgent" || item.rating <= 2 ? "critical" : item.status === "under_review" ? "warning" : "neutral"}`} />
+                          <div>
+                            <strong>{item.tone === "urgent" || item.rating <= 2 ? "Guest complaint" : item.wantsContact ? "Contact requested" : "Under review"}</strong>
+                            <p>{item.name} · {item.roomNumber || "Suite"}</p>
+                            <small>{item.timeAgo}</small>
+                          </div>
+                          <span>→</span>
+                        </Link>
+                      ))
                   ) : (
-                    <p className="empty-state">No open items. Your teams are caught up.</p>
+                    <p className="empty-state">No open items in this filter view. Your teams are caught up.</p>
                   )}
                 </div>
               </div>
             </section>
 
             <FeedbackTable
-              feedback={data.recentFeedback.slice(0, 8)}
+              feedback={filteredFeedback.slice(0, 8)}
               title="Recent feedback"
             />
           </>
@@ -493,16 +560,16 @@ function PanelHeading({
   );
 }
 
-function RatingBars({ data }: { data: DashboardData }) {
+export function RatingBars({ bars }: { bars: RatingBarItem[] }) {
   return (
     <div className="rating-bars dashboard-rating-bars">
-      {data.ratingDistribution.bars.map((bar) => (
+      {bars.map((bar) => (
         <div className="bar-row" key={bar.stars}>
-          <span>{bar.stars} stars</span>
+          <span className="bar-label">{bar.stars} stars</span>
           <div className="bar-track">
             <i style={{ width: bar.percentage }} />
           </div>
-          <strong>{bar.count}</strong>
+          <strong className="bar-value">{bar.count}</strong>
         </div>
       ))}
     </div>
@@ -510,17 +577,25 @@ function RatingBars({ data }: { data: DashboardData }) {
 }
 
 export function FeedbackTable({
-  feedback,
+  feedback: initialFeedback,
   title = "Feedback",
 }: {
   feedback: FeedbackViewModel[];
   title?: string;
 }) {
+  const router = useRouter();
   const [selected, setSelected] = useState<FeedbackViewModel | null>(null);
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [userRole, setUserRole] = useState<string>("visitor");
+
+  // Selection state for admins
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Comments visibility toggle and filter
+  const [showComments, setShowComments] = useState<boolean>(true);
+  const [commentsFilter, setCommentsFilter] = useState<"all" | "with_comments" | "without_comments">("all");
 
   useEffect(() => {
     const user = getClientUser();
@@ -528,6 +603,37 @@ export function FeedbackTable({
       setUserRole(user.role);
     }
   }, []);
+
+  const isAdmin = userRole === "admin";
+
+  // Filter feedback by commentsFilter
+  const visibleFeedback = initialFeedback.filter((item) => {
+    if (commentsFilter === "with_comments") {
+      return Boolean(item.comment && item.comment.trim());
+    }
+    if (commentsFilter === "without_comments") {
+      return !item.comment || !item.comment.trim();
+    }
+    return true;
+  });
+
+  const allVisibleSelected =
+    visibleFeedback.length > 0 &&
+    visibleFeedback.every((item) => selectedIds.includes(item.id));
+
+  const handleToggleAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(visibleFeedback.map((item) => item.id));
+    }
+  };
+
+  const handleToggleRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
   async function update() {
     if (!selected || !status) return;
@@ -539,25 +645,138 @@ export function FeedbackTable({
     });
     if (res.ok) {
       setSelected(null);
+      router.refresh();
       window.location.reload();
     }
     setSaving(false);
   }
 
+  async function handleDeleteBatch() {
+    if (selectedIds.length === 0) return;
+    const confirmMsg = `Are you sure you want to permanently delete ${selectedIds.length} feedback record${selectedIds.length > 1 ? "s" : ""}? This action cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      if (res.ok) {
+        setSelectedIds([]);
+        router.refresh();
+        window.location.reload();
+      } else {
+        alert("Failed to delete records. Please try again.");
+      }
+    } catch (err: any) {
+      alert(`Error deleting records: ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleDeleteSingle(id: string) {
+    const confirmMsg = "Are you sure you want to delete this feedback record? This action cannot be undone.";
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setSelected(null);
+        router.refresh();
+        window.location.reload();
+      } else {
+        alert("Failed to delete record. Please try again.");
+      }
+    } catch (err: any) {
+      alert(`Error deleting record: ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <section className="panel table-panel">
-      <div className="panel-heading">
+      <div className="panel-heading table-panel-header">
         <div>
           <h2>{title}</h2>
-          <p>Guest comments, ratings, and resolution status</p>
+          <p>Guest ratings, department signal, and resolution status</p>
         </div>
-        <span className="panel-action">{feedback.length} records</span>
+        <div className="table-header-controls">
+          {/* Comments Filter Dropdown */}
+          <select
+            className="compact-select"
+            value={commentsFilter}
+            onChange={(e) => setCommentsFilter(e.target.value as any)}
+            aria-label="Filter feedback comments"
+          >
+            <option value="all">All feedback</option>
+            <option value="with_comments">With comments only</option>
+            <option value="without_comments">Ratings only</option>
+          </select>
+
+          {/* Toggle comments visibility */}
+          <button
+            type="button"
+            className={`comment-toggle-pill ${showComments ? "active" : ""}`}
+            onClick={() => setShowComments(!showComments)}
+            title={showComments ? "Click to hide written comments" : "Click to show written comments"}
+          >
+            <MessageSquare size={12} />
+            <span>{showComments ? "Comments visible" : "Comments hidden"}</span>
+          </button>
+
+          <span className="panel-action">{visibleFeedback.length} records</span>
+        </div>
       </div>
+
+      {/* Admin Batch Action Bar */}
+      {isAdmin && selectedIds.length > 0 && (
+        <div className="bulk-actions-toolbar">
+          <span className="bulk-count">
+            <strong>{selectedIds.length}</strong> record{selectedIds.length > 1 ? "s" : ""} selected
+          </span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              className="button button-danger compact"
+              onClick={handleDeleteBatch}
+              disabled={deleting}
+            >
+              <Trash2 size={13} />
+              {deleting ? "Deleting…" : `Delete selected (${selectedIds.length})`}
+            </button>
+            <button
+              type="button"
+              className="button button-outline compact"
+              onClick={() => setSelectedIds([])}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              {isAdmin && (
+                <th style={{ width: "36px", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    className="custom-table-checkbox"
+                    checked={allVisibleSelected}
+                    onChange={handleToggleAll}
+                    aria-label="Select all rows"
+                  />
+                </th>
+              )}
               <th>Guest</th>
               <th>Experience</th>
               <th>Rating</th>
@@ -566,40 +785,72 @@ export function FeedbackTable({
             </tr>
           </thead>
           <tbody>
-            {feedback.map((item) => (
-              <tr
-                className="clickable-row"
-                key={item.id}
-                onClick={() => {
-                  setSelected(item);
-                  setStatus(item.status);
-                  setNotes(item.resolutionNotes || "");
-                }}
-              >
-                <td>
-                  <div className="guest-cell">
-                    <span className="mini-avatar">{item.initials}</span>
-                    <div>
-                      <strong>{item.name}</strong>
-                      <small>{item.roomNumber}</small>
+            {visibleFeedback.length > 0 ? (
+              visibleFeedback.map((item) => (
+                <tr
+                  className="clickable-row"
+                  key={item.id}
+                  onClick={() => {
+                    setSelected(item);
+                    setStatus(item.status);
+                    setNotes(item.resolutionNotes || "");
+                  }}
+                >
+                  {isAdmin && (
+                    <td
+                      style={{ width: "36px", textAlign: "center" }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        className="custom-table-checkbox"
+                        checked={selectedIds.includes(item.id)}
+                        onChange={() => handleToggleRow(item.id)}
+                        aria-label={`Select feedback from ${item.name}`}
+                      />
+                    </td>
+                  )}
+                  <td>
+                    <div className="guest-cell">
+                      <span className="mini-avatar">{item.initials}</span>
+                      <div>
+                        <strong>{item.name}</strong>
+                        <small>{item.roomNumber || "Suite"}</small>
+                      </div>
                     </div>
-                  </div>
+                  </td>
+                  <td>
+                    <div className="experience-cell">
+                      <span className="department-tag">{item.department}</span>
+                      {showComments && (
+                        item.comment ? (
+                          <div className="table-comment-box">
+                            <p className="table-comment-text">“{item.comment}”</p>
+                          </div>
+                        ) : (
+                          <span className="table-no-comment">No written comment</span>
+                        )
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="table-rating">
+                      {item.rating} <b>/ 5</b>
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status ${item.tone}`}>{item.statusLabel}</span>
+                  </td>
+                  <td>{item.timeAgo}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
+                  No feedback matching the selected filter criteria.
                 </td>
-                <td>
-                  <strong>{item.department}</strong>
-                  <small>{item.comment || "No comment"}</small>
-                </td>
-                <td>
-                  <span className="table-rating">
-                    {item.rating} <b>/ 5</b>
-                  </span>
-                </td>
-                <td>
-                  <span className={`status ${item.tone}`}>{item.statusLabel}</span>
-                </td>
-                <td>{item.timeAgo}</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
@@ -717,6 +968,21 @@ export function FeedbackTable({
                     </label>
                     <button className="button button-dark" disabled={saving} onClick={update} style={{ width: "100%", padding: "12px", marginTop: "4px" }}>
                       {saving ? "Saving…" : "Save resolution"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Admin Delete Action */}
+                {isAdmin && (
+                  <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      className="button button-danger compact"
+                      onClick={() => handleDeleteSingle(selected.id)}
+                      disabled={deleting}
+                    >
+                      <Trash2 size={13} />
+                      {deleting ? "Deleting…" : "Delete this feedback record"}
                     </button>
                   </div>
                 )}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchFeedbackList, createFeedback } from "../../../lib/services/guestExperienceService";
+import { fetchFeedbackList, createFeedback, deleteFeedback } from "../../../lib/services/guestExperienceService";
 import { FeedbackStatus } from "../../../types/database";
 
 export async function GET(request: NextRequest) {
@@ -25,6 +25,21 @@ export async function POST(request: NextRequest) {
 
     const created = await createFeedback(body);
     return NextResponse.json({ success: true, data: created }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const ids = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
+    if (!ids || ids.length === 0) {
+      return NextResponse.json({ success: false, error: "No feedback IDs provided" }, { status: 400 });
+    }
+
+    const result = await deleteFeedback(ids);
+    return NextResponse.json({ success: true, count: result.count });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
