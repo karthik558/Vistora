@@ -87,7 +87,9 @@ DROP TABLE IF EXISTS public.user_credentials CASCADE;
 DROP TABLE IF EXISTS public.user_rights CASCADE;
 
 -- Public Users View (Convenient alias/view of public.profiles for viewing all workspace users)
-CREATE OR REPLACE VIEW public.users AS
+-- Uses security_invoker = true so PostgreSQL Row Level Security (RLS) is evaluated for the querying user
+CREATE OR REPLACE VIEW public.users
+WITH (security_invoker = true) AS
 SELECT
     id,
     email,
