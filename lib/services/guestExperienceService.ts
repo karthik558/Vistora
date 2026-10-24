@@ -33,10 +33,10 @@ function getSupabase() {
 const fallbackProperties: PropertyRow[] = [
   {
     id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    name: "Anantara Riverside Bangkok",
-    slug: "anantara-riverside-bangkok",
-    code: "ARB",
-    brand: "Anantara Hotels",
+    name: "Vistora Riverside Bangkok",
+    slug: "vistora-riverside-bangkok",
+    code: "VRB",
+    brand: "Vistora Hotels & Resorts",
     location: "Bangkok",
     country: "Thailand",
     timezone: "Asia/Bangkok",
@@ -45,10 +45,10 @@ const fallbackProperties: PropertyRow[] = [
   },
   {
     id: "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
-    name: "Anantara Siam Bangkok",
-    slug: "anantara-siam-bangkok",
-    code: "ASB",
-    brand: "Anantara Hotels",
+    name: "Vistora Siam Bangkok",
+    slug: "vistora-siam-bangkok",
+    code: "VSB",
+    brand: "Vistora Hotels & Resorts",
     location: "Bangkok",
     country: "Thailand",
     timezone: "Asia/Bangkok",
@@ -57,10 +57,10 @@ const fallbackProperties: PropertyRow[] = [
   },
   {
     id: "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33",
-    name: "Anantara Chiang Mai Resort",
-    slug: "anantara-chiang-mai",
-    code: "ACM",
-    brand: "Anantara Hotels",
+    name: "Vistora Chiang Mai Resort",
+    slug: "vistora-chiang-mai",
+    code: "VCM",
+    brand: "Vistora Hotels & Resorts",
     location: "Chiang Mai",
     country: "Thailand",
     timezone: "Asia/Bangkok",
@@ -160,36 +160,15 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
       .eq("public_token", publicToken)
       .single();
 
-    if (error) {
-      console.warn(`[Supabase] Stay token '${publicToken}' not found:`, error.message);
-      // Try finding by room_number if token is a room number
-      const { data: fallbackStay } = await supabase
-        .from("stays")
-        .select("*, properties(name), guests(full_name, vip_tier)")
-        .limit(1)
-        .single();
-
-      if (fallbackStay) {
-        const item = fallbackStay as any;
-        return {
-          token: publicToken,
-          guestName: item.guests?.full_name || "Valued Guest",
-          roomNumber: item.room_number || "Suite",
-          checkInDate: item.check_in_date,
-          checkOutDate: item.check_out_date,
-          propertyName: item.properties?.name || "Vistora Partner Property",
-          propertyId: item.property_id,
-          vipTier: item.guests?.vip_tier,
-        };
-      }
+    if (error || !data) {
       return null;
     }
 
     const stayData = data as any;
     return {
       token: publicToken,
-      guestName: stayData.guests?.full_name || "Valued Guest",
-      roomNumber: stayData.room_number || "Room",
+      guestName: stayData.guests?.full_name || "",
+      roomNumber: stayData.room_number || "",
       checkInDate: stayData.check_in_date,
       checkOutDate: stayData.check_out_date,
       propertyName: stayData.properties?.name || "Vistora Partner Property",
@@ -198,16 +177,7 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
     };
   }
 
-  return {
-    token: publicToken,
-    guestName: "Valued Guest",
-    roomNumber: "Room 602",
-    checkInDate: "2024-06-14",
-    checkOutDate: "2024-06-18",
-    propertyName: "Vistora Partner Property",
-    propertyId: fallbackProperties[0].id,
-    vipTier: "VIP Gold",
-  };
+  return null;
 }
 
 export async function fetchFeedbackList(options?: {

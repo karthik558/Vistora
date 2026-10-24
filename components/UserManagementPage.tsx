@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./Dashboard";
 import { UserPlus, Key, Trash2, X, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface WorkspaceUserItem {
   id: string;
@@ -26,8 +27,9 @@ export default function UserManagementPage() {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState<"admin" | "staff" | "visitor">("staff");
+  const [addRole, setAddRole] = useState<"admin" | "staff" | "visitor">("visitor");
   const [submitting, setSubmitting] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("visitor");
 
   // Form states for Change Password
   const [newPassword, setNewPassword] = useState("");
@@ -49,6 +51,23 @@ export default function UserManagementPage() {
   }
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("vistora-user");
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u?.role) setCurrentUserRole(u.role);
+      }
+    } catch {}
+
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.user?.role) {
+          setCurrentUserRole(data.user.role);
+        }
+      })
+      .catch(() => {});
+
     loadUsers();
   }, []);
 
@@ -147,60 +166,73 @@ export default function UserManagementPage() {
   return (
     <AppShell active="Team & users">
       <div className="content-wrap">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">Access & Administration</p>
-            <h1>Team & users</h1>
-            <p className="subheading">
-              Manage workspace members, role assignments, and authentication credentials.
+        {currentUserRole === "visitor" ? (
+          <div className="panel" style={{ padding: "50px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
+            <p className="eyebrow" style={{ color: "var(--muted)" }}>Access & Administration</p>
+            <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
+            <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
+              Your account is assigned the <strong>Visitor</strong> role. Visitor users have view-only access across guest experience records and cannot access user administration or member settings.
             </p>
+            <a className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
+              ← Return to Dashboard
+            </a>
           </div>
-          <button
-            className="button button-dark compact"
-            onClick={() => {
-              setError(null);
-              setSuccess(null);
-              setShowAddModal(true);
-            }}
-          >
-            <UserPlus size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
-            Add member
-          </button>
-        </div>
-
-        {error && (
-          <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#fbf1ef", color: "#8b261a", border: "1px solid #ebd3cf", fontSize: "12px" }}>
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-            <Check size={14} strokeWidth={2} />
-            {success}
-          </div>
-        )}
-
-        <section className="panel table-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Workspace members</h2>
-              <p>Active accounts with operational access to Vistora</p>
+        ) : (
+          <>
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">Access & Administration</p>
+                <h1>Team & users</h1>
+                <p className="subheading">
+                  Manage workspace members, role assignments, and authentication credentials.
+                </p>
+              </div>
+              <button
+                className="button button-dark compact"
+                onClick={() => {
+                  setError(null);
+                  setSuccess(null);
+                  setShowAddModal(true);
+                }}
+              >
+                <UserPlus size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
+                Add member
+              </button>
             </div>
-            <span className="panel-action">{users.length} members</span>
-          </div>
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>Email ID</th>
-                  <th>Assigned Role</th>
-                  <th>Created</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
+            {error && (
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#fbf1ef", color: "#8b261a", border: "1px solid #ebd3cf", fontSize: "12px" }}>
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Check size={14} strokeWidth={2} />
+                {success}
+              </div>
+            )}
+
+            <section className="panel table-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Workspace members</h2>
+                  <p>Active accounts with operational access to Vistora</p>
+                </div>
+                <span className="panel-action">{users.length} members</span>
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      <th>Email ID</th>
+                      <th>Assigned Role</th>
+                      <th>Created</th>
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
               <tbody>
                 {loading ? (
                   <tr>
@@ -295,116 +327,156 @@ export default function UserManagementPage() {
         </section>
 
         {/* Modal: Add Member */}
-        {showAddModal && (
-          <div className="drawer-backdrop" onClick={() => setShowAddModal(false)}>
-            <div className="detail-drawer" style={{ maxWidth: "420px" }} onClick={(e) => e.stopPropagation()}>
-              <button className="drawer-close" onClick={() => setShowAddModal(false)} aria-label="Close">
-                <X size={18} strokeWidth={1.75} />
-              </button>
-              <p className="eyebrow">Workspace Administration</p>
-              <h2>Add team member</h2>
-              <p className="drawer-meta">Create an operational account with role-based permissions.</p>
-
-              <form onSubmit={handleAddUser} style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <label className="field-label">
-                  Full Name
-                  <input
-                    className="auth-input"
-                    value={addName}
-                    onChange={(e) => setAddName(e.target.value)}
-                    placeholder="e.g. Somchai Tan"
-                    required
-                  />
-                </label>
-
-                <label className="field-label">
-                  Work Email
-                  <input
-                    className="auth-input"
-                    type="email"
-                    value={addEmail}
-                    onChange={(e) => setAddEmail(e.target.value)}
-                    placeholder="e.g. member@hotel.com"
-                    required
-                  />
-                </label>
-
-                <label className="field-label">
-                  Role Assignment
-                  <select
-                    className="auth-input"
-                    value={addRole}
-                    onChange={(e) => setAddRole(e.target.value as any)}
-                  >
-                    <option value="staff">Staff (Operations Lead)</option>
-                    <option value="admin">Admin (General Manager)</option>
-                    <option value="visitor">Visitor (Read-only Preview)</option>
-                  </select>
-                </label>
-
-                <label className="field-label">
-                  Initial Password
-                  <input
-                    className="auth-input"
-                    type="password"
-                    value={addPassword}
-                    onChange={(e) => setAddPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    required
-                    minLength={6}
-                  />
-                </label>
-
-                <button
-                  type="submit"
-                  className="button button-dark"
-                  disabled={submitting}
-                  style={{ marginTop: "12px", padding: "12px" }}
-                >
-                  {submitting ? "Creating member…" : "Save and Grant Access →"}
+        <AnimatePresence>
+          {showAddModal && (
+            <motion.div
+              key="add-member-backdrop"
+              className="drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              onClick={() => setShowAddModal(false)}
+            >
+              <motion.div
+                key="add-member-drawer"
+                className="detail-drawer"
+                style={{ maxWidth: "420px" }}
+                initial={{ x: "100%", opacity: 0.85 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 0.85 }}
+                transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button className="drawer-close" onClick={() => setShowAddModal(false)} aria-label="Close">
+                  <X size={18} strokeWidth={1.75} />
                 </button>
-              </form>
-            </div>
-          </div>
-        )}
+                <p className="eyebrow">Workspace Administration</p>
+                <h2>Add team member</h2>
+                <p className="drawer-meta">Create an operational account with role-based permissions.</p>
+
+                <form onSubmit={handleAddUser} style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <label className="field-label">
+                    Full Name
+                    <input
+                      className="auth-input"
+                      value={addName}
+                      onChange={(e) => setAddName(e.target.value)}
+                      placeholder="e.g. Somchai Tan"
+                      required
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Work Email
+                    <input
+                      className="auth-input"
+                      type="email"
+                      value={addEmail}
+                      onChange={(e) => setAddEmail(e.target.value)}
+                      placeholder="e.g. member@hotel.com"
+                      required
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Role Assignment
+                    <select
+                      className="auth-input"
+                      value={addRole}
+                      onChange={(e) => setAddRole(e.target.value as any)}
+                    >
+                      <option value="visitor">Visitor (Standard User - View-only)</option>
+                      <option value="staff">Staff (Operations Lead)</option>
+                      <option value="admin">Admin (Workspace Admin)</option>
+                    </select>
+                  </label>
+
+                  <label className="field-label">
+                    Initial Password
+                    <input
+                      className="auth-input"
+                      type="password"
+                      value={addPassword}
+                      onChange={(e) => setAddPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      required
+                      minLength={6}
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="button button-dark"
+                    disabled={submitting}
+                    style={{ marginTop: "12px", padding: "12px" }}
+                  >
+                    {submitting ? "Creating member…" : "Save and Grant Access →"}
+                  </button>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Modal: Change Password */}
-        {showPasswordModal && (
-          <div className="drawer-backdrop" onClick={() => setShowPasswordModal(null)}>
-            <div className="detail-drawer" style={{ maxWidth: "420px" }} onClick={(e) => e.stopPropagation()}>
-              <button className="drawer-close" onClick={() => setShowPasswordModal(null)} aria-label="Close">
-                <X size={18} strokeWidth={1.75} />
-              </button>
-              <p className="eyebrow">Security & Credentials</p>
-              <h2>Change password</h2>
-              <p className="drawer-meta">Updating password for <strong>{showPasswordModal.email}</strong></p>
-
-              <form onSubmit={handleChangePassword} style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                <label className="field-label">
-                  New Password
-                  <input
-                    className="auth-input"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password (min. 6 characters)"
-                    required
-                    minLength={6}
-                    autoFocus
-                  />
-                </label>
-
-                <button
-                  type="submit"
-                  className="button button-dark"
-                  disabled={changingPassword}
-                  style={{ padding: "12px" }}
-                >
-                  {changingPassword ? "Updating password…" : "Update Password →"}
+        <AnimatePresence>
+          {showPasswordModal && (
+            <motion.div
+              key="change-password-backdrop"
+              className="drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              onClick={() => setShowPasswordModal(null)}
+            >
+              <motion.div
+                key="change-password-drawer"
+                className="detail-drawer"
+                style={{ maxWidth: "420px" }}
+                initial={{ x: "100%", opacity: 0.85 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 0.85 }}
+                transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button className="drawer-close" onClick={() => setShowPasswordModal(null)} aria-label="Close">
+                  <X size={18} strokeWidth={1.75} />
                 </button>
-              </form>
-            </div>
-          </div>
+                <p className="eyebrow">Security & Credentials</p>
+                <h2>Change password</h2>
+                <p className="drawer-meta">Updating password for <strong>{showPasswordModal.email}</strong></p>
+
+                <form onSubmit={handleChangePassword} style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <label className="field-label">
+                    New Password
+                    <input
+                      className="auth-input"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password (min. 6 characters)"
+                      required
+                      minLength={6}
+                      autoFocus
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="button button-dark"
+                    disabled={changingPassword}
+                    style={{ padding: "12px" }}
+                  >
+                    {changingPassword ? "Updating password…" : "Update Password →"}
+                  </button>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+          </>
         )}
       </div>
     </AppShell>

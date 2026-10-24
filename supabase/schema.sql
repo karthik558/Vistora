@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     code TEXT NOT NULL UNIQUE,
-    brand TEXT NOT NULL DEFAULT 'Anantara Hotels',
+    brand TEXT NOT NULL DEFAULT 'Vistora Hotels & Resorts',
     location TEXT NOT NULL,
     country TEXT NOT NULL,
     timezone TEXT NOT NULL DEFAULT 'Asia/Bangkok',
@@ -266,10 +266,18 @@ ON CONFLICT (id) DO NOTHING;
 -- ------------------------------------------------------------------------------
 INSERT INTO public.properties (id, name, slug, code, brand, location, country, timezone, total_rooms)
 VALUES
-    ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Anantara Riverside Bangkok', 'anantara-riverside-bangkok', 'ARB', 'Anantara Hotels', 'Bangkok', 'Thailand', 'Asia/Bangkok', 376),
-    ('b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Anantara Siam Bangkok', 'anantara-siam-bangkok', 'ASB', 'Anantara Hotels', 'Bangkok', 'Thailand', 'Asia/Bangkok', 354),
-    ('c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33', 'Anantara Chiang Mai Resort', 'anantara-chiang-mai', 'ACM', 'Anantara Hotels', 'Chiang Mai', 'Thailand', 'Asia/Bangkok', 84)
-ON CONFLICT (slug) DO NOTHING;
+    ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Vistora Riverside Bangkok', 'vistora-riverside-bangkok', 'VRB', 'Vistora Hotels & Resorts', 'Bangkok', 'Thailand', 'Asia/Bangkok', 376),
+    ('b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Vistora Siam Bangkok', 'vistora-siam-bangkok', 'VSB', 'Vistora Hotels & Resorts', 'Bangkok', 'Thailand', 'Asia/Bangkok', 354),
+    ('c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33', 'Vistora Chiang Mai Resort', 'vistora-chiang-mai', 'VCM', 'Vistora Hotels & Resorts', 'Chiang Mai', 'Thailand', 'Asia/Bangkok', 84)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    code = EXCLUDED.code,
+    brand = EXCLUDED.brand,
+    location = EXCLUDED.location,
+    country = EXCLUDED.country,
+    timezone = EXCLUDED.timezone,
+    total_rooms = EXCLUDED.total_rooms;
 
 INSERT INTO public.guests (id, full_name, email, phone, vip_tier, total_stays)
 VALUES
@@ -279,7 +287,7 @@ VALUES
     ('44444444-4444-4444-4444-444444444444', 'Daniel Lee', 'daniel.lee@sydneyfin.com.au', '+61 412 345 678', 'VIP Gold', 3),
     ('55555555-5555-5555-5555-555555555555', 'Elena Rostova', 'elena.rostova@geneva-corp.ch', '+41 22 123 4567', 'Standard', 2),
     ('66666666-6666-6666-6666-666666666666', 'Marcus Vance', 'marcus.v@seattleventures.io', '+1 206 555 0199', 'Standard', 1)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.stays (id, property_id, guest_id, room_number, check_in_date, check_out_date, public_token, status)
 VALUES
@@ -287,7 +295,7 @@ VALUES
     ('a2222222-0000-0000-0000-000000000002', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '22222222-2222-2222-2222-222222222222', '314', '2024-06-15', '2024-06-19', 'stay-jm-314', 'active'),
     ('a3333333-0000-0000-0000-000000000003', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '33333333-3333-3333-3333-333333333333', 'Villa 4', '2024-06-12', '2024-06-18', 'stay-nr-v4', 'active'),
     ('a4444444-0000-0000-0000-000000000004', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '44444444-4444-4444-4444-444444444444', '818', '2024-06-16', '2024-06-20', 'stay-dl-818', 'active')
-ON CONFLICT (public_token) DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.feedback (id, property_id, stay_id, guest_name, guest_email, guest_phone, room_number, department, rating, comment, wants_contact, contact_preference, status, tone, sla_deadline, assigned_to, resolution_notes, resolved_at, created_at)
 VALUES
@@ -459,4 +467,4 @@ VALUES
         NOW() - INTERVAL '5 hours',
         NOW() - INTERVAL '6 hours'
     )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO NOTHING;

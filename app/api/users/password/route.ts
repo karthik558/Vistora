@@ -36,7 +36,16 @@ export async function POST(request: NextRequest) {
 
     const newHash = hashPassword(newPassword.trim());
 
-    // 1. Try updating in profiles table
+    // 1. Update in Supabase auth.users if userId is present
+    try {
+      if (userId) {
+        await adminClient.auth.admin.updateUserById(userId, { password: newPassword.trim() });
+      }
+    } catch (e) {
+      console.warn("Could not update auth.users password:", e);
+    }
+
+    // 2. Update hash in profiles table
     let profileQuery = adminClient.from("profiles").update({
       avatar_url: newHash,
       updated_at: new Date().toISOString(),
@@ -48,32 +57,21 @@ export async function POST(request: NextRequest) {
       profileQuery = profileQuery.ilike("email", email.trim().toLowerCase());
     }
 
-    const { data: updatedProfile } = await profileQuery.select("id, email, full_name, role").maybeSingle();
+    const { data: updatedProfile, error: profileErr } = await profileQuery
+      .select("id, email, full_name, role")
+      .maybeSingle();
 
-    // 2. Try updating in guests table
-    let guestQuery = adminClient.from("guests").update({
-      phone: newHash,
-    });
-
-    if (userId) {
-      guestQuery = guestQuery.eq("id", userId);
-    } else {
-      guestQuery = guestQuery.ilike("email", email.trim().toLowerCase());
-    }
-
-    const { data: updatedGuest } = await guestQuery.select("id, email, full_name, vip_tier").maybeSingle();
-
-    if (!updatedProfile && !updatedGuest) {
+    if (profileErr || !updatedProfile) {
       return NextResponse.json(
-        { success: false, error: "User not found to update password." },
+        { success: false, error: profileErr?.message || "User profile not found in Supabase." },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Password updated successfully in Supabase.",
-      user: updatedProfile || updatedGuest,
+      message: "Password updated successfully.",
+      user: updatedProfile,
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -18,45 +18,17 @@ export async function GET() {
       auth: { persistSession: false },
     });
 
-    const userList: any[] = [];
-
-    // 1. Fetch from profiles table
-    const { data: profiles } = await adminClient
+    // Strictly fetch only workspace members from public.profiles
+    const { data: profiles, error } = await adminClient
       .from("profiles")
       .select("id, email, full_name, role, created_at, updated_at")
       .order("created_at", { ascending: false });
 
-    if (profiles) {
-      userList.push(...profiles);
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // 2. Fetch created team members from guests table
-    const { data: guestUsers } = await adminClient
-      .from("guests")
-      .select("id, email, full_name, vip_tier, created_at")
-      .order("created_at", { ascending: false });
-
-    if (guestUsers) {
-      for (const g of guestUsers) {
-        if (!userList.some((u) => u.email?.toLowerCase() === g.email?.toLowerCase())) {
-          let role = "visitor";
-          if (g.vip_tier?.startsWith("role:")) {
-            role = g.vip_tier.replace("role:", "");
-          } else if (g.vip_tier === "Ambassador" || g.vip_tier === "VIP Gold") {
-            role = "staff";
-          }
-          userList.push({
-            id: g.id,
-            email: g.email,
-            full_name: g.full_name,
-            role,
-            created_at: g.created_at,
-          });
-        }
-      }
-    }
-
-    return NextResponse.json({ success: true, users: userList });
+    return NextResponse.json({ success: true, users: profiles || [] });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to fetch users" },
@@ -67,7 +39,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, role = "staff", password } = await request.json();
+    const { email, fullName, role = "visitor", password } = await request.json();
 
     if (!email || !email.trim()) {
       return NextResponse.json({ success: false, error: "Email is required." }, { status: 400 });
@@ -99,73 +71,59 @@ export async function POST(request: NextRequest) {
       auth: { persistSession: false },
     });
 
-    // Check if user already exists
+    // Check if user already exists in profiles
     const { data: existingProfile } = await adminClient
       .from("profiles")
       .select("id")
       .ilike("email", cleanEmail)
       .maybeSingle();
 
-    const { data: existingGuest } = await adminClient
-      .from("guests")
-      .select("id")
-      .ilike("email", cleanEmail)
-      .maybeSingle();
-
-    if (existingProfile || existingGuest) {
+    if (existingProfile) {
       return NextResponse.json(
-        { success: false, error: "A user with this email already exists." },
+        { success: false, error: "A workspace member with this email already exists." },
         { status: 400 }
       );
     }
 
-    let createdUser: any = null;
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: cleanEmail,
+      password: password.trim(),
+      email_confirm: true,
+      user_metadata: {
+        full_name: cleanName,
+        role,
+      },
+    });
 
-    // First attempt insert into profiles
-    const newUserId = crypto.randomUUID();
+    if (authError || !authData?.user) {
+      return NextResponse.json(
+        { success: false, error: authError?.message || "Failed to create user in authentication system." },
+        { status: 500 }
+      );
+    }
+
+    const newUserId = authData.user.id;
+
+    // Upsert into public.profiles
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
-      .insert({
+      .upsert({
         id: newUserId,
         email: cleanEmail,
         full_name: cleanName,
         role,
         avatar_url: passwordHash,
+        updated_at: new Date().toISOString(),
       })
       .select("id, email, full_name, role, created_at")
-      .maybeSingle();
+      .single();
 
-    if (!profileError && profileInsert) {
-      createdUser = profileInsert;
-    } else {
-      // If foreign key constraint is present on profiles, store member securely in guests table
-      const { data: guestInsert, error: guestError } = await adminClient
-        .from("guests")
-        .insert({
-          id: newUserId,
-          full_name: cleanName,
-          email: cleanEmail,
-          phone: passwordHash,
-          vip_tier: `role:${role}`,
-          total_stays: 1,
-        })
-        .select("id, email, full_name, vip_tier, created_at")
-        .single();
-
-      if (guestError) {
-        return NextResponse.json({ success: false, error: guestError.message }, { status: 500 });
-      }
-
-      createdUser = {
-        id: guestInsert.id,
-        email: guestInsert.email,
-        full_name: guestInsert.full_name,
-        role,
-        created_at: guestInsert.created_at,
-      };
+    if (profileError) {
+      return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, user: createdUser });
+    return NextResponse.json({ success: true, user: profileInsert });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to create user" },

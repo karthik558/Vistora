@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
+import { motion } from "framer-motion";
 import { AppShell, FeedbackTable } from "./Dashboard";
 import { DashboardData } from "../types/experience";
 
@@ -57,33 +58,40 @@ export default function OperationsPage({ section, data }: { section: string; dat
           )}
         </div>
 
-        {section === "analytics" ? (
-          <Analytics data={data} />
-        ) : section === "directory" ? (
-          <Directory data={data} query={query} setQuery={setQuery} />
-        ) : section === "forms" ? (
-          <Forms />
-        ) : section === "qr-codes" ? (
-          <QrCodes />
-        ) : section === "reports" ? (
-          <Reports data={data} />
-        ) : (
-          <>
-            <div className="table-toolbar page-toolbar">
-              <input
-                className="auth-input"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search guest, room, department, or comment…"
+        <motion.div
+          key={section}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {section === "analytics" ? (
+            <Analytics data={data} />
+          ) : section === "directory" ? (
+            <Directory data={data} query={query} setQuery={setQuery} />
+          ) : section === "forms" ? (
+            <Forms />
+          ) : section === "qr-codes" ? (
+            <QrCodes />
+          ) : section === "reports" ? (
+            <Reports data={data} />
+          ) : (
+            <>
+              <div className="table-toolbar page-toolbar">
+                <input
+                  className="auth-input"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search guest, room, department, or comment…"
+                />
+                <span className="toolbar-count">{feedback.length} records</span>
+              </div>
+              <FeedbackTable
+                feedback={feedback}
+                title={section === "complaints" ? "Open recovery queue" : "Feedback records"}
               />
-              <span className="toolbar-count">{feedback.length} records</span>
-            </div>
-            <FeedbackTable
-              feedback={feedback}
-              title={section === "complaints" ? "Open recovery queue" : "Feedback records"}
-            />
-          </>
-        )}
+            </>
+          )}
+        </motion.div>
       </div>
     </AppShell>
   );

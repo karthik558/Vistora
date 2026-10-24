@@ -1,7 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
+import { cookies } from "next/headers";
+
+export const dynamic = "force-dynamic";
 
 export default function HomePage() {
+  const cookieStore = cookies();
+  const userCookie = cookieStore.get("vistora-user")?.value;
+  let isLoggedIn = false;
+
+  if (userCookie) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(userCookie));
+      if (parsed?.email) isLoggedIn = true;
+    } catch {
+      if (userCookie.includes("@")) isLoggedIn = true;
+    }
+  }
+
   return (
     <main className="landing-shell">
       {/* Top Header */}
@@ -16,9 +32,15 @@ export default function HomePage() {
             style={{ height: "36px", width: "auto", objectFit: "contain" }}
           />
         </Link>
-        <Link href="/login" className="button button-dark compact">
-          Sign In <span>→</span>
-        </Link>
+        {isLoggedIn ? (
+          <Link href="/dashboard" className="button button-dark compact">
+            Dashboard <span>→</span>
+          </Link>
+        ) : (
+          <Link href="/login" className="button button-dark compact">
+            Sign In <span>→</span>
+          </Link>
+        )}
       </div>
 
       {/* Hero Content */}
@@ -32,9 +54,15 @@ export default function HomePage() {
       </p>
 
       <div className="landing-actions" style={{ marginTop: "28px" }}>
-        <Link className="button button-dark" href="/login">
-          Access workspace <span>→</span>
-        </Link>
+        {isLoggedIn ? (
+          <Link className="button button-dark" href="/dashboard">
+            Open Operations Dashboard <span>→</span>
+          </Link>
+        ) : (
+          <Link className="button button-dark" href="/login">
+            Access workspace <span>→</span>
+          </Link>
+        )}
       </div>
 
       {/* Simple one-line footer text */}

@@ -39,8 +39,6 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       .then((json) => {
         if (mounted && json.success && json.data) {
           setStay(json.data);
-          setGuestName(json.data.guestName);
-          setRoomNumber(json.data.roomNumber);
           setLoading(false);
         }
       })
@@ -65,8 +63,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         body: JSON.stringify({
           publicToken,
           propertyId: stay?.propertyId,
-          guestName: guestName.trim() || stay?.guestName || "Guest",
-          roomNumber: roomNumber.trim() || stay?.roomNumber || "Suite",
+          guestName: guestName.trim() || undefined,
+          roomNumber: roomNumber.trim() || undefined,
           department,
           rating,
           comment: comment.trim() || undefined,
@@ -91,8 +89,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     return (
       <main className="guest-shell">
         <div className="guest-card" style={{ textAlign: "center", padding: "60px 20px" }}>
-          <p className="eyebrow">Connecting to guest stay...</p>
-          <p className="guest-intro" style={{ margin: "auto" }}>Loading your stay details</p>
+          <p className="eyebrow">Guest feedback</p>
+          <p className="guest-intro" style={{ margin: "auto" }}>Preparing feedback form…</p>
         </div>
       </main>
     );
@@ -103,10 +101,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       <main className="guest-shell">
         <div className="guest-card success-card">
           <div className="success-mark">✓</div>
-          <p className="eyebrow">Thank you, {stay?.propertyName || "Vistora Partner Property"}</p>
+          <p className="eyebrow">Thank you</p>
           <h1>Your feedback is<br /><em>with our team.</em></h1>
           <p>
-            We appreciate you taking a moment to tell us about your experience in {roomNumber || stay?.roomNumber}.
+            We appreciate you taking a moment to tell us about your experience{roomNumber ? ` in ${roomNumber}` : ""}.
             {rating !== null && rating <= 2
               ? " A duty manager has been notified and our service recovery team will follow up promptly."
               : " Your comments help our team refine the thoughtful details our guests remember."}
@@ -138,14 +136,12 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               style={{ height: "26px", width: "auto", objectFit: "contain" }}
             />
           </Link>
-          <span className="verified-stay-pill" style={{ background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", borderRadius: "4px", padding: "4px 10px", fontSize: "10px", fontFamily: "var(--font-dm-mono)", fontWeight: 600 }}>Verified Stay · {roomNumber || stay?.roomNumber}</span>
         </div>
         <div className="guest-progress"><span /><span /><span /></div>
 
-        <p className="eyebrow">{stay?.propertyName || "Vistora Partner Property"}</p>
         <h1>How did we make<br /><em>you feel?</em></h1>
         <p className="guest-intro">
-          Welcome {guestName ? `, ${guestName}` : ""}. Your perspective helps our hospitality team tailor every arrival.
+          Your perspective helps our hospitality team tailor every arrival.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -209,7 +205,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 type="text"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Aisha Khan"
+                placeholder="Your name (optional)"
                 style={{
                   width: "100%",
                   padding: "10px 12px",
@@ -229,7 +225,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 type="text"
                 value={roomNumber}
                 onChange={(e) => setRoomNumber(e.target.value)}
-                placeholder="Room 602"
+                placeholder="e.g. 304 or Poolside"
                 style={{
                   width: "100%",
                   padding: "10px 12px",

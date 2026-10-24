@@ -16,7 +16,10 @@ import {
   ExternalLink,
   ShieldCheck,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel } from "../types/experience";
 import { FeedbackStatus } from "../types/database";
 
@@ -35,7 +38,7 @@ const nav = [
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode },
-  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck },
+  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, adminOnly: true },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet },
 ] as const;
 
@@ -94,6 +97,7 @@ export function AppShell({
 }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(propUser || null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (propUser) {
@@ -132,7 +136,15 @@ export function AppShell({
     router.refresh();
   };
 
-  const groups = [...new Set(nav.map((item) => item.group))];
+  // Filter navigation for visitor role
+  const visibleNav = nav.filter((item) => {
+    if ((item as any).adminOnly && currentUser?.role === "visitor") {
+      return false;
+    }
+    return true;
+  });
+
+  const groups = [...new Set(visibleNav.map((item) => item.group))];
   const displayName =
     currentUser?.fullName ||
     (currentUser?.email ? currentUser.email.split("@")[0] : "Operations User");
@@ -141,30 +153,59 @@ export function AppShell({
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        {/* Vistora Official Logo in Sidebar */}
-        <Link
-          href="/"
-          className="brand"
-          title="Vistora Home"
-          style={{ display: "flex", alignItems: "center", textDecoration: "none", padding: "0 10px 22px" }}
-        >
-          <Image
-            src="/logo.webp"
-            alt="Vistora"
-            width={130}
-            height={34}
-            priority
-            style={{ height: "28px", width: "auto", objectFit: "contain" }}
+      {/* Mobile Drawer Backdrop */}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            key="mobile-nav-backdrop"
+            className="sidebar-mobile-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
           />
-        </Link>
+        )}
+      </AnimatePresence>
+
+      <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
+        {/* Vistora Official Logo in Sidebar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px 22px" }}>
+          <Link
+            href="/"
+            className="brand"
+            title="Vistora Home"
+            onClick={() => setMobileNavOpen(false)}
+            style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
+          >
+            <Image
+              src="/logo.webp"
+              alt="Vistora"
+              width={130}
+              height={34}
+              priority
+              style={{ height: "28px", width: "auto", objectFit: "contain" }}
+            />
+          </Link>
+          {mobileNavOpen && (
+            <button
+              type="button"
+              className="sidebar-close-btn"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X size={18} strokeWidth={2} />
+            </button>
+          )}
+        </div>
 
         {/* Workspace Navigation with Monochrome Lucide Icons */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           {groups.map((group) => (
             <div className="nav-group" key={group}>
               <p>{group}</p>
-              {nav
+              {visibleNav
                 .filter((item) => item.group === group)
                 .map((item) => {
                   const Icon = item.icon;
@@ -174,6 +215,7 @@ export function AppShell({
                       key={item.href}
                       href={item.href}
                       className={`nav-item ${isActive ? "active" : ""}`}
+                      onClick={() => setMobileNavOpen(false)}
                     >
                       <Icon
                         size={16}
@@ -195,7 +237,11 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
-          <Link href="/feedback" className="sidebar-guest-link">
+          <Link
+            href="/feedback"
+            className="sidebar-guest-link"
+            onClick={() => setMobileNavOpen(false)}
+          >
             <span>Open guest feedback form</span>
             <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />
           </Link>
@@ -211,7 +257,7 @@ export function AppShell({
                 {displayEmail}
               </small>
             </div>
-            {/* Sign out button moved to sidebar */}
+            {/* Sign out button in sidebar */}
             <button
               type="button"
               onClick={handleSignOut}
@@ -240,12 +286,32 @@ export function AppShell({
       </aside>
 
       <main className="main-content">
-        {/* Topbar: clean breadcrumbs, NO duplicate logo, NO Data Connected, NO topbar sign out */}
+        {/* Topbar: clean breadcrumbs, mobile hamburger toggle, responsive logo */}
         <header className="topbar">
-          <div className="breadcrumbs">
-            <span>Workspace</span>
-            <b>/</b>
-            <strong>{active}</strong>
+          <div className="topbar-inner">
+            <button
+              type="button"
+              className="mobile-menu-btn"
+              onClick={() => setMobileNavOpen(!mobileNavOpen)}
+              aria-label={mobileNavOpen ? "Close menu" : "Open navigation menu"}
+            >
+              {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
+            </button>
+            <Link href="/" className="topbar-mobile-logo" title="Vistora Home">
+              <Image
+                src="/logo.webp"
+                alt="Vistora"
+                width={95}
+                height={24}
+                priority
+                style={{ height: "22px", width: "auto", objectFit: "contain" }}
+              />
+            </Link>
+            <div className="breadcrumbs">
+              <span>Workspace</span>
+              <b>/</b>
+              <strong>{active}</strong>
+            </div>
           </div>
         </header>
         {children}
@@ -454,6 +520,14 @@ export function FeedbackTable({
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [userRole, setUserRole] = useState<string>("visitor");
+
+  useEffect(() => {
+    const user = getClientUser();
+    if (user?.role) {
+      setUserRole(user.role);
+    }
+  }, []);
 
   async function update() {
     if (!selected || !status) return;
@@ -530,47 +604,127 @@ export function FeedbackTable({
         </table>
       </div>
 
-      {selected && (
-        <div className="drawer-backdrop" onClick={() => setSelected(null)}>
-          <div className="detail-drawer" onClick={(event) => event.stopPropagation()}>
-            <button className="drawer-close" onClick={() => setSelected(null)} aria-label="Close">
-              ×
-            </button>
-            <p className="eyebrow">Feedback record</p>
-            <h2>{selected.name}</h2>
-            <p className="drawer-meta">
-              {selected.roomNumber} · {selected.department} · {selected.rating}/5
-            </p>
-            <blockquote>{selected.comment || "No written comment provided."}</blockquote>
-            <label className="field-label">
-              Resolution status
-              <select
-                className="auth-input"
-                value={status}
-                onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
-              >
-                <option value="needs_attention">Needs attention</option>
-                <option value="under_review">Under review</option>
-                <option value="resolved">Resolved</option>
-                <option value="escalated">Escalated</option>
-              </select>
-            </label>
-            <label className="field-label">
-              Resolution notes
-              <textarea
-                className="auth-input"
-                rows={4}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Record the action taken…"
-              />
-            </label>
-            <button className="button button-dark" disabled={saving} onClick={update}>
-              {saving ? "Saving…" : "Save resolution"}
-            </button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            key="drawer-backdrop"
+            className="drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={() => setSelected(null)}
+          >
+            <motion.div
+              key="detail-drawer"
+              className="detail-drawer"
+              initial={{ x: "100%", opacity: 0.85 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "100%", opacity: 0.85 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button className="drawer-close" onClick={() => setSelected(null)} aria-label="Close">
+                ×
+              </button>
+              <p className="eyebrow">Service recovery & compliance</p>
+              <h2 style={{ margin: "6px 0 18px", fontSize: "22px" }}>{selected.name}</h2>
+
+              {/* Structured Info Chips with generous spacing */}
+              <div className="drawer-chip-grid">
+                <div className="drawer-chip">
+                  <span className="drawer-chip-label">Room / Location</span>
+                  <strong className="drawer-chip-value mono">{selected.roomNumber || "Suite"}</strong>
+                </div>
+                <div className="drawer-chip">
+                  <span className="drawer-chip-label">Department</span>
+                  <strong className="drawer-chip-value">{selected.department}</strong>
+                </div>
+                <div className="drawer-chip">
+                  <span className="drawer-chip-label">Guest Rating</span>
+                  <strong className="drawer-chip-value rating">★ {selected.rating} / 5</strong>
+                </div>
+                <div className="drawer-chip">
+                  <span className="drawer-chip-label">Logged</span>
+                  <strong className="drawer-chip-value">{selected.timeAgo}</strong>
+                </div>
+              </div>
+
+              {/* Guest Statement Card with generous breathing room */}
+              <div className="drawer-statement-card">
+                <div className="drawer-statement-header">
+                  <span>Guest Statement</span>
+                  <span className={`status ${selected.tone}`}>{selected.statusLabel}</span>
+                </div>
+                <p className="drawer-statement-text">
+                  "{selected.comment || "No written comment provided by the guest."}"
+                </p>
+                {selected.wantsContact && (
+                  <div className="drawer-contact-pill">
+                    Follow-up requested by guest via {selected.contactPreference || "email"}
+                  </div>
+                )}
+              </div>
+
+              {/* Resolution Section (RBAC protected) */}
+              <div className="drawer-resolution-section">
+                <h3 style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 }}>
+                  Resolution & Compliance
+                </h3>
+
+                {userRole === "visitor" ? (
+                  <div className="drawer-readonly-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>Current Status</span>
+                      <span className={`status ${selected.tone}`}>{selected.statusLabel}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginBottom: "6px" }}>Resolution Notes</span>
+                      <p style={{ margin: 0, fontSize: "12px", color: "var(--ink)", fontStyle: selected.resolutionNotes ? "normal" : "italic", lineHeight: "1.6" }}>
+                        {selected.resolutionNotes || "No resolution notes recorded yet."}
+                      </p>
+                    </div>
+                    <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--line)", fontSize: "11px", color: "var(--muted)" }}>
+                      Visitor access: You have view-only permissions. Compliance modifications require staff or admin privileges.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <label className="field-label" style={{ margin: 0 }}>
+                      Resolution status
+                      <select
+                        className="auth-input"
+                        value={status}
+                        onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
+                        style={{ marginTop: "6px" }}
+                      >
+                        <option value="needs_attention">Needs attention</option>
+                        <option value="under_review">Under review</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="escalated">Escalated</option>
+                      </select>
+                    </label>
+                    <label className="field-label" style={{ margin: 0 }}>
+                      Resolution notes
+                      <textarea
+                        className="auth-input"
+                        rows={4}
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        placeholder="Record the action taken…"
+                        style={{ marginTop: "6px" }}
+                      />
+                    </label>
+                    <button className="button button-dark" disabled={saving} onClick={update} style={{ width: "100%", padding: "12px", marginTop: "4px" }}>
+                      {saving ? "Saving…" : "Save resolution"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

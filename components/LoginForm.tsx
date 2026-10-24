@@ -114,7 +114,7 @@ export default function LoginForm() {
             disabled={loading}
             style={{ width: "100%", marginTop: "16px", padding: "13px", fontSize: "12px" }}
           >
-            {loading ? "Verifying with Supabase…" : "Sign In to Workspace →"}
+            {loading ? "Logging in…" : "Sign In to Workspace →"}
           </button>
         </form>
       </div>
