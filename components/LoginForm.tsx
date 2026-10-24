@@ -1,30 +1,21 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<"admin" | "staff" | "visitor">("admin");
-  const [email, setEmail] = useState("rhea.menon@anantara.com");
-  const [password, setPassword] = useState("••••••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRoleSelect = (role: "admin" | "staff" | "visitor") => {
     setSelectedRole(role);
     setError(null);
-    if (role === "admin") {
-      setEmail("rhea.menon@anantara.com");
-      setPassword("••••••••••••");
-    } else if (role === "staff") {
-      setEmail("somchai.operations@anantara.com");
-      setPassword("••••••••••••");
-    } else {
-      setEmail("visitor.preview@vistora.guest");
-      setPassword("••••••••••••");
-    }
   };
 
   async function handleSubmit(e: FormEvent) {
@@ -38,7 +29,7 @@ export default function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
-          password: password === "••••••••••••" ? "Password123!" : password,
+          password: password.trim() || "Password123!",
           role: selectedRole,
         }),
       });
@@ -47,6 +38,12 @@ export default function LoginForm() {
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Authentication failed. Please verify your credentials.");
+      }
+
+      if (typeof window !== "undefined" && data.user) {
+        try {
+          localStorage.setItem("vistora-user", JSON.stringify(data.user));
+        } catch {}
       }
 
       router.push("/dashboard");
@@ -63,12 +60,16 @@ export default function LoginForm() {
       <div className="auth-card">
         {/* Brand row */}
         <div className="auth-brand-row">
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div className="brand-mark">V</div>
-            <strong style={{ fontSize: "16px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              VISTORA
-            </strong>
-          </div>
+          <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
+            <Image
+              src="/logo.webp"
+              alt="Vistora"
+              width={130}
+              height={34}
+              priority
+              style={{ height: "30px", width: "auto", objectFit: "contain" }}
+            />
+          </Link>
           <Link href="/" className="text-link" style={{ fontSize: "11px" }}>
             ← Home
           </Link>
@@ -158,6 +159,7 @@ export default function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email ID (e.g. you@company.com)"
               required
             />
           </div>
@@ -172,6 +174,7 @@ export default function LoginForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
               required
             />
           </div>

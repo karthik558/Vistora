@@ -1,10 +1,10 @@
-import Dashboard from "../../components/Dashboard";
+import { cookies } from "next/headers";
+import Dashboard, { WorkspaceUser } from "../../components/Dashboard";
 import { getDashboardData } from "../../lib/services/guestExperienceService";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // Fetch initial data directly from Supabase on the server
   let initialData = null;
   try {
     initialData = await getDashboardData("all");
@@ -12,5 +12,14 @@ export default async function DashboardPage() {
     console.error("Server-side fetch error:", err);
   }
 
-  return <Dashboard initialData={initialData} />;
+  let initialUser: WorkspaceUser | null = null;
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("vistora-user")?.value;
+    if (userCookie) {
+      initialUser = JSON.parse(userCookie);
+    }
+  } catch {}
+
+  return <Dashboard initialData={initialData} initialUser={initialUser} />;
 }

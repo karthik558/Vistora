@@ -4,18 +4,43 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+function formatUserDisplayName(email: string): string {
+  const clean = email.trim();
+  const [localPart, domainPart = ""] = clean.toLowerCase().split("@");
+  if (clean.toLowerCase() === "dev@karthiklal.in" || domainPart.includes("karthiklal")) {
+    return "Karthik Lal";
+  }
+  const parts = localPart
+    .replace(/[._\-+]/g, " ")
+    .split(/\s+/)
+    .map((p) => p.replace(/\d+/g, "").trim())
+    .filter(Boolean);
+  if (parts.length > 0) {
+    return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+  }
+  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { role, email } = await request.json();
 
     if (!["admin", "staff", "visitor"].includes(role)) {
-      return NextResponse.json({ success: false, error: "Invalid role. Must be 'admin', 'staff', or 'visitor'." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid role. Must be 'admin', 'staff', or 'visitor'." },
+        { status: 400 }
+      );
     }
 
-    const targetEmail = email || "rhea.menon@anantara.com";
-    let userName = targetEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-    if (targetEmail === "rhea.menon@anantara.com") userName = "Rhea Menon";
-    if (targetEmail === "somchai.operations@anantara.com") userName = "Somchai Tan";
+    if (!email) {
+      return NextResponse.json(
+        { success: false, error: "Email is required to switch role." },
+        { status: 400 }
+      );
+    }
+
+    const targetEmail = email.trim();
+    let userName = formatUserDisplayName(targetEmail);
 
     // Try finding & updating in Supabase if possible
     try {

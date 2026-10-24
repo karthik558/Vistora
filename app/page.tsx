@@ -1,11 +1,19 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
   return (
     <main className="landing-shell">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14vh" }}>
-        <Link href="/" style={{ textDecoration: "none" }} title="Vistora Home">
-          <div className="landing-mark">V</div>
+        <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }} title="Vistora Home">
+          <Image
+            src="/logo.webp"
+            alt="Vistora"
+            width={150}
+            height={40}
+            priority
+            style={{ height: "36px", width: "auto", objectFit: "contain" }}
+          />
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <Link href="/dashboard" className="button button-outline compact">

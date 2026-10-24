@@ -27,6 +27,11 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "Vistora | Guest Experience Operations",
   description: "A premium guest feedback and service recovery operations workspace.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -36,6 +41,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${dmSans.variable} ${dmMono.variable} ${playfair.variable}`}>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+      </head>
       <body className={dmSans.className}>{children}</body>
     </html>
   );

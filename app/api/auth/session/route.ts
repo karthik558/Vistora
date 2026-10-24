@@ -4,6 +4,23 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+function formatUserDisplayName(email: string): string {
+  const clean = email.trim();
+  const [localPart, domainPart = ""] = clean.toLowerCase().split("@");
+  if (clean.toLowerCase() === "dev@karthiklal.in" || domainPart.includes("karthiklal")) {
+    return "Karthik Lal";
+  }
+  const parts = localPart
+    .replace(/[._\-+]/g, " ")
+    .split(/\s+/)
+    .map((p) => p.replace(/\d+/g, "").trim())
+    .filter(Boolean);
+  if (parts.length > 0) {
+    return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+  }
+  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+}
+
 export async function GET(request: NextRequest) {
   try {
     // 1. Check workspace session cookie
@@ -12,6 +29,9 @@ export async function GET(request: NextRequest) {
       try {
         const parsed = JSON.parse(userCookie);
         if (parsed && parsed.email) {
+          if (!parsed.fullName || parsed.fullName === "Operations User") {
+            parsed.fullName = formatUserDisplayName(parsed.email);
+          }
           return NextResponse.json({
             success: true,
             user: parsed,
@@ -34,12 +54,16 @@ export async function GET(request: NextRequest) {
           const rawRole = data.user.user_metadata?.role;
           const role =
             rawRole === "admin" || !rawRole ? "admin" : rawRole === "visitor" ? "visitor" : "staff";
+          const fullName =
+            data.user.user_metadata?.full_name ||
+            data.user.user_metadata?.name ||
+            (data.user.email ? formatUserDisplayName(data.user.email) : "Operations User");
           return NextResponse.json({
             success: true,
             user: {
               id: data.user.id,
               email: data.user.email,
-              fullName: data.user.user_metadata?.full_name || "Operations Lead",
+              fullName,
               role,
             },
           });
@@ -50,23 +74,13 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      success: true,
-      user: {
-        id: "default-user",
-        email: "rhea.menon@anantara.com",
-        fullName: "Rhea Menon",
-        role: "admin",
-      },
+      success: false,
+      user: null,
     });
   } catch {
     return NextResponse.json({
-      success: true,
-      user: {
-        id: "default-user",
-        email: "rhea.menon@anantara.com",
-        fullName: "Rhea Menon",
-        role: "admin",
-      },
+      success: false,
+      user: null,
     });
   }
 }

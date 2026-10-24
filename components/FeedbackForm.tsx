@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { DepartmentType } from "../types/database";
 import { GuestStayDetails } from "../types/experience";
@@ -102,7 +103,7 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
       <main className="guest-shell">
         <div className="guest-card success-card">
           <div className="success-mark">✓</div>
-          <p className="eyebrow">Thank you, {stay?.propertyName || "Anantara Riverside"}</p>
+          <p className="eyebrow">Thank you, {stay?.propertyName || "Vistora Partner Property"}</p>
           <h1>Your feedback is<br /><em>with our team.</em></h1>
           <p>
             We appreciate you taking a moment to tell us about your experience in {roomNumber || stay?.roomNumber}.
@@ -127,12 +128,21 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
     <main className="guest-shell">
       <div className="guest-card">
         <div className="guest-top">
-          <div className="property-mark">V</div>
+          <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
+            <Image
+              src="/logo.webp"
+              alt="Vistora"
+              width={120}
+              height={32}
+              priority
+              style={{ height: "26px", width: "auto", objectFit: "contain" }}
+            />
+          </Link>
           <span className="demo-pill">Verified Stay · {roomNumber || stay?.roomNumber}</span>
         </div>
         <div className="guest-progress"><span /><span /><span /></div>
 
-        <p className="eyebrow">{stay?.propertyName || "Anantara Riverside Bangkok"}</p>
+        <p className="eyebrow">{stay?.propertyName || "Vistora Partner Property"}</p>
         <h1>How did we make<br /><em>you feel?</em></h1>
         <p className="guest-intro">
           Welcome {guestName ? `, ${guestName}` : ""}. Your perspective helps our hospitality team tailor every arrival.

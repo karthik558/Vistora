@@ -4,6 +4,30 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+function formatUserDisplayName(email: string): string {
+  const clean = email.trim();
+  const [localPart, domainPart = ""] = clean.toLowerCase().split("@");
+
+  if (clean.toLowerCase() === "dev@karthiklal.in" || domainPart.includes("karthiklal")) {
+    return "Karthik Lal";
+  }
+
+  // Handle dots, dashes, underscores, e.g. "karthik.lal" -> "Karthik Lal"
+  const parts = localPart
+    .replace(/[._\-+]/g, " ")
+    .split(/\s+/)
+    .map((p) => p.replace(/\d+/g, "").trim())
+    .filter(Boolean);
+
+  if (parts.length > 0) {
+    return parts
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
+  }
+
+  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password, role = "admin" } = await request.json();
@@ -18,10 +42,8 @@ export async function POST(request: NextRequest) {
     const assignedRole =
       role === "staff" ? "staff" : role === "visitor" ? "visitor" : "admin";
 
-    let userName = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-    if (email === "rhea.menon@anantara.com") userName = "Rhea Menon";
-    if (email === "somchai.operations@anantara.com") userName = "Somchai Tan";
-    if (email === "dev@karthiklal.in") userName = "Karthik Lal";
+    const cleanEmail = email.trim();
+    let userName = formatUserDisplayName(cleanEmail);
 
     let supabaseToken: string | null = null;
     let userId = "usr-" + Date.now();
@@ -33,7 +55,7 @@ export async function POST(request: NextRequest) {
       });
 
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password: password || "Password123!",
       });
 
@@ -42,6 +64,8 @@ export async function POST(request: NextRequest) {
         userId = data.user.id;
         if (data.user.user_metadata?.full_name) {
           userName = data.user.user_metadata.full_name;
+        } else if (data.user.user_metadata?.name) {
+          userName = data.user.user_metadata.name;
         }
       }
     } catch {
@@ -50,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     const userData = {
       id: userId,
-      email,
+      email: cleanEmail,
       fullName: userName,
       role: assignedRole,
     };

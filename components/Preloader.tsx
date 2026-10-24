@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 interface PreloaderProps {
   isLoading: boolean;
@@ -57,15 +58,18 @@ export default function Preloader({
       aria-label="Loading Vistora Workspace"
     >
       <div className="preloader-content">
-        {/* Brand Mark with Pulse Ring */}
-        <div className="preloader-mark-wrap">
-          <div className="preloader-ring" />
-          <div className="preloader-mark">V</div>
+        {/* Brand Logo */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
+          <Image
+            src="/logo.webp"
+            alt="Vistora"
+            width={160}
+            height={42}
+            priority
+            style={{ height: "36px", width: "auto", objectFit: "contain" }}
+          />
         </div>
-
-        {/* Brand Text */}
-        <p className="preloader-brand">VISTORA</p>
-        <p className="preloader-sub">GUEST EXPERIENCE OPERATIONS</p>
+        <p className="preloader-sub" style={{ marginTop: "2px" }}>GUEST EXPERIENCE OPERATIONS</p>
 
         {/* Progress Bar */}
         <div className="preloader-track">
