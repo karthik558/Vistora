@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppShell, WorkspaceUser } from "./Dashboard";
+import { AppShell, WorkspaceUser, getClientUser } from "./Dashboard";
 import { UserPlus, Key, Trash2, X, Check, Building2, Shield, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
@@ -56,8 +56,15 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [success, setSuccess] = useState<string | null>(null);
 
   // User session
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(initialUser?.role || null);
-  const [sessionLoading, setSessionLoading] = useState(!initialUser?.role);
+  const [activeUser, setActiveUser] = useState<WorkspaceUser | null>(
+    () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
+  );
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(initialUser?.role || activeUser?.role || null);
+  const [sessionLoading, setSessionLoading] = useState(!initialUser?.role && !activeUser?.role);
+
+  const isUserAdmin = activeUser?.role === "admin" || currentUserRole === "admin";
+  const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
+  const canManageUsers = isUserAdmin || userRights.has("manage_users");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -121,19 +128,21 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   }
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("vistora-user");
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.role) setCurrentUserRole(u.role);
-      }
-    } catch {}
+    const local = getClientUser();
+    if (local) {
+      setActiveUser(local);
+      if (local.role) setCurrentUserRole(local.role);
+    }
 
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((data) => {
-        if (data?.success && data?.user?.role) {
-          setCurrentUserRole(data.user.role);
+        if (data?.success && data?.user) {
+          setActiveUser(data.user);
+          if (data.user.role) setCurrentUserRole(data.user.role);
+          try {
+            localStorage.setItem("vistora-user", JSON.stringify(data.user));
+          } catch {}
         }
       })
       .catch(() => {})
@@ -336,7 +345,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   }
 
   return (
-    <AppShell active="Team & users">
+    <AppShell active="Team & users" user={activeUser}>
       <div className="content-wrap">
         {sessionLoading ? (
           <div className="panel" style={{ padding: "60px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
@@ -344,12 +353,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
             <h2 style={{ fontSize: "20px", margin: "10px 0" }}>Verifying credentials…</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px" }}>Loading workspace permissions…</p>
           </div>
-        ) : currentUserRole === "visitor" ? (
+        ) : !canManageUsers ? (
           <div className="panel" style={{ padding: "50px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Access & Administration</p>
             <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
-              Your account is assigned the <strong>Visitor</strong> role. Visitor users have view-only access across guest experience records and cannot access user administration or member settings.
+              Your account does not have permission to manage team members or configure access rights.
             </p>
             <a className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
               ← Return to Dashboard
@@ -487,7 +496,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   }}
                                 >
                                   <Shield size={10} strokeWidth={1.75} />
-                                  {user.rights?.length ? `${user.rights.length} rights active` : "Role default"}
+                                  {user.role === "admin"
+                                    ? "Full administrator access"
+                                    : Array.isArray(user.rights)
+                                    ? user.rights.length > 0
+                                      ? `${user.rights.length} rights active`
+                                      : "No rights assigned"
+                                    : "Role default"}
                                 </span>
                               </div>
                             </td>
@@ -609,7 +624,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     setEditRights(
                                       user.role === "admin"
                                         ? SYSTEM_RIGHTS.map((r) => r.id)
-                                        : user.rights && user.rights.length > 0
+                                        : Array.isArray(user.rights)
                                         ? user.rights
                                         : ROLE_DEFAULT_RIGHTS[user.role] || []
                                     );

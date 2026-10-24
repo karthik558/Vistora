@@ -18,14 +18,22 @@ import {
   FileText,
   Search,
 } from "lucide-react";
-import { AppShell, FeedbackTable } from "./Dashboard";
+import { AppShell, FeedbackTable, WorkspaceUser, getClientUser } from "./Dashboard";
 import { DashboardData, PropertyRow } from "../types/experience";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
 import CustomSelect from "./CustomSelect";
 
-export default function OperationsPage({ section, data }: { section: string; data: DashboardData }) {
+export default function OperationsPage({
+  section,
+  data,
+  initialUser,
+}: {
+  section: string;
+  data: DashboardData;
+  initialUser?: WorkspaceUser | null;
+}) {
   const [query, setQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
@@ -33,20 +41,43 @@ export default function OperationsPage({ section, data }: { section: string; dat
     startDate: null,
     endDate: null,
   });
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<WorkspaceUser | null>(
+    () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
+  );
 
   useEffect(() => {
+    const local = getClientUser();
+    if (local && !user) setUser(local);
+
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((resData) => {
         if (resData?.success && resData?.user) {
           setUser(resData.user);
+          try {
+            localStorage.setItem("vistora-user", JSON.stringify(resData.user));
+          } catch {}
         }
       })
       .catch(() => {});
   }, []);
 
-  const isUserAdmin = !user || user.role === "admin";
+  const isUserAdmin = user?.role === "admin";
+  const userRights = new Set(Array.isArray(user?.rights) ? user.rights : []);
+
+  let isSectionAuthorized = true;
+  if (!isUserAdmin && user) {
+    if (section === "reports") {
+      isSectionAuthorized = userRights.has("export_reports");
+    } else if (section === "questionnaire" || section === "forms" || section === "qr-codes") {
+      isSectionAuthorized = userRights.has("manage_questionnaire");
+    } else if (section === "complaints") {
+      isSectionAuthorized = userRights.has("manage_complaints");
+    } else if (section === "feedback" || section === "directory" || section === "analytics") {
+      isSectionAuthorized = userRights.has("view_feedback");
+    }
+  }
+
   const userAllowedPropIds: string[] | null = isUserAdmin
     ? null
     : user?.propertyIds?.length
@@ -119,14 +150,27 @@ export default function OperationsPage({ section, data }: { section: string; dat
       : "Reports";
 
   return (
-    <AppShell active={navLabel} complaints={Number(data.metrics.openComplaints.value)}>
+    <AppShell active={navLabel} complaints={Number(data.metrics.openComplaints.value)} user={user}>
       <div className="content-wrap">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">Guest experience operations</p>
-            <h1>{title}</h1>
-            <p className="subheading">{descriptions[section]}</p>
+        {!isSectionAuthorized ? (
+          <div className="panel" style={{ padding: "60px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
+            <p className="eyebrow" style={{ color: "var(--muted)" }}>Operations Module</p>
+            <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
+            <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
+              Your account does not have permission to access the <strong>{title}</strong> module. Please use the navigation sidebar to access modules assigned to your profile.
+            </p>
+            <Link className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
+              ← Return to Dashboard
+            </Link>
           </div>
+        ) : (
+          <>
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">Guest experience operations</p>
+                <h1>{title}</h1>
+                <p className="subheading">{descriptions[section]}</p>
+              </div>
           <div className="page-heading-actions">
             <PropertyFilter
               properties={
@@ -196,6 +240,8 @@ export default function OperationsPage({ section, data }: { section: string; dat
             </>
           )}
         </motion.div>
+          </>
+        )}
       </div>
     </AppShell>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAdmin } from "../../../../lib/auth/serverAuth";
+import { requireAdminOrRight } from "../../../../lib/auth/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -11,7 +11,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const authCheck = await requireAdmin(request);
+    const authCheck = await requireAdminOrRight(request, "manage_users");
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const resolvedParams = await context.params;

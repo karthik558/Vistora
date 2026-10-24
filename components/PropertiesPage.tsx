@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppShell, WorkspaceUser } from "./Dashboard";
+import { AppShell, WorkspaceUser, getClientUser } from "./Dashboard";
 import { Building2, Plus, Trash2, X, Check, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -35,10 +35,18 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const [properties, setProperties] = useState<PropertyItem[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(initialUser?.role || null);
-  const [sessionLoading, setSessionLoading] = useState(!initialUser?.role);
+  // User session
+  const [activeUser, setActiveUser] = useState<WorkspaceUser | null>(
+    () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
+  );
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(initialUser?.role || activeUser?.role || null);
+  const [sessionLoading, setSessionLoading] = useState(!initialUser?.role && !activeUser?.role);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const isUserAdmin = activeUser?.role === "admin" || currentUserRole === "admin";
+  const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
+  const canManageProperties = isUserAdmin || userRights.has("manage_properties");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -77,19 +85,21 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   }
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("vistora-user");
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u?.role) setCurrentUserRole(u.role);
-      }
-    } catch {}
+    const local = getClientUser();
+    if (local) {
+      setActiveUser(local);
+      if (local.role) setCurrentUserRole(local.role);
+    }
 
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((data) => {
-        if (data?.success && data?.user?.role) {
-          setCurrentUserRole(data.user.role);
+        if (data?.success && data?.user) {
+          setActiveUser(data.user);
+          if (data.user.role) setCurrentUserRole(data.user.role);
+          try {
+            localStorage.setItem("vistora-user", JSON.stringify(data.user));
+          } catch {}
         }
       })
       .catch(() => {})
@@ -170,19 +180,19 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   }
 
   return (
-    <AppShell active="Properties">
+    <AppShell active="Properties" user={activeUser}>
       <div className="content-wrap">
         {sessionLoading ? (
           <div className="panel" style={{ padding: "60px 24px", textAlign: "center" }}>
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Portfolio Management</p>
             <h2 style={{ fontSize: "20px", margin: "10px 0" }}>Verifying access…</h2>
           </div>
-        ) : currentUserRole === "visitor" ? (
+        ) : !canManageProperties ? (
           <div className="panel" style={{ padding: "50px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Access & Administration</p>
             <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
-              Your account is assigned the <strong>Visitor</strong> role. Only workspace administrators have authorization to register or manage property locations.
+              Your account does not have permission to manage hotel property locations.
             </p>
             <a className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
               ← Return to Dashboard

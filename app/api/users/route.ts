@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAdmin, getAuthenticatedUser } from "../../../lib/auth/serverAuth";
+import { requireAdmin, requireAdminOrRight, getAuthenticatedUser } from "../../../lib/auth/serverAuth";
 import { sanitizeString, sanitizeEmail } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -88,8 +88,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Strict admin check
-    const authCheck = await requireAdmin(request);
+    // Strict authorization check: Admin role or manage_users permission required
+    const authCheck = await requireAdminOrRight(request, "manage_users");
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();
@@ -220,8 +220,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Strict admin check
-    const authCheck = await requireAdmin(request);
+    // Strict authorization check: Admin role or manage_users permission required
+    const authCheck = await requireAdminOrRight(request, "manage_users");
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();

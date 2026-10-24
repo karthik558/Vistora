@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getAuthenticatedUser, requireAdmin } from "../../../lib/auth/serverAuth";
+import { getAuthenticatedUser, requireAdmin, requireAdminOrRight } from "../../../lib/auth/serverAuth";
 import { sanitizeString } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Strictly require administrator privileges
-    const authCheck = await requireAdmin(request);
+    // Strictly require administrator or manage_properties privileges
+    const authCheck = await requireAdminOrRight(request, "manage_properties");
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();
@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Strictly require administrator privileges
-    const authCheck = await requireAdmin(request);
+    // Strictly require administrator or manage_properties privileges
+    const authCheck = await requireAdminOrRight(request, "manage_properties");
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const { propertyId } = await request.json();

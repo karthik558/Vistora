@@ -40,19 +40,27 @@ export interface WorkspaceUser {
   rights?: string[];
 }
 
-const nav = [
-  { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard },
-  { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3 },
-  { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare },
-  { label: "Complaints", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle },
-  { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users },
-  { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText },
-  { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle },
-  { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode },
-  { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, adminOnly: true },
-  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, adminOnly: true },
-  { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet },
-] as const;
+export interface NavItemConfig {
+  label: string;
+  href: string;
+  group: string;
+  icon: any;
+  requiredRight?: string;
+}
+
+const nav: readonly NavItemConfig[] = [
+  { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
+  { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
+  { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
+  { label: "Complaints", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
+  { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
+  { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText, requiredRight: "manage_questionnaire" },
+  { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },
+  { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
+  { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
+  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
+  { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet, requiredRight: "export_reports" },
+];
 
 function getUserInitials(name?: string, email?: string): string {
   if (name && name.trim()) {
@@ -73,7 +81,7 @@ function getUserInitials(name?: string, email?: string): string {
   return "OP";
 }
 
-function getClientUser(): WorkspaceUser | null {
+export function getClientUser(): WorkspaceUser | null {
   if (typeof window === "undefined") return null;
 
   try {
@@ -109,20 +117,22 @@ export function AppShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(propUser || null);
+  const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
+    () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
+  );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (propUser) {
       setCurrentUser(propUser);
-      return;
+    } else {
+      const local = getClientUser();
+      if (local) {
+        setCurrentUser(local);
+      }
     }
 
-    const local = getClientUser();
-    if (local) {
-      setCurrentUser(local);
-    }
-
+    // Always fetch latest session data from Supabase to guarantee rights freshness
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((data) => {
@@ -149,8 +159,22 @@ export function AppShell({
     router.refresh();
   };
 
-  // Keep navigation visible for all users
-  const visibleNav = nav;
+  // Dynamic rights-based sidebar navigation filtering
+  const isAdmin = currentUser?.role === "admin";
+  const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
+
+  const visibleNav = nav.filter((item) => {
+    // Administrator role automatically holds all operational capabilities
+    if (isAdmin) return true;
+
+    // Strict right-based visibility: completely hide item if permission is not granted
+    if (item.requiredRight) {
+      return userRights.has(item.requiredRight);
+    }
+
+    return true;
+  });
+
   const groups = [...new Set(visibleNav.map((item) => item.group))];
   const displayName =
     currentUser?.fullName ||
@@ -209,44 +233,50 @@ export function AppShell({
 
         {/* Workspace Navigation with Monochrome Lucide Icons */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          {groups.map((group) => (
-            <div className="nav-group" key={group}>
-              <p>{group}</p>
-              {visibleNav
-                .filter((item) => item.group === group)
-                .map((item) => {
-                  const Icon = item.icon;
-                  const isActive =
-                    pathname === item.href ||
-                    (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
-                    active === item.label ||
-                    (active && item.label.toLowerCase() === active.toLowerCase()) ||
-                    (item.label === "Complaints" && (active?.toLowerCase().includes("complaint") || pathname?.includes("/complaints"))) ||
-                    (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`nav-item ${isActive ? "active" : ""}`}
-                      onClick={() => setMobileNavOpen(false)}
-                    >
-                      <Icon
-                        size={16}
-                        strokeWidth={1.75}
-                        style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }}
-                        aria-hidden="true"
-                      />
-                      <span style={{ flex: 1 }}>{item.label}</span>
-                      {item.label === "Complaints" && complaints > 0 && (
-                        <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
-                          {complaints}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+          {groups.length === 0 ? (
+            <div style={{ padding: "28px 16px", color: "var(--muted)", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
+              No operational rights assigned. Contact an administrator to configure module access.
             </div>
-          ))}
+          ) : (
+            groups.map((group) => (
+              <div className="nav-group" key={group}>
+                <p>{group}</p>
+                {visibleNav
+                  .filter((item) => item.group === group)
+                  .map((item) => {
+                    const Icon = item.icon;
+                    const isActive =
+                      pathname === item.href ||
+                      (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
+                      active === item.label ||
+                      (active && item.label.toLowerCase() === active.toLowerCase()) ||
+                      (item.label === "Complaints" && (active?.toLowerCase().includes("complaint") || pathname?.includes("/complaints"))) ||
+                      (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`nav-item ${isActive ? "active" : ""}`}
+                        onClick={() => setMobileNavOpen(false)}
+                      >
+                        <Icon
+                          size={16}
+                          strokeWidth={1.75}
+                          style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }}
+                          aria-hidden="true"
+                        />
+                        <span style={{ flex: 1 }}>{item.label}</span>
+                        {item.label === "Complaints" && complaints > 0 && (
+                          <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
+                            {complaints}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+              </div>
+            ))
+          )}
         </nav>
 
         <div className="sidebar-bottom">
@@ -455,36 +485,52 @@ export default function Dashboard({
       ? user.email.split("@")[0]
       : "";
 
+  const userRights = new Set(Array.isArray(user?.rights) ? user.rights : []);
+  const canViewFeedback = isUserAdmin || userRights.has("view_feedback");
+  const canExportReports = isUserAdmin || userRights.has("export_reports");
+
   return (
     <AppShell complaints={complaints} user={user}>
       <div className="content-wrap">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">Operations overview</p>
-            <h1>{firstName ? `Good morning, ${firstName}` : "Operations Dashboard"}</h1>
-            <p className="subheading">
-              A clear view of the guest moments that need attention today.
+        {!canViewFeedback ? (
+          <div className="panel" style={{ padding: "60px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
+            <p className="eyebrow" style={{ color: "var(--muted)" }}>Operations Dashboard</p>
+            <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Feedback View Restricted</h2>
+            <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
+              Your account does not have permission to view guest reviews or sentiment analytics. Please use the navigation sidebar to access modules assigned to your profile.
             </p>
           </div>
-          <div className="page-heading-actions">
-            <PropertyFilter
-              properties={
-                userAllowedPropIds !== null
-                  ? (data?.properties || []).filter((p) => userAllowedPropIds.includes(p.id))
-                  : data?.properties || []
-              }
-              selectedId={selectedProperty}
-              onChange={setSelectedProperty}
-            />
-            <CustomDatePicker
-              value={dateFilter}
-              onChange={setDateFilter}
-            />
-            <Link href="/dashboard/reports" className="button button-dark compact">
-              Create report <span>↗</span>
-            </Link>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">Operations overview</p>
+                <h1>{firstName ? `Good morning, ${firstName}` : "Operations Dashboard"}</h1>
+                <p className="subheading">
+                  A clear view of the guest moments that need attention today.
+                </p>
+              </div>
+              <div className="page-heading-actions">
+                <PropertyFilter
+                  properties={
+                    userAllowedPropIds !== null
+                      ? (data?.properties || []).filter((p) => userAllowedPropIds.includes(p.id))
+                      : data?.properties || []
+                  }
+                  selectedId={selectedProperty}
+                  onChange={setSelectedProperty}
+                />
+                <CustomDatePicker
+                  value={dateFilter}
+                  onChange={setDateFilter}
+                />
+                {canExportReports && (
+                  <Link href="/dashboard/reports" className="button button-dark compact">
+                    Create report <span>↗</span>
+                  </Link>
+                )}
+              </div>
+            </div>
 
         {data ? (
           <>
@@ -564,6 +610,8 @@ export default function Dashboard({
           <div className="panel empty-state">
             Unable to load workspace data. Please refresh.
           </div>
+        )}
+          </>
         )}
       </div>
     </AppShell>

@@ -63,21 +63,43 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Role-based protection: /dashboard/users and /dashboard/properties are strictly admin-only
-    if (pathname.startsWith("/dashboard/users") || pathname.startsWith("/dashboard/properties")) {
-      let isAdmin = false;
-      if (userCookie) {
-        try {
-          const parsed = JSON.parse(userCookie);
-          if (parsed?.role === "admin") {
-            isAdmin = true;
-          }
-        } catch {}
-      }
-      if (!isAdmin) {
-        // Redirect non-admins safely to main dashboard
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
+    // Role-based & permissions-based route protection
+    if (userCookie) {
+      try {
+        const parsed = JSON.parse(userCookie);
+        const isAdmin = parsed?.role === "admin";
+        const rights: string[] = Array.isArray(parsed?.rights) ? parsed.rights : [];
+        const hasAccess = (rightId: string) => isAdmin || rights.includes(rightId);
+
+        if (pathname.startsWith("/dashboard/users") && !hasAccess("manage_users")) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+        if (pathname.startsWith("/dashboard/properties") && !hasAccess("manage_properties")) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+        if (pathname.startsWith("/dashboard/reports") && !hasAccess("export_reports")) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+        if (
+          (pathname.startsWith("/dashboard/questionnaire") ||
+            pathname.startsWith("/dashboard/forms") ||
+            pathname.startsWith("/dashboard/qr-codes")) &&
+          !hasAccess("manage_questionnaire")
+        ) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+        if (pathname.startsWith("/dashboard/complaints") && !hasAccess("manage_complaints")) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+        if (
+          (pathname.startsWith("/dashboard/feedback") ||
+            pathname.startsWith("/dashboard/directory") ||
+            pathname.startsWith("/dashboard/analytics")) &&
+          !hasAccess("view_feedback")
+        ) {
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+      } catch {}
     }
   }
 

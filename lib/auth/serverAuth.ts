@@ -131,6 +131,36 @@ export async function requireAdmin(request: NextRequest): Promise<
 }
 
 /**
+ * Enforces that the request is made by a verified Administrator OR a team member holding the required right.
+ */
+export async function requireAdminOrRight(
+  request: NextRequest,
+  requiredRight: string
+): Promise<{ user: VerifiedUser; errorResponse?: never } | { user?: never; errorResponse: NextResponse }> {
+  const user = await getAuthenticatedUser(request);
+
+  if (!user) {
+    return {
+      errorResponse: NextResponse.json(
+        { success: false, error: "Authentication required. Please sign in to continue." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (user.role === "admin" || (Array.isArray(user.rights) && user.rights.includes(requiredRight))) {
+    return { user };
+  }
+
+  return {
+    errorResponse: NextResponse.json(
+      { success: false, error: `Access denied. '${requiredRight}' permission or Administrator role required.` },
+      { status: 403 }
+    ),
+  };
+}
+
+/**
  * Determines property access scope for a user.
  * Admin users have unrestricted global access.
  * Non-admin users are strictly confined to their assigned property_ids.
