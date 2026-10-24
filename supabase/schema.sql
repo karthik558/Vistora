@@ -468,3 +468,101 @@ VALUES
         NOW() - INTERVAL '6 hours'
     )
 ON CONFLICT (id) DO NOTHING;
+
+-- ------------------------------------------------------------------------------
+-- 6. QUESTIONNAIRE QUESTIONS & RESPONSES
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.feedback_questions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID REFERENCES public.properties(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    question_type TEXT NOT NULL DEFAULT 'choice', -- 'choice', 'rating', 'yes_no', 'text'
+    options JSONB DEFAULT '[]'::jsonb,
+    department department_type,
+    is_required BOOLEAN NOT NULL DEFAULT false,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.feedback_answers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    feedback_id UUID NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
+    question_id UUID REFERENCES public.feedback_questions(id) ON DELETE SET NULL,
+    question_text TEXT NOT NULL,
+    answer_value TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_questions_property_id ON public.feedback_questions(property_id);
+CREATE INDEX IF NOT EXISTS idx_questions_active ON public.feedback_questions(is_active);
+CREATE INDEX IF NOT EXISTS idx_answers_feedback_id ON public.feedback_answers(feedback_id);
+
+ALTER TABLE public.feedback_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback_answers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public questions are viewable by everyone" ON public.feedback_questions;
+CREATE POLICY "Public questions are viewable by everyone"
+    ON public.feedback_questions FOR SELECT
+    USING (true);
+
+DROP POLICY IF EXISTS "Service role full access to questions" ON public.feedback_questions;
+CREATE POLICY "Service role full access to questions"
+    ON public.feedback_questions FOR ALL
+    USING (true);
+
+DROP POLICY IF EXISTS "Public can submit feedback answers" ON public.feedback_answers;
+CREATE POLICY "Public can submit feedback answers"
+    ON public.feedback_answers FOR INSERT
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access to answers" ON public.feedback_answers;
+CREATE POLICY "Service role full access to answers"
+    ON public.feedback_answers FOR ALL
+    USING (true);
+
+-- Seed default questionnaire questions
+INSERT INTO public.feedback_questions (id, property_id, question_text, question_type, options, is_required, display_order, is_active)
+VALUES
+    (
+        'b0000001-0000-0000-0000-000000000001',
+        null,
+        'How smooth was your check-in and arrival experience?',
+        'choice',
+        '["Seamless & prompt", "Standard / acceptable", "Delayed or congested"]'::jsonb,
+        true,
+        1,
+        true
+    ),
+    (
+        'b0000002-0000-0000-0000-000000000002',
+        null,
+        'How satisfied were you with room cleanliness and ambiance?',
+        'rating',
+        '[]'::jsonb,
+        true,
+        2,
+        true
+    ),
+    (
+        'b0000003-0000-0000-0000-000000000003',
+        null,
+        'Would you recommend Vistora to friends or colleagues?',
+        'choice',
+        '["Definitely", "Likely", "Unlikely"]'::jsonb,
+        false,
+        3,
+        true
+    ),
+    (
+        'b0000004-0000-0000-0000-000000000004',
+        null,
+        'Did our team promptly assist you with all requests?',
+        'yes_no',
+        '["Yes, absolutely", "Could be faster", "No, unattended"]'::jsonb,
+        false,
+        4,
+        true
+    )
+ON CONFLICT (id) DO NOTHING;

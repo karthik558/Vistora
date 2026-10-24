@@ -36,7 +36,7 @@ export default function LoginForm() {
       if (typeof window !== "undefined" && data.user) {
         try {
           localStorage.setItem("vistora-user", JSON.stringify(data.user));
-        } catch {}
+        } catch { }
       }
 
       router.push("/dashboard");
@@ -55,7 +55,7 @@ export default function LoginForm() {
         <div className="auth-brand-row">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
             <Image
-              src="/logo.webp"
+              src="/logo1.webp"
               alt="Vistora"
               width={130}
               height={34}

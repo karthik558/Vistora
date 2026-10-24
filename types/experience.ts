@@ -93,6 +93,11 @@ export interface SubmitFeedbackPayload {
   comment?: string;
   wantsContact: boolean;
   contactPreference?: "email" | "phone" | "in_person";
+  answers?: Array<{
+    questionId?: string;
+    questionText: string;
+    answerValue: string;
+  }>;
 }
 
 export interface GuestStayDetails {

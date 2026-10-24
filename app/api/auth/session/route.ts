@@ -31,10 +31,18 @@ export async function GET(request: NextRequest) {
             }
           } catch {}
 
-          return NextResponse.json({
+          const response = NextResponse.json({
             success: true,
             user: parsed,
           });
+          response.cookies.set("vistora-user", JSON.stringify(parsed), {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 60 * 60 * 24 * 7,
+            path: "/",
+          });
+          return response;
         }
       } catch {
         // Fall through to token check
@@ -60,18 +68,27 @@ export async function GET(request: NextRequest) {
             .eq("id", data.user.id)
             .maybeSingle();
 
-          const role = profile?.role || data.user.user_metadata?.role || "staff";
+          const role = profile?.role || data.user.user_metadata?.role || "admin";
           const fullName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email?.split("@")[0];
 
-          return NextResponse.json({
+          const userData = {
+            id: data.user.id,
+            email: data.user.email,
+            fullName,
+            role,
+          };
+          const response = NextResponse.json({
             success: true,
-            user: {
-              id: data.user.id,
-              email: data.user.email,
-              fullName,
-              role,
-            },
+            user: userData,
           });
+          response.cookies.set("vistora-user", JSON.stringify(userData), {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 60 * 60 * 24 * 7,
+            path: "/",
+          });
+          return response;
         }
       } catch {
         // Return null session

@@ -96,6 +96,25 @@ export default function PropertyFilter({
                 </button>
               ))}
             </div>
+
+            <div style={{ borderTop: "1px solid var(--line)", padding: "6px 8px", background: "#fbfcfb" }}>
+              <a
+                href="/dashboard/properties"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  color: "var(--ink)",
+                  textDecoration: "none",
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                }}
+              >
+                <span>+ Register new property…</span>
+              </a>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

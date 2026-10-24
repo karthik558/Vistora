@@ -9,6 +9,7 @@ import { AppShell, FeedbackTable } from "./Dashboard";
 import { DashboardData } from "../types/experience";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
+import QuestionnaireBuilder from "./QuestionnaireBuilder";
 
 export default function OperationsPage({ section, data }: { section: string; data: DashboardData }) {
   const [query, setQuery] = useState("");
@@ -38,6 +39,8 @@ export default function OperationsPage({ section, data }: { section: string; dat
       ? "Analytics"
       : section === "directory"
       ? "Guest directory"
+      : section === "questionnaire"
+      ? "Questionnaire"
       : section === "forms"
       ? "Feedback forms"
       : section === "qr-codes"
@@ -49,7 +52,8 @@ export default function OperationsPage({ section, data }: { section: string; dat
     feedback: "Review every guest submission captured across the workspace.",
     analytics: "Understand satisfaction and response patterns across properties.",
     directory: "A searchable guest view derived from recorded stays and feedback.",
-    forms: "Manage the public form guests use to share feedback.",
+    forms: "Manage public feedback forms and configure questionnaire questions.",
+    questionnaire: "Design and customize questions asked to guests on the feedback form.",
     "qr-codes": "Create trackable QR codes for rooms, departments, and guest touchpoints.",
     reports: "Export operational records for reviews and follow-up.",
   };
@@ -102,6 +106,8 @@ export default function OperationsPage({ section, data }: { section: string; dat
             <Directory data={data} query={query} setQuery={setQuery} />
           ) : section === "forms" ? (
             <Forms />
+          ) : section === "questionnaire" ? (
+            <QuestionnaireBuilder />
           ) : section === "qr-codes" ? (
             <QrCodes />
           ) : section === "reports" ? (
@@ -312,32 +318,35 @@ function Directory({
 
 function Forms() {
   return (
-    <div className="form-grid">
-      <div className="panel form-card">
-        <span className="form-status">ACTIVE</span>
-        <h2>Guest feedback form</h2>
-        <p>Public form for collecting ratings, department context, comments, and optional manager follow-up.</p>
-        <code>/feedback</code>
-        <div className="form-card-actions">
-          <Link className="button button-dark compact" href="/feedback">
-            Open form ↗
-          </Link>
-          <Link className="panel-action" href="/dashboard/qr-codes">
-            Create QR link
-          </Link>
+    <>
+      <div className="form-grid">
+        <div className="panel form-card">
+          <span className="form-status">ACTIVE</span>
+          <h2>Guest feedback form</h2>
+          <p>Public form for collecting ratings, department context, comments, and optional manager follow-up.</p>
+          <code>/feedback</code>
+          <div className="form-card-actions">
+            <Link className="button button-dark compact" href="/feedback">
+              Open form ↗
+            </Link>
+            <Link className="panel-action" href="/dashboard/qr-codes">
+              Create QR link
+            </Link>
+          </div>
+        </div>
+        <div className="panel form-card muted-card">
+          <span className="form-status">CONFIGURATION</span>
+          <h2>What the form captures</h2>
+          <ul>
+            <li>1–5 guest rating & experience department</li>
+            <li>Customizable multi-question questionnaire options</li>
+            <li>Written guest commentary & contact request</li>
+            <li>Direct database sync with operational dashboard</li>
+          </ul>
         </div>
       </div>
-      <div className="panel form-card muted-card">
-        <span className="form-status">CONFIGURATION</span>
-        <h2>What the form captures</h2>
-        <ul>
-          <li>1–5 guest rating</li>
-          <li>Department and room context</li>
-          <li>Written feedback</li>
-          <li>Optional contact request</li>
-        </ul>
-      </div>
-    </div>
+      <QuestionnaireBuilder />
+    </>
   );
 }
 

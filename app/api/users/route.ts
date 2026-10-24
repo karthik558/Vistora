@@ -18,10 +18,10 @@ export async function GET() {
       auth: { persistSession: false },
     });
 
-    // Strictly fetch only workspace members from public.profiles
+    // Fetch workspace members from public.profiles with associated property details
     const { data: profiles, error } = await adminClient
       .from("profiles")
-      .select("id, email, full_name, role, created_at, updated_at")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -39,7 +39,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, role = "visitor", password } = await request.json();
+    const { email, fullName, role = "visitor", password, propertyId } = await request.json();
 
     if (!email || !email.trim()) {
       return NextResponse.json({ success: false, error: "Email is required." }, { status: 400 });
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     const newUserId = authData.user.id;
 
-    // Upsert into public.profiles
+    // Upsert into public.profiles with optional property_id assignment
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
       .upsert({
@@ -113,10 +113,11 @@ export async function POST(request: NextRequest) {
         email: cleanEmail,
         full_name: cleanName,
         role,
+        property_id: propertyId || null,
         avatar_url: passwordHash,
         updated_at: new Date().toISOString(),
       })
-      .select("id, email, full_name, role, created_at")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), created_at")
       .single();
 
     if (profileError) {
@@ -127,6 +128,50 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to create user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { userId, role, propertyId } = await request.json();
+
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (role && ["admin", "staff", "visitor"].includes(role)) {
+      updatePayload.role = role;
+    }
+
+    if (propertyId !== undefined) {
+      updatePayload.property_id = propertyId || null;
+    }
+
+    const { data, error } = await adminClient
+      .from("profiles")
+      .update(updatePayload)
+      .eq("id", userId)
+      .select("id, email, full_name, role, property_id, properties(id, name, code)")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, user: data });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || "Failed to update user" },
       { status: 500 }
     );
   }

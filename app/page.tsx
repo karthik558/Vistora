@@ -24,7 +24,7 @@ export default function HomePage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14vh" }}>
         <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }} title="Vistora Home">
           <Image
-            src="/logo.webp"
+            src="/logo1.webp"
             alt="Vistora"
             width={150}
             height={40}

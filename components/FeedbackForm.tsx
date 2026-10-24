@@ -32,6 +32,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [guestName, setGuestName] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
 
+  // Dynamic Questionnaire from Supabase
+  const [questions, setQuestions] = useState<Array<{
+    id: string;
+    question_text: string;
+    question_type: "choice" | "rating" | "yes_no" | "text";
+    options?: string[];
+    is_required?: boolean;
+  }>>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
   useEffect(() => {
     let mounted = true;
     fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
@@ -46,6 +56,17 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         console.error("Error fetching stay details", err);
         if (mounted) setLoading(false);
       });
+
+    // Fetch active questionnaire questions
+    fetch("/api/questions", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (mounted && json.success && json.questions) {
+          setQuestions(json.questions);
+        }
+      })
+      .catch(() => { });
+
     return () => {
       mounted = false;
     };
@@ -57,6 +78,14 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
     setSubmitting(true);
     try {
+      const answersPayload = questions
+        .map((q) => ({
+          questionId: q.id,
+          questionText: q.question_text,
+          answerValue: answers[q.id] || "",
+        }))
+        .filter((a) => a.answerValue && a.answerValue.trim().length > 0);
+
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,6 +97,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           department,
           rating,
           comment: comment.trim() || undefined,
+          answers: answersPayload,
           wantsContact,
           contactPreference: wantsContact ? contactPreference : undefined,
           guestEmail: wantsContact && contactPreference === "email" ? contactValue : undefined,
@@ -128,7 +158,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         <div className="guest-top">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
             <Image
-              src="/logo.webp"
+              src="/logo1.webp"
               alt="Vistora"
               width={120}
               height={32}
@@ -237,6 +267,135 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               />
             </div>
           </div>
+
+          {/* Dynamic Questionnaire Questions */}
+          {questions.length > 0 && (
+            <div
+              style={{
+                marginBottom: "24px",
+                padding: "16px",
+                background: "#f9faf9",
+                borderRadius: "6px",
+                border: "1px solid #e5ebe5",
+              }}
+            >
+              <p className="eyebrow" style={{ marginBottom: "14px", color: "var(--muted)", letterSpacing: "0.06em" }}>
+                Experience Questionnaire
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                {questions.map((q) => (
+                  <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      {q.question_text}
+                      {q.is_required && <span style={{ color: "#a84232", fontSize: "11px" }}>*</span>}
+                    </label>
+
+                    {q.question_type === "choice" && q.options && q.options.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        {q.options.map((opt) => {
+                          const isSelected = answers[q.id] === opt;
+                          return (
+                            <button
+                              type="button"
+                              key={opt}
+                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
+                              style={{
+                                padding: "6px 14px",
+                                borderRadius: "20px",
+                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
+                                background: isSelected ? "#0b100f" : "#ffffff",
+                                color: isSelected ? "#ffffff" : "var(--ink)",
+                                fontSize: "11px",
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {q.question_type === "yes_no" && (
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        {(q.options && q.options.length > 0 ? q.options : ["Yes", "No"]).map((opt) => {
+                          const isSelected = answers[q.id] === opt;
+                          return (
+                            <button
+                              type="button"
+                              key={opt}
+                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
+                              style={{
+                                padding: "6px 16px",
+                                borderRadius: "4px",
+                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
+                                background: isSelected ? "#0b100f" : "#ffffff",
+                                color: isSelected ? "#ffffff" : "var(--ink)",
+                                fontSize: "11px",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {q.question_type === "rating" && (
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        {[1, 2, 3, 4, 5].map((val) => {
+                          const isSelected = answers[q.id] === `${val}/5`;
+                          return (
+                            <button
+                              type="button"
+                              key={val}
+                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : `${val}/5` }))}
+                              style={{
+                                width: "38px",
+                                height: "36px",
+                                borderRadius: "4px",
+                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
+                                background: isSelected ? "#0b100f" : "#ffffff",
+                                color: isSelected ? "#ffffff" : "var(--ink)",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {val}★
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {q.question_type === "text" && (
+                      <input
+                        type="text"
+                        value={answers[q.id] || ""}
+                        onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Your thoughts…"
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          borderRadius: "4px",
+                          border: "1px solid #d8dfd8",
+                          fontSize: "12px",
+                          outline: "none",
+                          background: "#fff",
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Comments */}
           <label className="field-label" htmlFor="comment">

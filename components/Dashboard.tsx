@@ -15,6 +15,8 @@ import {
   FileSpreadsheet,
   ExternalLink,
   ShieldCheck,
+  Building2,
+  HelpCircle,
   LogOut,
   Menu,
   X,
@@ -41,7 +43,9 @@ const nav = [
   { label: "Complaints", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle },
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText },
+  { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode },
+  { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, adminOnly: true },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, adminOnly: true },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet },
 ] as const;
@@ -74,14 +78,14 @@ function getClientUser(): WorkspaceUser | null {
       const parsed = JSON.parse(saved);
       if (parsed?.email) return parsed;
     }
-  } catch {}
+  } catch { }
 
   if (typeof document !== "undefined") {
     const match = document.cookie.match(/(?:^|;\s*)vistora-user=([^;]+)/);
     if (match) {
       try {
         return JSON.parse(decodeURIComponent(match[1]));
-      } catch {}
+      } catch { }
     }
   }
 
@@ -121,20 +125,20 @@ export function AppShell({
           setCurrentUser(data.user);
           try {
             localStorage.setItem("vistora-user", JSON.stringify(data.user));
-          } catch {}
+          } catch { }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [propUser]);
 
   const handleSignOut = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch {}
+    } catch { }
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("vistora-user");
-      } catch {}
+      } catch { }
     }
     router.push("/login");
     router.refresh();
@@ -184,7 +188,7 @@ export function AppShell({
             style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
           >
             <Image
-              src="/logo.webp"
+              src="/logo1.webp"
               alt="Vistora"
               width={130}
               height={34}
@@ -303,7 +307,7 @@ export function AppShell({
             </button>
             <Link href="/" className="topbar-mobile-logo" title="Vistora Home">
               <Image
-                src="/logo.webp"
+                src="/logo1.webp"
                 alt="Vistora"
                 width={95}
                 height={24}
@@ -377,7 +381,7 @@ export default function Dashboard({
           setUser(data.user);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [initialUser]);
 
   const data = initialData;
@@ -424,8 +428,8 @@ export default function Dashboard({
   const firstName = user?.fullName
     ? user.fullName.split(" ")[0]
     : user?.email
-    ? user.email.split("@")[0]
-    : "";
+      ? user.email.split("@")[0]
+      : "";
 
   return (
     <AppShell complaints={complaints} user={user}>

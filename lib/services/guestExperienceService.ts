@@ -227,6 +227,20 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
   const tone: FeedbackTone = rating <= 2 ? "urgent" : rating === 3 ? "review" : "positive";
   const status: FeedbackStatus = rating <= 2 ? "needs_attention" : rating === 3 ? "under_review" : "resolved";
 
+  // Assemble questionnaire answers into formatted comment if present
+  let finalComment = payload.comment?.trim() || "";
+  if (payload.answers && payload.answers.length > 0) {
+    const answersSummary = payload.answers
+      .filter((a) => a.answerValue && a.answerValue.trim())
+      .map((a) => `• ${a.questionText}: ${a.answerValue}`)
+      .join("\n");
+    if (answersSummary) {
+      finalComment = finalComment
+        ? `${finalComment}\n\n[Guest Questionnaire]\n${answersSummary}`
+        : `[Guest Questionnaire]\n${answersSummary}`;
+    }
+  }
+
   if (isSupabaseLive) {
     const supabase = getSupabase();
 
@@ -245,7 +259,7 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
       room_number: payload.roomNumber || "Suite",
       department: payload.department || "Front Desk",
       rating,
-      comment: payload.comment || null,
+      comment: finalComment || null,
       wants_contact: Boolean(payload.wantsContact),
       contact_preference: payload.contactPreference || (payload.guestPhone ? "phone" : "email"),
       status,
@@ -261,6 +275,25 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
       console.error("[Supabase Error] createFeedback failed:", error);
       throw new Error(`Failed to save feedback to Supabase: ${error.message}`);
     }
+
+    // Try saving answers to feedback_answers table if available
+    if (payload.answers && payload.answers.length > 0 && data?.id) {
+      try {
+        const answerRows = payload.answers
+          .filter((a) => a.answerValue && a.answerValue.trim())
+          .map((a) => ({
+            feedback_id: data.id,
+            question_text: a.questionText,
+            answer_value: a.answerValue,
+          }));
+        if (answerRows.length > 0) {
+          await supabase.from("feedback_answers").insert(answerRows);
+        }
+      } catch (err) {
+        console.warn("Could not insert to feedback_answers table:", err);
+      }
+    }
+
     return toViewModel(data);
   }
 
@@ -274,7 +307,7 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
     room_number: payload.roomNumber || "Suite",
     department: payload.department || "Front Desk",
     rating,
-    comment: payload.comment || null,
+    comment: finalComment || null,
     wants_contact: Boolean(payload.wantsContact),
     contact_preference: payload.contactPreference || null,
     status,
