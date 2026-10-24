@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Check, X, HelpCircle, Star, ToggleLeft, ToggleRight, Copy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import CustomSelect from "./CustomSelect";
 
 export interface QuestionData {
   id: string;
@@ -452,14 +453,14 @@ CREATE POLICY "Service role full access to answers" ON public.feedback_answers F
                 </div>
 
                 <div style={{ marginBottom: "14px" }}>
-                  <label className="field-label" htmlFor="q-type">
+                  <label className="field-label" htmlFor="q-type" style={{ display: "block", marginBottom: "6px" }}>
                     Question Format
                   </label>
-                  <select
+                  <CustomSelect
                     id="q-type"
                     value={questionType}
-                    onChange={(e) => {
-                      const t = e.target.value as any;
+                    onChange={(val) => {
+                      const t = val as any;
                       setQuestionType(t);
                       if (t === "yes_no") {
                         setOptionsStr("Yes, No");
@@ -467,13 +468,14 @@ CREATE POLICY "Service role full access to answers" ON public.feedback_answers F
                         setOptionsStr("Seamless, Standard, Delayed");
                       }
                     }}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid var(--line)", borderRadius: "4px", fontSize: "12px", outline: "none", background: "#fff" }}
-                  >
-                    <option value="choice">Multiple Choice (Pill Options)</option>
-                    <option value="rating">1–5 Star Rating</option>
-                    <option value="yes_no">Yes / No Quick Selector</option>
-                    <option value="text">Open-ended Short Text</option>
-                  </select>
+                    header="Question Format"
+                    options={[
+                      { value: "choice", label: "Multiple Choice", detail: "Interactive pill options" },
+                      { value: "rating", label: "1–5 Star Rating", detail: "Numerical rating score" },
+                      { value: "yes_no", label: "Yes / No Selector", detail: "Binary quick response" },
+                      { value: "text", label: "Open-ended Text", detail: "Freeform guest comments" },
+                    ]}
+                  />
                 </div>
 
                 {(questionType === "choice" || questionType === "yes_no") && (

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { DepartmentType } from "../types/database";
 import { GuestStayDetails } from "../types/experience";
+import CustomSelect from "./CustomSelect";
 
 const departments: DepartmentType[] = [
   "Front Desk",
@@ -87,22 +88,27 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       })
       .catch(() => {});
 
-    fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((json) => {
-        if (mounted && json.success && json.data) {
-          setStay(json.data);
-          if (json.data.propertyId) {
-            setSelectedPropertyId(json.data.propertyId);
-            setIsUrlPreselected(true);
+    if (publicToken && publicToken !== "verified") {
+      fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
+        .then((res) => res.json())
+        .then((json) => {
+          if (mounted && json.success && json.data) {
+            setStay(json.data);
+            if (json.data.propertyId) {
+              setSelectedPropertyId(json.data.propertyId);
+              setIsUrlPreselected(true);
+            }
           }
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching stay details", err);
-        if (mounted) setLoading(false);
-      });
+        })
+        .catch((err) => {
+          console.error("Error fetching stay details", err);
+        })
+        .finally(() => {
+          if (mounted) setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
 
     // Fetch active questionnaire questions
     fetch("/api/questions", { cache: "no-store" })
@@ -239,33 +245,21 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               )}
             </label>
 
-            <select
+            <CustomSelect
               id="property-select"
               value={selectedPropertyId}
-              onChange={(e) => {
-                setSelectedPropertyId(e.target.value);
+              onChange={(val) => {
+                setSelectedPropertyId(val);
                 setPropertyError(null);
               }}
-              required
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "4px",
-                border: "1px solid #c8d3c8",
-                background: "#ffffff",
-                color: selectedPropertyId ? "var(--ink)" : "var(--muted)",
-                fontSize: "12px",
-                fontWeight: selectedPropertyId ? 500 : 400,
-                outline: "none",
-              }}
-            >
-              <option value="" disabled>-- Select property location (Required) --</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.code}) · {p.location}
-                </option>
-              ))}
-            </select>
+              placeholder="-- Select property location (Required) --"
+              header="Vistora Properties"
+              options={properties.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${p.code})`,
+                detail: p.location,
+              }))}
+            />
 
             {propertyError && (
               <p style={{ color: "#8b261a", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
@@ -300,27 +294,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             <label className="field-label" htmlFor="department-select">
               Which area is this feedback about?
             </label>
-            <select
+            <CustomSelect
               id="department-select"
               value={department}
-              onChange={(e) => setDepartment(e.target.value as DepartmentType)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e1e7e1",
-                background: "#fff",
-                color: "var(--ink)",
-                fontSize: "12px",
-                outline: "none",
-              }}
-            >
-              {departments.map((dep) => (
-                <option key={dep} value={dep}>
-                  {dep}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setDepartment(val as DepartmentType)}
+              header="Hospitality Department"
+              options={departments.map((dep) => ({
+                value: dep,
+                label: dep,
+              }))}
+            />
           </div>
 
           {/* Guest Name & Room confirmation */}

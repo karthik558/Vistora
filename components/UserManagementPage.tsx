@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell, WorkspaceUser } from "./Dashboard";
 import { UserPlus, Key, Trash2, X, Check, Building2, Shield, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import CustomSelect from "./CustomSelect";
 
 export interface UserRight {
   id: string;
@@ -43,6 +44,7 @@ interface PropertyOption {
   name: string;
   code: string;
   location: string;
+  total_rooms?: number;
 }
 
 export default function UserManagementPage({ initialUser }: { initialUser?: WorkspaceUser | null }) {
@@ -85,6 +87,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [creatingProp, setCreatingProp] = useState(false);
 
   // Form states for Edit Access
+  const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<"admin" | "staff" | "visitor">("staff");
   const [editPropertyId, setEditPropertyId] = useState("");
   const [editRights, setEditRights] = useState<string[]>([]);
@@ -276,6 +279,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: editAccessUser.id,
+          fullName: editName.trim() || editAccessUser.full_name,
           role: editRole,
           propertyId: propertyIdToSend,
           rights: rightsToSend,
@@ -287,7 +291,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to update access.");
       }
 
-      setSuccess(`Permissions saved: ${editRole === "admin" ? "Admin full access" : `${rightsToSend.length} rights active`}.`);
+      setSuccess(`Updated member profile & permissions for ${editName.trim() || editAccessUser.full_name}.`);
       setEditAccessUser(null);
       await loadData();
     } catch (err: any) {
@@ -525,6 +529,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                                   onClick={() => {
                                     setEditAccessUser(user);
+                                    setEditName(user.full_name || "");
                                     setEditRole(user.role);
                                     setEditPropertyId(user.property_id || "");
                                     setEditRights(
@@ -630,13 +635,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </label>
 
-                      <label className="field-label">
-                        Role Assignment
-                        <select
-                          className="auth-input"
+                      <div style={{ marginBottom: "16px" }}>
+                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                          Role Assignment
+                        </label>
+                        <CustomSelect
                           value={addRole}
-                          onChange={(e) => {
-                            const newRole = e.target.value as any;
+                          onChange={(val) => {
+                            const newRole = val as any;
                             setAddRole(newRole);
                             if (newRole === "admin") {
                               setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
@@ -648,28 +654,34 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               }
                             }
                           }}
-                        >
-                          <option value="visitor">Visitor (Standard User - View-only)</option>
-                          <option value="staff">Staff (Operations Lead)</option>
-                          <option value="admin">Admin (Workspace Admin)</option>
-                        </select>
-                      </label>
+                          header="Select Role"
+                          options={[
+                            { value: "visitor", label: "Visitor", detail: "Standard User - View-only" },
+                            { value: "staff", label: "Staff", detail: "Operations Lead" },
+                            { value: "admin", label: "Admin", detail: "Workspace Admin" },
+                          ]}
+                        />
+                      </div>
 
-                      <label className="field-label">
-                        Property Access
-                        <select
-                          className="auth-input"
+                      <div style={{ marginBottom: "16px" }}>
+                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                          Property Access
+                        </label>
+                        <CustomSelect
                           value={addPropertyId}
-                          onChange={(e) => setAddPropertyId(e.target.value)}
-                        >
-                          <option value="">All Properties (Global Access)</option>
-                          {properties.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.code}) — {p.location}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          onChange={(val) => setAddPropertyId(val)}
+                          placeholder="All Properties (Global Access)"
+                          header="Select Property Access"
+                          options={[
+                            { value: "", label: "All Properties (Global Access)", detail: "Global portfolio overview" },
+                            ...properties.map((p) => ({
+                              value: p.id,
+                              label: `${p.name} (${p.code})`,
+                              detail: p.location,
+                            })),
+                          ]}
+                        />
+                      </div>
 
                       <label className="field-label">
                         Initial Password
@@ -823,42 +835,63 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                     <h2>Edit member access</h2>
                     <p className="drawer-meta">Updating settings for <strong>{editAccessUser.full_name}</strong> ({editAccessUser.email})</p>
 
-                    <form onSubmit={handleUpdateAccess} style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                      <label className="field-label">
-                        Role
-                        <select
+                    <form onSubmit={handleUpdateAccess} style={{ marginTop: "24px", display: "flex", flexDirection: "column" }}>
+                      <div style={{ marginBottom: "18px" }}>
+                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                          Full Name
+                        </label>
+                        <input
                           className="auth-input"
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Member full name"
+                          required
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: "20px" }}>
+                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                          Assigned Role
+                        </label>
+                        <CustomSelect
                           value={editRole}
-                          onChange={(e) => {
-                            const newRole = e.target.value as any;
+                          onChange={(val) => {
+                            const newRole = val as any;
                             setEditRole(newRole);
                             if (newRole === "admin") {
                               setEditRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setEditPropertyId("");
                             }
                           }}
-                        >
-                          <option value="visitor">Visitor (View-only)</option>
-                          <option value="staff">Staff (Operations Lead)</option>
-                          <option value="admin">Admin (Full Access)</option>
-                        </select>
-                      </label>
+                          header="Assign Role"
+                          options={[
+                            { value: "visitor", label: "Visitor", detail: "Standard guest access (View-only across records)" },
+                            { value: "staff", label: "Staff", detail: "Operations lead (Complaint recovery & compliance)" },
+                            { value: "admin", label: "Admin", detail: "Workspace administrator (Full configuration & rights)" },
+                          ]}
+                        />
+                      </div>
 
-                      <label className="field-label">
-                        Assigned Property
-                        <select
-                          className="auth-input"
+                      <div style={{ marginBottom: "24px" }}>
+                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                          Assigned Property
+                        </label>
+                        <CustomSelect
                           value={editPropertyId}
-                          onChange={(e) => setEditPropertyId(e.target.value)}
-                        >
-                          <option value="">All Properties (Global Access)</option>
-                          {properties.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.code}) — {p.location}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          onChange={(val) => setEditPropertyId(val)}
+                          placeholder="All Properties (Global Access)"
+                          header="Property Access Scope"
+                          options={[
+                            { value: "", label: "All Properties (Global Access)", detail: "Access to all portfolio hotels" },
+                            ...properties.map((p) => ({
+                              value: p.id,
+                              label: `${p.name} (${p.code})`,
+                              detail: `${p.location || ""} · ${p.total_rooms || 0} rooms`,
+                            })),
+                          ]}
+                        />
+                      </div>
 
                       {editRole === "admin" ? (
                         <div

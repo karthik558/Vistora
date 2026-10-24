@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { userId, role, propertyId, rights } = await request.json();
+    const { userId, role, propertyId, rights, fullName } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
@@ -199,6 +199,10 @@ export async function PATCH(request: NextRequest) {
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
+
+    if (fullName !== undefined && typeof fullName === "string" && fullName.trim().length > 0) {
+      updatePayload.full_name = fullName.trim();
+    }
 
     const effectiveRole = (role && ["admin", "staff", "visitor"].includes(role)) ? role : currentProfile?.role;
     if (role && ["admin", "staff", "visitor"].includes(role)) {
@@ -240,6 +244,7 @@ export async function PATCH(request: NextRequest) {
     try {
       await adminClient.auth.admin.updateUserById(userId, {
         user_metadata: {
+          full_name: updatePayload.full_name || undefined,
           role: updatePayload.role || currentProfile?.role,
           rights: rights || [],
           property_id: updatePayload.property_id !== undefined ? updatePayload.property_id : currentProfile?.property_id,

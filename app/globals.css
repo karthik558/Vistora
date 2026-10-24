@@ -381,6 +381,7 @@ a {
   justify-content: flex-end;
 }
 .detail-drawer {
+  position: relative;
   width: min(520px, 100%);
   height: 100%;
   overflow-y: auto;
@@ -394,17 +395,28 @@ a {
   transform: translateZ(0);
 }
 .drawer-close {
-  float: right;
-  font-size: 26px;
-  color: var(--muted);
-  background: transparent;
-  border: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f4f7f4;
+  border: 1px solid #dbe6dc;
+  color: var(--ink);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  z-index: 50;
+  padding: 0;
   line-height: 1;
-  padding: 4px;
 }
 .drawer-close:hover {
-  color: var(--ink);
+  background: #e6eee6;
+  color: #0b100f;
+  transform: scale(1.05);
 }
 .drawer-chip-grid {
   display: grid;

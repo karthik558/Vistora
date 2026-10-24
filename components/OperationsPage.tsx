@@ -23,6 +23,7 @@ import { DashboardData, PropertyRow } from "../types/experience";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
+import CustomSelect from "./CustomSelect";
 
 export default function OperationsPage({ section, data }: { section: string; data: DashboardData }) {
   const [query, setQuery] = useState("");
@@ -454,28 +455,34 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
           Send an instant link or place a QR code. When sending a link from your side, the selected property will be automatically pre-selected for the guest.
         </p>
 
-        <label className="field-label" style={{ marginTop: "16px" }}>
-          Target Property (Pre-selects for Guest)
-          <select
-            className="auth-input"
+        <div style={{ marginTop: "20px", marginBottom: "22px" }}>
+          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
+            Target Property (Pre-selects for Guest)
+          </label>
+          <CustomSelect
             value={selectedPropertyId}
-            onChange={(e) => setSelectedPropertyId(e.target.value)}
-          >
-            <option value="">-- No pre-selection (guest chooses) --</option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code}) — {p.location}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={(val) => setSelectedPropertyId(val)}
+            placeholder="-- No pre-selection (guest chooses) --"
+            header="Target Property Selection"
+            options={[
+              { value: "", label: "No pre-selection (guest chooses location)", detail: "Guest selects property upon opening form" },
+              ...properties.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${p.code})`,
+                detail: `${p.location} · ${p.total_rooms || 0} rooms`,
+              })),
+            ]}
+          />
+        </div>
 
-        <label className="field-label">
-          Placement / Campaign Label
+        <div style={{ marginBottom: "22px" }}>
+          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
+            Placement / Campaign Label
+          </label>
           <input className="auth-input" value={label} onChange={(event) => setLabel(event.target.value)} />
-        </label>
+        </div>
 
-        <div style={{ margin: "14px 0", padding: "12px 14px", background: "#f8faf8", border: "1px solid var(--line)", borderRadius: "6px" }}>
+        <div style={{ marginBottom: "22px", padding: "14px 16px", background: "#f8faf8", border: "1px solid var(--line)", borderRadius: "6px" }}>
           <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", cursor: "pointer", fontWeight: 500 }}>
             <input
               type="checkbox"
@@ -485,15 +492,17 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             />
             <span>Send as demo link (pre-loads verified hotel stay)</span>
           </label>
-          <p style={{ margin: "4px 0 0 24px", color: "var(--muted)", fontSize: "11px" }}>
+          <p style={{ margin: "6px 0 0 24px", color: "var(--muted)", fontSize: "11px", lineHeight: "1.5" }}>
             The guest opens the link with {selectedProp ? selectedProp.name : "the selected property"} automatically locked in.
           </p>
         </div>
 
-        <label className="field-label">
-          Generated Link (Share with Guest or Prospect)
+        <div style={{ marginBottom: "22px" }}>
+          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
+            Generated Link (Share with Guest or Prospect)
+          </label>
           <input className="auth-input" value={url} readOnly />
-        </label>
+        </div>
 
         <div style={{ display: "flex", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
           <button

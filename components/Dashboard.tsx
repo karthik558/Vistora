@@ -28,6 +28,7 @@ import { FeedbackStatus } from "../types/database";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
+import CustomSelect from "./CustomSelect";
 
 export interface WorkspaceUser {
   id?: string;
@@ -597,7 +598,7 @@ export function FeedbackTable({
   const [userRole, setUserRole] = useState<string>("visitor");
 
   // Property assignment for admins
-  const [allProperties, setAllProperties] = useState<Array<{ id: string; name: string; code: string }>>([]);
+  const [allProperties, setAllProperties] = useState<Array<{ id: string; name: string; code: string; location?: string }>>([]);
   const [feedbackPropertyId, setFeedbackPropertyId] = useState<string>("");
   const [reassigningProperty, setReassigningProperty] = useState(false);
   const [propertyAssignSuccess, setPropertyAssignSuccess] = useState(false);
@@ -917,7 +918,7 @@ export function FeedbackTable({
               onClick={(event) => event.stopPropagation()}
             >
               <button className="drawer-close" onClick={() => setSelected(null)} aria-label="Close">
-                ×
+                <X size={18} strokeWidth={1.75} />
               </button>
               <p className="eyebrow">Service recovery & compliance</p>
               <h2 style={{ margin: "6px 0 18px", fontSize: "22px" }}>{selected.name}</h2>
@@ -956,23 +957,22 @@ export function FeedbackTable({
                 </div>
 
                 {isAdmin ? (
-                  <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                    <select
-                      className="auth-input"
+                  <div style={{ display: "flex", gap: "8px", marginTop: "6px", alignItems: "flex-start" }}>
+                    <CustomSelect
                       value={feedbackPropertyId}
-                      onChange={(e) => {
-                        setFeedbackPropertyId(e.target.value);
+                      onChange={(val) => {
+                        setFeedbackPropertyId(val);
                         setPropertyAssignSuccess(false);
                       }}
-                      style={{ flex: 1, fontSize: "12px", background: "#fff", padding: "7px 10px" }}
-                    >
-                      <option value="" disabled>-- Select property location --</option>
-                      {allProperties.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.code})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select property location"
+                      header="Assign Property"
+                      options={allProperties.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} (${p.code})`,
+                        detail: p.location,
+                      }))}
+                      style={{ flex: 1 }}
+                    />
                     <button
                       type="button"
                       className="button button-dark compact"
@@ -1060,20 +1060,22 @@ export function FeedbackTable({
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <label className="field-label" style={{ margin: 0 }}>
-                      Resolution status
-                      <select
-                        className="auth-input"
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <span className="field-label" style={{ margin: 0 }}>
+                        Resolution status
+                      </span>
+                      <CustomSelect
                         value={status}
-                        onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
-                        style={{ marginTop: "6px" }}
-                      >
-                        <option value="needs_attention">Needs attention</option>
-                        <option value="under_review">Under review</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="escalated">Escalated</option>
-                      </select>
-                    </label>
+                        onChange={(val) => setStatus(val as FeedbackStatus)}
+                        header="Resolution Status"
+                        options={[
+                          { value: "needs_attention", label: "Needs attention", detail: "Open guest alert requiring action" },
+                          { value: "under_review", label: "Under review", detail: "Duty manager investigating incident" },
+                          { value: "resolved", label: "Resolved", detail: "Guest contact & recovery completed" },
+                          { value: "escalated", label: "Escalated", detail: "Senior leadership notification sent" },
+                        ]}
+                      />
+                    </div>
                     <label className="field-label" style={{ margin: 0 }}>
                       Resolution notes
                       <textarea
