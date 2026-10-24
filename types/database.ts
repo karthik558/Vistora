@@ -17,9 +17,43 @@ export type DepartmentType =
   | "Spa & Wellness"
   | "Valet & Transfers";
 
+export type UserRole = "admin" | "staff" | "visitor";
+
 export interface Database {
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          role: UserRole;
+          property_id: string | null;
+          avatar_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name: string;
+          role?: UserRole;
+          property_id?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string;
+          role?: UserRole;
+          property_id?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       properties: {
         Row: {
           id: string;

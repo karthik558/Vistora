@@ -69,6 +69,15 @@ export interface DashboardData {
   properties: PropertyRow[];
   activePropertyId: string | "all";
   source: "supabase" | "local";
+  currentUser?: UserProfile | null;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "admin" | "staff" | "visitor";
+  propertyId?: string | null;
 }
 
 export interface SubmitFeedbackPayload {

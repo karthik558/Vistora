@@ -25,14 +25,31 @@ DO $$ BEGIN
         'Food & Beverage',
         'Concierge',
         'Facilities & Room',
-        'Spa & Wellness',
         'Valet & Transfers'
     );
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('admin', 'staff', 'visitor');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- 3. TABLES
+
+-- Profiles (Role-based access control for users)
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role user_role NOT NULL DEFAULT 'staff',
+    property_id UUID,
+    avatar_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Properties (Hotels / Resorts)
 CREATE TABLE IF NOT EXISTS properties (
