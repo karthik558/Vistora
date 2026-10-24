@@ -239,11 +239,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to create property.");
       }
 
-      setSuccess(`Property "${data.property.name}" registered and user access assigned.`);
+      setSuccess(`Property "${data.property.name}" registered and automatically selected.`);
       setShowPropertyModal(false);
       setNewPropName("");
       setNewPropCode("");
       setSelectedUserIdsForProp([]);
+      if (data.property?.id) {
+        setAddPropertyId(data.property.id);
+      }
       await loadData();
     } catch (err: any) {
       setError(err.message || "Failed to create property.");
@@ -260,6 +263,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSuccess(null);
     setSavingAccess(true);
 
+    // Admins always have all rights at all times
+    const rightsToSend = editRole === "admin"
+      ? SYSTEM_RIGHTS.map((r) => r.id)
+      : editRights;
+
+    const propertyIdToSend = editPropertyId && editPropertyId.trim() ? editPropertyId.trim() : null;
+
     try {
       const res = await fetch("/api/users", {
         method: "PATCH",
@@ -267,8 +277,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         body: JSON.stringify({
           userId: editAccessUser.id,
           role: editRole,
-          propertyId: editPropertyId || null,
-          rights: editRights,
+          propertyId: propertyIdToSend,
+          rights: rightsToSend,
         }),
       });
 
@@ -277,7 +287,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to update access.");
       }
 
-      setSuccess(`Access and rights updated for ${editAccessUser.full_name}.`);
+      setSuccess(`Permissions saved: ${editRole === "admin" ? "Admin full access" : `${rightsToSend.length} rights active`}.`);
       setEditAccessUser(null);
       await loadData();
     } catch (err: any) {
@@ -483,7 +493,21 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   {user.properties.name} ({user.properties.code})
                                 </span>
                               ) : (
-                                <span style={{ color: "var(--muted)", fontSize: "11px" }}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: "#edf4ed",
+                                    color: "#254230",
+                                    padding: "3px 8px",
+                                    borderRadius: "3px",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                    border: "1px solid #d4e2d6",
+                                  }}
+                                >
+                                  <Building2 size={11} strokeWidth={1.75} />
                                   All Properties (Global)
                                 </span>
                               )}
@@ -502,9 +526,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   onClick={() => {
                                     setEditAccessUser(user);
                                     setEditRole(user.role);
-                                    setEditPropertyId(user.property_id || properties[0]?.id || "");
+                                    setEditPropertyId(user.property_id || "");
                                     setEditRights(
-                                      user.rights && user.rights.length > 0
+                                      user.role === "admin"
+                                        ? SYSTEM_RIGHTS.map((r) => r.id)
+                                        : user.rights && user.rights.length > 0
                                         ? user.rights
                                         : ROLE_DEFAULT_RIGHTS[user.role] || []
                                     );
@@ -612,7 +638,15 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(e) => {
                             const newRole = e.target.value as any;
                             setAddRole(newRole);
-                            setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
+                            if (newRole === "admin") {
+                              setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
+                              setAddPropertyId("");
+                            } else {
+                              setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
+                              if (!addPropertyId && properties.length > 0) {
+                                setAddPropertyId(properties[0].id);
+                              }
+                            }
                           }}
                         >
                           <option value="visitor">Visitor (Standard User - View-only)</option>
@@ -628,12 +662,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           value={addPropertyId}
                           onChange={(e) => setAddPropertyId(e.target.value)}
                         >
+                          <option value="">All Properties (Global Access)</option>
                           {properties.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} ({p.code}) — {p.location}
                             </option>
                           ))}
-                          <option value="">All Properties (Global Access)</option>
                         </select>
                       </label>
 
@@ -650,81 +684,103 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </label>
 
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                          <span className="field-label" style={{ margin: 0 }}>
-                            Assigned Rights & Capabilities ({addRights.length} active)
-                          </span>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            <button
-                              type="button"
-                              className="button button-outline compact"
-                              style={{ padding: "2px 7px", fontSize: "10px" }}
-                              onClick={() => setAddRights(SYSTEM_RIGHTS.map((r) => r.id))}
-                            >
-                              All
-                            </button>
-                            <button
-                              type="button"
-                              className="button button-outline compact"
-                              style={{ padding: "2px 7px", fontSize: "10px" }}
-                              onClick={() => setAddRights([])}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
+                      {addRole === "admin" ? (
                         <div
                           style={{
+                            padding: "14px 16px",
+                            background: "#edf4ed",
+                            border: "1px solid #d4e2d6",
+                            borderRadius: "6px",
                             display: "flex",
                             flexDirection: "column",
-                            gap: "8px",
-                            maxHeight: "180px",
-                            overflowY: "auto",
-                            border: "1px solid var(--line)",
-                            borderRadius: "6px",
-                            padding: "10px 12px",
-                            background: "#fafbfa",
+                            gap: "6px",
                           }}
                         >
-                          {SYSTEM_RIGHTS.map((right) => {
-                            const checked = addRights.includes(right.id);
-                            return (
-                              <label
-                                key={right.id}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "10px",
-                                  fontSize: "12px",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setAddRights([...addRights, right.id]);
-                                    } else {
-                                      setAddRights(addRights.filter((id) => id !== right.id));
-                                    }
-                                  }}
-                                  style={{ marginTop: "2px", accentColor: "#0b100f" }}
-                                />
-                                <div>
-                                  <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
-                                    {right.name}
-                                  </div>
-                                  <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
-                                    {right.description}
-                                  </div>
-                                </div>
-                              </label>
-                            );
-                          })}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
+                            <strong style={{ fontSize: "12px", color: "#254230" }}>Administrator Full Access</strong>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
+                            Administrators hold all 7 operational permissions automatically across all properties. No manual selection required.
+                          </p>
                         </div>
-                      </div>
+                      ) : (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span className="field-label" style={{ margin: 0 }}>
+                              Assigned Rights & Capabilities ({addRights.length} active)
+                            </span>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setAddRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                              >
+                                All
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setAddRights([])}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                              maxHeight: "180px",
+                              overflowY: "auto",
+                              border: "1px solid var(--line)",
+                              borderRadius: "6px",
+                              padding: "10px 12px",
+                              background: "#fafbfa",
+                            }}
+                          >
+                            {SYSTEM_RIGHTS.map((right) => {
+                              const checked = addRights.includes(right.id);
+                              return (
+                                <label
+                                  key={right.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "10px",
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setAddRights([...addRights, right.id]);
+                                      } else {
+                                        setAddRights(addRights.filter((id) => id !== right.id));
+                                      }
+                                    }}
+                                    style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                  />
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
+                                      {right.name}
+                                    </div>
+                                    <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
+                                      {right.description}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       <button
                         type="submit"
@@ -776,6 +832,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(e) => {
                             const newRole = e.target.value as any;
                             setEditRole(newRole);
+                            if (newRole === "admin") {
+                              setEditRights(SYSTEM_RIGHTS.map((r) => r.id));
+                              setEditPropertyId("");
+                            }
                           }}
                         >
                           <option value="visitor">Visitor (View-only)</option>
@@ -791,90 +851,112 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           value={editPropertyId}
                           onChange={(e) => setEditPropertyId(e.target.value)}
                         >
+                          <option value="">All Properties (Global Access)</option>
                           {properties.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} ({p.code}) — {p.location}
                             </option>
                           ))}
-                          <option value="">All Properties (Global Access)</option>
                         </select>
                       </label>
 
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                          <span className="field-label" style={{ margin: 0 }}>
-                            Assigned Rights & Capabilities ({editRights.length} active)
-                          </span>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            <button
-                              type="button"
-                              className="button button-outline compact"
-                              style={{ padding: "2px 7px", fontSize: "10px" }}
-                              onClick={() => setEditRights(SYSTEM_RIGHTS.map((r) => r.id))}
-                            >
-                              All
-                            </button>
-                            <button
-                              type="button"
-                              className="button button-outline compact"
-                              style={{ padding: "2px 7px", fontSize: "10px" }}
-                              onClick={() => setEditRights([])}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
+                      {editRole === "admin" ? (
                         <div
                           style={{
+                            padding: "14px 16px",
+                            background: "#edf4ed",
+                            border: "1px solid #d4e2d6",
+                            borderRadius: "6px",
                             display: "flex",
                             flexDirection: "column",
-                            gap: "8px",
-                            maxHeight: "180px",
-                            overflowY: "auto",
-                            border: "1px solid var(--line)",
-                            borderRadius: "6px",
-                            padding: "10px 12px",
-                            background: "#fafbfa",
+                            gap: "6px",
                           }}
                         >
-                          {SYSTEM_RIGHTS.map((right) => {
-                            const checked = editRights.includes(right.id);
-                            return (
-                              <label
-                                key={right.id}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "10px",
-                                  fontSize: "12px",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setEditRights([...editRights, right.id]);
-                                    } else {
-                                      setEditRights(editRights.filter((id) => id !== right.id));
-                                    }
-                                  }}
-                                  style={{ marginTop: "2px", accentColor: "#0b100f" }}
-                                />
-                                <div>
-                                  <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
-                                    {right.name}
-                                  </div>
-                                  <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
-                                    {right.description}
-                                  </div>
-                                </div>
-                              </label>
-                            );
-                          })}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
+                            <strong style={{ fontSize: "12px", color: "#254230" }}>Administrator Full Access</strong>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
+                            Administrators hold all 7 operational permissions automatically across all properties. No manual selection required.
+                          </p>
                         </div>
-                      </div>
+                      ) : (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span className="field-label" style={{ margin: 0 }}>
+                              Assigned Rights & Capabilities ({editRights.length} active)
+                            </span>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setEditRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                              >
+                                All
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setEditRights([])}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                              maxHeight: "180px",
+                              overflowY: "auto",
+                              border: "1px solid var(--line)",
+                              borderRadius: "6px",
+                              padding: "10px 12px",
+                              background: "#fafbfa",
+                            }}
+                          >
+                            {SYSTEM_RIGHTS.map((right) => {
+                              const checked = editRights.includes(right.id);
+                              return (
+                                <label
+                                  key={right.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "10px",
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditRights([...editRights, right.id]);
+                                      } else {
+                                        setEditRights(editRights.filter((id) => id !== right.id));
+                                      }
+                                    }}
+                                    style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                  />
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
+                                      {right.name}
+                                    </div>
+                                    <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
+                                      {right.description}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       <button
                         type="submit"

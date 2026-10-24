@@ -86,12 +86,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: insertError.message }, { status: 500 });
     }
 
-    // If specific users were selected to have access to this new property, update their profiles
+    // If specific users were selected to have access to this new property, update their profiles.
+    // Workspace administrators inherently retain global access to all existing and new properties.
     if (Array.isArray(userIds) && userIds.length > 0) {
       await supabase
         .from("profiles")
         .update({ property_id: property.id, updated_at: new Date().toISOString() })
-        .in("id", userIds);
+        .in("id", userIds)
+        .neq("role", "admin");
     }
 
     return NextResponse.json({ success: true, property }, { status: 201 });

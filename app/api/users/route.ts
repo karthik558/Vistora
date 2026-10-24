@@ -35,7 +35,10 @@ export async function GET() {
     }
 
     const usersWithRights = (profiles || []).map((p: any) => {
-      let rights = Array.isArray(p.rights) && p.rights.length > 0
+      // Admins ALWAYS have all rights at all times
+      let rights = p.role === "admin"
+        ? DEFAULT_RIGHTS.admin
+        : Array.isArray(p.rights) && p.rights.length > 0
         ? p.rights
         : DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
 
@@ -197,6 +200,7 @@ export async function PATCH(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
+    const effectiveRole = (role && ["admin", "staff", "visitor"].includes(role)) ? role : currentProfile?.role;
     if (role && ["admin", "staff", "visitor"].includes(role)) {
       updatePayload.role = role;
     }
@@ -205,7 +209,10 @@ export async function PATCH(request: NextRequest) {
       updatePayload.property_id = propertyId || null;
     }
 
-    if (Array.isArray(rights)) {
+    // Admins always have all rights at all times with no need to configure
+    if (effectiveRole === "admin") {
+      updatePayload.rights = DEFAULT_RIGHTS.admin;
+    } else if (Array.isArray(rights)) {
       updatePayload.rights = rights;
     }
 

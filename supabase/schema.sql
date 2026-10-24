@@ -76,10 +76,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS rights TEXT[] DEFAULT '{}';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL;
 
--- Automatically assign any profile with NULL property_id to the primary hotel property
-UPDATE public.profiles
-SET property_id = (SELECT id FROM public.properties ORDER BY created_at ASC LIMIT 1)
-WHERE property_id IS NULL;
 
 -- Clean up: Drop unnecessary views and legacy tables.
 -- All operational user data (role, property_id, rights) is consolidated directly inside public.profiles,
