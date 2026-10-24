@@ -392,7 +392,10 @@ export async function updateFeedbackStatus(
 }
 
 // Compute real metrics exclusively from the Supabase database
-export async function getDashboardData(propertyId: string | "all" = "all"): Promise<DashboardData> {
+export async function getDashboardData(
+  propertyId: string | "all" = "all",
+  allowedPropertyIds?: string[] | null
+): Promise<DashboardData> {
   let feedbackRows: FeedbackRow[] = [];
   let propertiesList: PropertyRow[] = [];
 
@@ -405,26 +408,67 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
       console.error("[Supabase Error] Properties query failed:", propErr);
       throw new Error(`Failed to fetch properties from Supabase: ${propErr.message}`);
     }
-    propertiesList = propData || [];
 
-    // 2. Fetch feedback from Supabase
+    // Filter properties strictly to allowedPropertyIds if restricted
+    if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
+      propertiesList = (propData || []).filter((p: any) => allowedPropertyIds.includes(p.id));
+    } else {
+      propertiesList = propData || [];
+    }
+
+    // 2. Fetch feedback with strict multi-tenant isolation
     let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
-    if (propertyId !== "all") {
-      query = query.eq("property_id", propertyId);
-    }
 
-    const { data: feedData, error: feedErr } = await query;
-    if (feedErr) {
-      console.error("[Supabase Error] Feedback query failed:", feedErr);
-      throw new Error(`Failed to fetch feedback from Supabase: ${feedErr.message}`);
+    if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
+      if (allowedPropertyIds.length === 0) {
+        // User has access to 0 properties; return nothing
+        feedbackRows = [];
+      } else if (propertyId !== "all") {
+        if (!allowedPropertyIds.includes(propertyId)) {
+          // Strictly block accessing a property outside user's assigned scope
+          feedbackRows = [];
+        } else {
+          query = query.eq("property_id", propertyId);
+          const { data: feedData, error: feedErr } = await query;
+          if (feedErr) throw feedErr;
+          feedbackRows = feedData || [];
+        }
+      } else {
+        query = query.in("property_id", allowedPropertyIds);
+        const { data: feedData, error: feedErr } = await query;
+        if (feedErr) throw feedErr;
+        feedbackRows = feedData || [];
+      }
+    } else {
+      if (propertyId !== "all") {
+        query = query.eq("property_id", propertyId);
+      }
+      const { data: feedData, error: feedErr } = await query;
+      if (feedErr) {
+        console.error("[Supabase Error] Feedback query failed:", feedErr);
+        throw new Error(`Failed to fetch feedback from Supabase: ${feedErr.message}`);
+      }
+      feedbackRows = feedData || [];
     }
-    feedbackRows = feedData || [];
   } else {
-    propertiesList = fallbackProperties;
-    feedbackRows =
-      propertyId !== "all"
-        ? memoryFeedbackStore.filter((r) => r.property_id === propertyId)
-        : memoryFeedbackStore;
+    if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
+      propertiesList = fallbackProperties.filter((p) => allowedPropertyIds.includes(p.id));
+      if (allowedPropertyIds.length === 0) {
+        feedbackRows = [];
+      } else if (propertyId !== "all") {
+        feedbackRows = allowedPropertyIds.includes(propertyId)
+          ? memoryFeedbackStore.filter((r) => r.property_id === propertyId)
+          : [];
+      } else {
+        feedbackRows = memoryFeedbackStore.filter((r) => allowedPropertyIds.includes(r.property_id));
+      }
+    } else {
+      propertiesList = fallbackProperties;
+      feedbackRows =
+        propertyId !== "all"
+          ? memoryFeedbackStore.filter((r) => r.property_id === propertyId)
+          : memoryFeedbackStore;
+    }
   }
 
   const total = feedbackRows.length;

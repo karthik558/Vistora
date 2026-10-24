@@ -34,6 +34,7 @@ interface WorkspaceUserItem {
   full_name: string;
   role: "admin" | "staff" | "visitor";
   property_id?: string | null;
+  property_ids?: string[];
   properties?: { id: string; name: string; code: string } | null;
   rights?: string[];
   created_at?: string;
@@ -70,6 +71,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<"admin" | "staff" | "visitor">("staff");
   const [addPropertyId, setAddPropertyId] = useState("");
+  const [addPropertyIds, setAddPropertyIds] = useState<string[]>([]);
   const [addRights, setAddRights] = useState<string[]>(ROLE_DEFAULT_RIGHTS.staff);
   const [submitting, setSubmitting] = useState(false);
 
@@ -90,6 +92,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<"admin" | "staff" | "visitor">("staff");
   const [editPropertyId, setEditPropertyId] = useState("");
+  const [editPropertyIds, setEditPropertyIds] = useState<string[]>([]);
   const [editRights, setEditRights] = useState<string[]>([]);
   const [savingAccess, setSavingAccess] = useState(false);
 
@@ -148,6 +151,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSubmitting(true);
 
     try {
+      const propIdsToSend = addRole === "admin"
+        ? properties.map((p) => p.id)
+        : addPropertyIds;
+
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -156,8 +163,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
           email: addEmail.trim(),
           password: addPassword.trim(),
           role: addRole,
-          propertyId: addPropertyId || null,
-          rights: addRights,
+          propertyId: propIdsToSend[0] || null,
+          propertyIds: propIdsToSend,
+          rights: addRole === "admin" ? SYSTEM_RIGHTS.map((r) => r.id) : addRights,
         }),
       });
 
@@ -173,6 +181,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       setAddPassword("");
       setAddRole("staff");
       setAddPropertyId("");
+      setAddPropertyIds([]);
       setAddRights(ROLE_DEFAULT_RIGHTS.staff);
       await loadData();
     } catch (err: any) {
@@ -249,6 +258,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       setSelectedUserIdsForProp([]);
       if (data.property?.id) {
         setAddPropertyId(data.property.id);
+        setAddPropertyIds([data.property.id]);
       }
       await loadData();
     } catch (err: any) {
@@ -271,7 +281,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       ? SYSTEM_RIGHTS.map((r) => r.id)
       : editRights;
 
-    const propertyIdToSend = editPropertyId && editPropertyId.trim() ? editPropertyId.trim() : null;
+    const propIdsToSend = editRole === "admin"
+      ? properties.map((p) => p.id)
+      : editPropertyIds;
 
     try {
       const res = await fetch("/api/users", {
@@ -281,7 +293,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
           userId: editAccessUser.id,
           fullName: editName.trim() || editAccessUser.full_name,
           role: editRole,
-          propertyId: propertyIdToSend,
+          propertyId: propIdsToSend[0] || null,
+          propertyIds: propIdsToSend,
           rights: rightsToSend,
         }),
       });
@@ -479,24 +492,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               </div>
                             </td>
                             <td>
-                              {user.properties?.name ? (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    background: "#f0f4f0",
-                                    color: "#1c3825",
-                                    padding: "3px 8px",
-                                    borderRadius: "3px",
-                                    fontSize: "11px",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  <Building2 size={11} strokeWidth={1.75} />
-                                  {user.properties.name} ({user.properties.code})
-                                </span>
-                              ) : (
+                              {user.role === "admin" ? (
                                 <span
                                   style={{
                                     display: "inline-flex",
@@ -513,6 +509,78 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 >
                                   <Building2 size={11} strokeWidth={1.75} />
                                   All Properties (Global)
+                                </span>
+                              ) : user.property_ids && user.property_ids.length > 1 ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: "#edf4ed",
+                                    color: "#254230",
+                                    padding: "3px 8px",
+                                    borderRadius: "3px",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                    border: "1px solid #d4e2d6",
+                                  }}
+                                  title={properties.filter((p) => user.property_ids?.includes(p.id)).map((p) => p.name).join(", ")}
+                                >
+                                  <Building2 size={11} strokeWidth={1.75} />
+                                  {user.property_ids.length === properties.length
+                                    ? `All Properties (${user.property_ids.length})`
+                                    : `${user.property_ids.length} Properties`}
+                                </span>
+                              ) : user.properties?.name ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: "#f0f4f0",
+                                    color: "#1c3825",
+                                    padding: "3px 8px",
+                                    borderRadius: "3px",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Building2 size={11} strokeWidth={1.75} />
+                                  {user.properties.name} ({user.properties.code})
+                                </span>
+                              ) : user.property_id && properties.find((p) => p.id === user.property_id) ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: "#f0f4f0",
+                                    color: "#1c3825",
+                                    padding: "3px 8px",
+                                    borderRadius: "3px",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Building2 size={11} strokeWidth={1.75} />
+                                  {properties.find((p) => p.id === user.property_id)?.name}
+                                </span>
+                              ) : (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    background: "#fbf1ef",
+                                    color: "#8b261a",
+                                    padding: "3px 8px",
+                                    borderRadius: "3px",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Building2 size={11} strokeWidth={1.75} />
+                                  Unassigned
                                 </span>
                               )}
                             </td>
@@ -532,6 +600,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     setEditName(user.full_name || "");
                                     setEditRole(user.role);
                                     setEditPropertyId(user.property_id || "");
+                                    const initialPropIds = user.property_ids && user.property_ids.length > 0
+                                      ? user.property_ids
+                                      : user.property_id
+                                      ? [user.property_id]
+                                      : [];
+                                    setEditPropertyIds(initialPropIds);
                                     setEditRights(
                                       user.role === "admin"
                                         ? SYSTEM_RIGHTS.map((r) => r.id)
@@ -646,11 +720,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             setAddRole(newRole);
                             if (newRole === "admin") {
                               setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
-                              setAddPropertyId("");
+                              setAddPropertyIds(properties.map((p) => p.id));
                             } else {
                               setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
-                              if (!addPropertyId && properties.length > 0) {
-                                setAddPropertyId(properties[0].id);
+                              if (addPropertyIds.length === 0 && properties.length > 0) {
+                                setAddPropertyIds(properties.map((p) => p.id));
                               }
                             }
                           }}
@@ -663,25 +737,95 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </div>
 
-                      <div style={{ marginBottom: "16px" }}>
-                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                          Property Access
-                        </label>
-                        <CustomSelect
-                          value={addPropertyId}
-                          onChange={(val) => setAddPropertyId(val)}
-                          placeholder="All Properties (Global Access)"
-                          header="Select Property Access"
-                          options={[
-                            { value: "", label: "All Properties (Global Access)", detail: "Global portfolio overview" },
-                            ...properties.map((p) => ({
-                              value: p.id,
-                              label: `${p.name} (${p.code})`,
-                              detail: p.location,
-                            })),
-                          ]}
-                        />
-                      </div>
+                      {addRole !== "admin" && (
+                        <div style={{ marginBottom: "18px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <label className="field-label" style={{ margin: 0 }}>
+                              Assigned Properties ({addPropertyIds.length} of {properties.length} selected)
+                            </label>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setAddPropertyIds(properties.map((p) => p.id))}
+                              >
+                                Select All
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setAddPropertyIds([])}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              maxHeight: "150px",
+                              overflowY: "auto",
+                              border: "1px solid var(--line)",
+                              borderRadius: "6px",
+                              padding: "8px 10px",
+                              background: "#fafbfa",
+                            }}
+                          >
+                            {properties.map((p) => {
+                              const checked = addPropertyIds.includes(p.id);
+                              return (
+                                <label
+                                  key={p.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    padding: "6px 8px",
+                                    borderRadius: "4px",
+                                    background: checked ? "#edf4ed" : "#ffffff",
+                                    border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setAddPropertyIds([...addPropertyIds, p.id]);
+                                      } else {
+                                        setAddPropertyIds(addPropertyIds.filter((id) => id !== p.id));
+                                      }
+                                    }}
+                                    style={{ accentColor: "#254230", margin: 0 }}
+                                  />
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                                    <div>
+                                      <span style={{ fontWeight: 600, color: "var(--ink)", marginRight: "6px" }}>{p.name}</span>
+                                      <span style={{ fontSize: "10px", color: "var(--muted)" }}>{p.location || ""}</span>
+                                    </div>
+                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "#eef2ee", padding: "2px 5px", borderRadius: "3px", color: "#254230", fontWeight: 600 }}>
+                                      {p.code}
+                                    </span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {addPropertyIds.length === 0 && (
+                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#8b261a" }}>
+                              * Please select at least one property to grant operational access.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <label className="field-label">
                         Initial Password
@@ -885,25 +1029,95 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </div>
 
-                      <div style={{ marginBottom: "24px" }}>
-                        <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                          Assigned Property
-                        </label>
-                        <CustomSelect
-                          value={editPropertyId}
-                          onChange={(val) => setEditPropertyId(val)}
-                          placeholder="All Properties (Global Access)"
-                          header="Property Access Scope"
-                          options={[
-                            { value: "", label: "All Properties (Global Access)", detail: "Access to all portfolio hotels" },
-                            ...properties.map((p) => ({
-                              value: p.id,
-                              label: `${p.name} (${p.code})`,
-                              detail: `${p.location || ""} · ${p.total_rooms || 0} rooms`,
-                            })),
-                          ]}
-                        />
-                      </div>
+                      {editRole !== "admin" && (
+                        <div style={{ marginBottom: "20px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <label className="field-label" style={{ margin: 0 }}>
+                              Assigned Properties ({editPropertyIds.length} of {properties.length} selected)
+                            </label>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setEditPropertyIds(properties.map((p) => p.id))}
+                              >
+                                Select All
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-outline compact"
+                                style={{ padding: "2px 7px", fontSize: "10px" }}
+                                onClick={() => setEditPropertyIds([])}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              maxHeight: "150px",
+                              overflowY: "auto",
+                              border: "1px solid var(--line)",
+                              borderRadius: "6px",
+                              padding: "8px 10px",
+                              background: "#fafbfa",
+                            }}
+                          >
+                            {properties.map((p) => {
+                              const checked = editPropertyIds.includes(p.id);
+                              return (
+                                <label
+                                  key={p.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    padding: "6px 8px",
+                                    borderRadius: "4px",
+                                    background: checked ? "#edf4ed" : "#ffffff",
+                                    border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditPropertyIds([...editPropertyIds, p.id]);
+                                      } else {
+                                        setEditPropertyIds(editPropertyIds.filter((id) => id !== p.id));
+                                      }
+                                    }}
+                                    style={{ accentColor: "#254230", margin: 0 }}
+                                  />
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                                    <div>
+                                      <span style={{ fontWeight: 600, color: "var(--ink)", marginRight: "6px" }}>{p.name}</span>
+                                      <span style={{ fontSize: "10px", color: "var(--muted)" }}>{p.location || ""}</span>
+                                    </div>
+                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "#eef2ee", padding: "2px 5px", borderRadius: "3px", color: "#254230", fontWeight: 600 }}>
+                                      {p.code}
+                                    </span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {editPropertyIds.length === 0 && (
+                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#8b261a" }}>
+                              * Please select at least one property to grant operational access.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {editRole === "admin" ? (
                         <div

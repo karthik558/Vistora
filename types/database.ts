@@ -29,6 +29,7 @@ export interface Database {
           full_name: string;
           role: UserRole;
           property_id: string | null;
+          property_ids?: string[] | null;
           avatar_url: string | null;
           rights?: string[] | null;
           created_at: string;
@@ -40,6 +41,7 @@ export interface Database {
           full_name: string;
           role?: UserRole;
           property_id?: string | null;
+          property_ids?: string[] | null;
           avatar_url?: string | null;
           rights?: string[] | null;
           created_at?: string;
@@ -51,6 +53,7 @@ export interface Database {
           full_name?: string;
           role?: UserRole;
           property_id?: string | null;
+          property_ids?: string[] | null;
           avatar_url?: string | null;
           rights?: string[] | null;
           created_at?: string;

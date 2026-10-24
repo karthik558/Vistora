@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedUser, requireAdmin } from "../../../lib/auth/serverAuth";
+import { sanitizeString } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -11,13 +13,30 @@ function getAdminClient() {
   });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
     const supabase = getAdminClient();
-    const { data: properties, error } = await supabase
+
+    let query = supabase
       .from("properties")
       .select("*, profiles:profiles(id, full_name, email, role)")
       .order("name", { ascending: true });
+
+    // Multi-tenant isolation: non-admins only see properties they are assigned to
+    if (user && user.role !== "admin") {
+      const allowed = user.propertyIds?.length
+        ? user.propertyIds
+        : user.propertyId
+        ? [user.propertyId]
+        : [];
+      if (allowed.length === 0) {
+        return NextResponse.json({ success: true, properties: [] });
+      }
+      query = query.in("id", allowed);
+    }
+
+    const { data: properties, error } = await query;
 
     if (error) {
       console.error("[Supabase Error] properties query failed:", error);
@@ -35,22 +54,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verify user cookie or authorization (Only Admins can create properties)
-    const userCookie = request.cookies.get("vistora-user")?.value;
-    let userRole = "visitor";
-    if (userCookie) {
-      try {
-        const u = JSON.parse(userCookie);
-        userRole = u?.role || "visitor";
-      } catch {}
-    }
-
-    if (userRole === "visitor") {
-      return NextResponse.json(
-        { success: false, error: "Access Restricted: Only workspace administrators can register new properties." },
-        { status: 403 }
-      );
-    }
+    // Strictly require administrator privileges
+    const authCheck = await requireAdmin(request);
+    if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();
     const { name, code, location, country, brand, totalRooms, userIds } = body;
@@ -59,8 +65,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Property name is required." }, { status: 400 });
     }
 
-    const cleanName = name.trim();
-    const cleanCode = (code || cleanName.replace(/[^a-zA-Z]/g, "").slice(0, 3)).trim().toUpperCase();
+    const cleanName = sanitizeString(name, 100);
+    const cleanCode = (code || cleanName.replace(/[^a-zA-Z]/g, "").slice(0, 3)).trim().toUpperCase().slice(0, 10);
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
     const supabase = getAdminClient();
@@ -86,8 +92,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: insertError.message }, { status: 500 });
     }
 
-    // If specific users were selected to have access to this new property, update their profiles.
-    // Workspace administrators inherently retain global access to all existing and new properties.
+    // Assign to users if provided
     if (Array.isArray(userIds) && userIds.length > 0) {
       await supabase
         .from("profiles")
@@ -107,21 +112,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const userCookie = request.cookies.get("vistora-user")?.value;
-    let userRole = "visitor";
-    if (userCookie) {
-      try {
-        const u = JSON.parse(userCookie);
-        userRole = u?.role || "visitor";
-      } catch {}
-    }
-
-    if (userRole === "visitor") {
-      return NextResponse.json(
-        { success: false, error: "Access Restricted: Only administrators can delete properties." },
-        { status: 403 }
-      );
-    }
+    // Strictly require administrator privileges
+    const authCheck = await requireAdmin(request);
+    if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const { propertyId } = await request.json();
     if (!propertyId) {

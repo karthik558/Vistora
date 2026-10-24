@@ -33,15 +33,44 @@ export default function OperationsPage({ section, data }: { section: string; dat
     startDate: null,
     endDate: null,
   });
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData?.success && resData?.user) {
+          setUser(resData.user);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isUserAdmin = !user || user.role === "admin";
+  const userAllowedPropIds: string[] | null = isUserAdmin
+    ? null
+    : user?.propertyIds?.length
+    ? user.propertyIds
+    : user?.propertyId
+    ? [user.propertyId]
+    : [];
 
   const feedback = useMemo(
     () =>
       data.recentFeedback
+        .filter((item) => {
+          if (userAllowedPropIds !== null) {
+            if (!item.propertyId || !userAllowedPropIds.includes(item.propertyId)) {
+              return false;
+            }
+          }
+          return true;
+        })
         .filter((item) => section !== "complaints" || item.rating <= 2 || item.status === "needs_attention")
-        .filter((item) => selectedProperty === "all" || !item.propertyId || item.propertyId === selectedProperty)
+        .filter((item) => selectedProperty === "all" || (item.propertyId && item.propertyId === selectedProperty))
         .filter((item) => isDateInRange(item.createdAt, dateFilter))
         .filter((item) => !query || `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [data.recentFeedback, query, section, selectedProperty, dateFilter]
+    [data.recentFeedback, query, section, selectedProperty, dateFilter, userAllowedPropIds]
   );
 
   const title =
@@ -100,7 +129,11 @@ export default function OperationsPage({ section, data }: { section: string; dat
           </div>
           <div className="page-heading-actions">
             <PropertyFilter
-              properties={data.properties}
+              properties={
+                userAllowedPropIds !== null
+                  ? data.properties.filter((p) => userAllowedPropIds.includes(p.id))
+                  : data.properties
+              }
               selectedId={selectedProperty}
               onChange={setSelectedProperty}
             />
@@ -132,6 +165,7 @@ export default function OperationsPage({ section, data }: { section: string; dat
               data={data}
               selectedProperty={selectedProperty}
               dateFilter={dateFilter}
+              userAllowedPropIds={userAllowedPropIds}
             />
           ) : section === "directory" ? (
             <Directory data={data} query={query} setQuery={setQuery} />
@@ -171,13 +205,20 @@ function Analytics({
   data,
   selectedProperty,
   dateFilter,
+  userAllowedPropIds,
 }: {
   data: DashboardData;
   selectedProperty: string | "all";
   dateFilter: DateRangeFilter;
+  userAllowedPropIds?: string[] | null;
 }) {
   const filteredFeedback = useMemo(() => {
     return data.recentFeedback.filter((item) => {
+      if (userAllowedPropIds !== null && userAllowedPropIds !== undefined) {
+        if (!item.propertyId || !userAllowedPropIds.includes(item.propertyId)) {
+          return false;
+        }
+      }
       if (selectedProperty !== "all") {
         if (!item.propertyId || item.propertyId !== selectedProperty) {
           return false;
@@ -188,7 +229,7 @@ function Analytics({
       }
       return true;
     });
-  }, [data.recentFeedback, selectedProperty, dateFilter]);
+  }, [data.recentFeedback, selectedProperty, dateFilter, userAllowedPropIds]);
 
   const total = filteredFeedback.length;
   const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);

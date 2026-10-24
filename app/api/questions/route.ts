@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedUser } from "../../../lib/auth/serverAuth";
+import { sanitizeString } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -117,6 +119,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user || (user.role !== "admin" && !user.rights?.includes("manage_questionnaire"))) {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Questionnaire management privileges required." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { questionText, questionType = "choice", options = [], propertyId, isRequired = false, department } = body;
 
@@ -124,8 +134,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Question text is required." }, { status: 400 });
     }
 
-    const cleanText = questionText.trim();
-    const cleanOptions = Array.isArray(options) ? options.filter(Boolean) : [];
+    const cleanText = sanitizeString(questionText, 300);
+    const cleanOptions = Array.isArray(options) ? options.map((o) => sanitizeString(o, 100)).filter(Boolean) : [];
 
     const newQuestion: FeedbackQuestion = {
       id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -178,6 +188,14 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user || (user.role !== "admin" && !user.rights?.includes("manage_questionnaire"))) {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Questionnaire management privileges required." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { id, isActive, questionText, isRequired } = body;
 
@@ -190,7 +208,7 @@ export async function PATCH(request: NextRequest) {
       const supabase = getAdminClient();
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
       if (isActive !== undefined) updates.is_active = Boolean(isActive);
-      if (questionText !== undefined) updates.question_text = questionText.trim();
+      if (questionText !== undefined) updates.question_text = sanitizeString(questionText, 300);
       if (isRequired !== undefined) updates.is_required = Boolean(isRequired);
 
       const { data, error } = await supabase
@@ -209,7 +227,7 @@ export async function PATCH(request: NextRequest) {
     const item = fallbackQuestionsStore.find((q) => q.id === id);
     if (item) {
       if (isActive !== undefined) item.is_active = Boolean(isActive);
-      if (questionText !== undefined) item.question_text = questionText.trim();
+      if (questionText !== undefined) item.question_text = sanitizeString(questionText, 300);
       if (isRequired !== undefined) item.is_required = Boolean(isRequired);
       return NextResponse.json({ success: true, question: item, synced: false });
     }
@@ -225,6 +243,14 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user || (user.role !== "admin" && !user.rights?.includes("manage_questionnaire"))) {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Questionnaire management privileges required." },
+        { status: 403 }
+      );
+    }
+
     const { id } = await request.json();
     if (!id) {
       return NextResponse.json({ success: false, error: "Question ID is required." }, { status: 400 });

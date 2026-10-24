@@ -29,6 +29,11 @@ export async function GET(request: NextRequest) {
               parsed.fullName = profile.full_name;
               parsed.role = profile.role;
               parsed.propertyId = profile.property_id || null;
+              parsed.propertyIds = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
+                ? profile.property_ids
+                : profile.property_id
+                ? [profile.property_id]
+                : [];
               parsed.rights = profile.rights || [];
             }
           } catch {}
@@ -73,12 +78,19 @@ export async function GET(request: NextRequest) {
           const role = profile?.role || data.user.user_metadata?.role || "admin";
           const fullName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email?.split("@")[0];
 
+          const propertyIds = Array.isArray(profile?.property_ids) && profile.property_ids.length > 0
+            ? profile.property_ids
+            : profile?.property_id
+            ? [profile.property_id]
+            : [];
+
           const userData = {
             id: data.user.id,
             email: data.user.email,
             fullName,
             role,
             propertyId: profile?.property_id || null,
+            propertyIds,
             rights: profile?.rights || data.user.user_metadata?.rights || [],
           };
           const response = NextResponse.json({

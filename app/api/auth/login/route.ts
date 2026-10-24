@@ -98,6 +98,11 @@ export async function POST(request: NextRequest) {
     }
 
     const fullName = profile?.full_name || guest?.full_name || cleanEmail.split("@")[0];
+    const propertyIds = Array.isArray(profile?.property_ids) && profile.property_ids.length > 0
+      ? profile.property_ids
+      : profile?.property_id
+      ? [profile.property_id]
+      : [];
 
     const userData = {
       id: userId,
@@ -105,6 +110,7 @@ export async function POST(request: NextRequest) {
       fullName,
       role: assignedRole,
       propertyId: profile?.property_id || null,
+      propertyIds,
       rights: profile?.rights || [],
     };
 

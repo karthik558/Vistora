@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin, getAuthenticatedUser } from "../../../lib/auth/serverAuth";
+import { sanitizeString, sanitizeEmail } from "../../../lib/security/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -19,15 +21,24 @@ const DEFAULT_RIGHTS = {
   visitor: ["view_feedback"],
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Authenticate caller
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Authentication required to view users." },
+        { status: 401 }
+      );
+    }
+
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
     });
 
     const { data: profiles, error } = await adminClient
       .from("profiles")
-      .select("id, email, full_name, role, property_id, properties(id, name, code), rights, avatar_url, created_at, updated_at")
+      .select("id, email, full_name, role, property_id, property_ids, properties(id, name, code), rights, avatar_url, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -35,17 +46,21 @@ export async function GET() {
     }
 
     const usersWithRights = (profiles || []).map((p: any) => {
-      // Admins ALWAYS have all rights at all times
       let rights = p.role === "admin"
         ? DEFAULT_RIGHTS.admin
         : Array.isArray(p.rights) && p.rights.length > 0
         ? p.rights
         : DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
 
-      // Clean avatar_url: if it ever contained legacy JSON or password hashes, return null
       const cleanAvatar = p.avatar_url && (p.avatar_url.startsWith("{") || p.avatar_url.startsWith("pwd:"))
         ? null
         : p.avatar_url;
+
+      const propertyIds = Array.isArray(p.property_ids) && p.property_ids.length > 0
+        ? p.property_ids
+        : p.property_id
+        ? [p.property_id]
+        : [];
 
       return {
         id: p.id,
@@ -53,6 +68,7 @@ export async function GET() {
         full_name: p.full_name,
         role: p.role,
         property_id: p.property_id,
+        property_ids: propertyIds,
         properties: p.properties,
         rights,
         avatar_url: cleanAvatar,
@@ -72,17 +88,25 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, role = "visitor", password, propertyId, rights } = await request.json();
+    // Strict admin check
+    const authCheck = await requireAdmin(request);
+    if (authCheck.errorResponse) return authCheck.errorResponse;
 
-    if (!email || !email.trim()) {
-      return NextResponse.json({ success: false, error: "Email is required." }, { status: 400 });
+    const body = await request.json();
+    const { email, fullName, role = "visitor", password, propertyId, propertyIds, rights } = body;
+
+    const cleanEmail = sanitizeEmail(email);
+    const cleanName = sanitizeString(fullName, 100);
+
+    if (!cleanEmail) {
+      return NextResponse.json({ success: false, error: "A valid email address is required." }, { status: 400 });
     }
 
-    if (!fullName || !fullName.trim()) {
+    if (!cleanName) {
       return NextResponse.json({ success: false, error: "Full name is required." }, { status: 400 });
     }
 
-    if (!password || password.trim().length < 6) {
+    if (!password || typeof password !== "string" || password.trim().length < 6) {
       return NextResponse.json(
         { success: false, error: "Password must be at least 6 characters." },
         { status: 400 }
@@ -96,11 +120,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = fullName.trim();
-    const assignedRights = Array.isArray(rights)
+    const assignedRights = role === "admin"
+      ? DEFAULT_RIGHTS.admin
+      : Array.isArray(rights)
       ? rights
       : DEFAULT_RIGHTS[role as keyof typeof DEFAULT_RIGHTS] || [];
+
+    // Parse multi-property access
+    let resolvedPropertyIds: string[] = [];
+    if (role === "admin") {
+      resolvedPropertyIds = [];
+    } else if (Array.isArray(propertyIds)) {
+      resolvedPropertyIds = propertyIds.filter((id) => typeof id === "string" && id.trim().length > 0);
+    } else if (propertyId && typeof propertyId === "string" && propertyId.trim().length > 0) {
+      resolvedPropertyIds = [propertyId.trim()];
+    }
+
+    const primaryPropertyId = resolvedPropertyIds.length === 1 ? resolvedPropertyIds[0] : null;
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
@@ -120,7 +156,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Create user natively in Supabase Auth (auth.users manages encrypted passwords securely)
+    // 1. Create user in Supabase Auth
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: cleanEmail,
       password: password.trim(),
@@ -129,7 +165,8 @@ export async function POST(request: NextRequest) {
         full_name: cleanName,
         role,
         rights: assignedRights,
-        property_id: propertyId || null,
+        property_id: primaryPropertyId,
+        property_ids: resolvedPropertyIds,
       },
     });
 
@@ -142,20 +179,23 @@ export async function POST(request: NextRequest) {
 
     const newUserId = authData.user.id;
 
-    // 2. Insert user directly into public.profiles (all operational user data in one clean table)
+    // 2. Insert into public.profiles
+    const profilePayload: Record<string, any> = {
+      id: newUserId,
+      email: cleanEmail,
+      full_name: cleanName,
+      role,
+      property_id: primaryPropertyId,
+      property_ids: resolvedPropertyIds,
+      avatar_url: null,
+      rights: assignedRights,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
-      .upsert({
-        id: newUserId,
-        email: cleanEmail,
-        full_name: cleanName,
-        role,
-        property_id: propertyId || null,
-        avatar_url: null,
-        rights: assignedRights,
-        updated_at: new Date().toISOString(),
-      })
-      .select("id, email, full_name, role, property_id, properties(id, name, code), rights, created_at")
+      .upsert(profilePayload)
+      .select("id, email, full_name, role, property_id, property_ids, properties(id, name, code), rights, created_at")
       .single();
 
     if (profileError) {
@@ -167,6 +207,7 @@ export async function POST(request: NextRequest) {
       user: {
         ...profileInsert,
         rights: assignedRights,
+        property_ids: resolvedPropertyIds,
       },
     });
   } catch (err: any) {
@@ -179,7 +220,12 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { userId, role, propertyId, rights, fullName } = await request.json();
+    // Strict admin check
+    const authCheck = await requireAdmin(request);
+    if (authCheck.errorResponse) return authCheck.errorResponse;
+
+    const body = await request.json();
+    const { userId, role, propertyId, propertyIds, rights, fullName } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
@@ -189,10 +235,9 @@ export async function PATCH(request: NextRequest) {
       auth: { persistSession: false },
     });
 
-    // Retrieve existing profile
     const { data: currentProfile } = await adminClient
       .from("profiles")
-      .select("avatar_url, role, property_id")
+      .select("avatar_url, role, property_id, property_ids")
       .eq("id", userId)
       .single();
 
@@ -201,26 +246,38 @@ export async function PATCH(request: NextRequest) {
     };
 
     if (fullName !== undefined && typeof fullName === "string" && fullName.trim().length > 0) {
-      updatePayload.full_name = fullName.trim();
+      updatePayload.full_name = sanitizeString(fullName, 100);
     }
 
-    const effectiveRole = (role && ["admin", "staff", "visitor"].includes(role)) ? role : currentProfile?.role;
+    const effectiveRole = role && ["admin", "staff", "visitor"].includes(role) ? role : currentProfile?.role;
     if (role && ["admin", "staff", "visitor"].includes(role)) {
       updatePayload.role = role;
     }
 
-    if (propertyId !== undefined) {
-      updatePayload.property_id = propertyId || null;
-    }
-
-    // Admins always have all rights at all times with no need to configure
+    // Resolve property access
     if (effectiveRole === "admin") {
+      updatePayload.property_id = null;
+      updatePayload.property_ids = [];
       updatePayload.rights = DEFAULT_RIGHTS.admin;
-    } else if (Array.isArray(rights)) {
-      updatePayload.rights = rights;
+    } else {
+      let resolvedPropertyIds: string[] | undefined = undefined;
+      if (Array.isArray(propertyIds)) {
+        resolvedPropertyIds = propertyIds.filter((id) => typeof id === "string" && id.trim().length > 0);
+      } else if (propertyId !== undefined) {
+        resolvedPropertyIds = propertyId ? [propertyId] : [];
+      }
+
+      if (resolvedPropertyIds !== undefined) {
+        updatePayload.property_ids = resolvedPropertyIds;
+        updatePayload.property_id = resolvedPropertyIds.length === 1 ? resolvedPropertyIds[0] : null;
+      }
+
+      if (Array.isArray(rights)) {
+        updatePayload.rights = rights;
+      }
     }
 
-    // Clean avatar_url if it had legacy artifacts
+    // Clean legacy avatar artifacts
     if (
       currentProfile?.avatar_url &&
       (currentProfile.avatar_url.startsWith("{") || currentProfile.avatar_url.startsWith("pwd:"))
@@ -228,26 +285,26 @@ export async function PATCH(request: NextRequest) {
       updatePayload.avatar_url = null;
     }
 
-    // Update single profiles table
     const { data, error } = await adminClient
       .from("profiles")
       .update(updatePayload)
       .eq("id", userId)
-      .select("id, email, full_name, role, property_id, properties(id, name, code), rights")
+      .select("id, email, full_name, role, property_id, property_ids, properties(id, name, code), rights")
       .single();
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // Sync metadata in Supabase Auth
+    // Sync metadata to Supabase Auth
     try {
       await adminClient.auth.admin.updateUserById(userId, {
         user_metadata: {
           full_name: updatePayload.full_name || undefined,
           role: updatePayload.role || currentProfile?.role,
-          rights: rights || [],
+          rights: updatePayload.rights || rights || [],
           property_id: updatePayload.property_id !== undefined ? updatePayload.property_id : currentProfile?.property_id,
+          property_ids: updatePayload.property_ids !== undefined ? updatePayload.property_ids : currentProfile?.property_ids,
         },
       });
     } catch {}
@@ -257,6 +314,7 @@ export async function PATCH(request: NextRequest) {
       user: {
         ...data,
         rights: data?.rights || rights || [],
+        property_ids: data?.property_ids || updatePayload.property_ids || [],
       },
     });
   } catch (err: any) {

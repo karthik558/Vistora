@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "../../../../lib/auth/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
@@ -7,13 +8,25 @@ const supabaseServiceKey =
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = params.id;
+    const authCheck = await requireAdmin(request);
+    if (authCheck.errorResponse) return authCheck.errorResponse;
+
+    const resolvedParams = await context.params;
+    const userId = resolvedParams?.id;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
+    }
+
+    // Prevent admin from deleting their own active session
+    if (authCheck.user?.id === userId) {
+      return NextResponse.json(
+        { success: false, error: "Security restriction: You cannot delete your own administrator account." },
+        { status: 400 }
+      );
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {

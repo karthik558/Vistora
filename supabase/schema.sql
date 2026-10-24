@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Ensure profile columns exist even if the table was created earlier without them
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS rights TEXT[] DEFAULT '{}';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_ids UUID[] DEFAULT '{}';
+
+-- Automatically synchronize property_ids from property_id if property_ids is empty
+UPDATE public.profiles
+SET property_ids = ARRAY[property_id]
+WHERE property_id IS NOT NULL AND (property_ids IS NULL OR cardinality(property_ids) = 0);
 
 
 -- Clean up: Drop unnecessary views and legacy tables.

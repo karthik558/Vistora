@@ -1,0 +1,146 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export interface VerifiedUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "admin" | "staff" | "visitor";
+  propertyId: string | null;
+  propertyIds: string[];
+  rights: string[];
+}
+
+function getAdminClient() {
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+}
+
+/**
+ * Extracts and securely verifies the session user from cookies and tokens.
+ * Always validates against the database public.profiles record.
+ */
+export async function getAuthenticatedUser(request: NextRequest): Promise<VerifiedUser | null> {
+  const adminClient = getAdminClient();
+
+  // 1. Try Bearer token or sb-access-token
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const cookieToken = request.cookies.get("sb-access-token")?.value;
+  const token = bearerToken || cookieToken;
+
+  if (token) {
+    try {
+      const { data, error } = await adminClient.auth.getUser(token);
+      if (!error && data?.user) {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        const role = profile?.role || data.user.user_metadata?.role || "visitor";
+        const propertyIds: string[] = Array.isArray(profile?.property_ids)
+          ? profile.property_ids
+          : profile?.property_id
+          ? [profile.property_id]
+          : [];
+
+        return {
+          id: data.user.id,
+          email: data.user.email || "",
+          fullName: profile?.full_name || data.user.user_metadata?.full_name || "User",
+          role,
+          propertyId: profile?.property_id || null,
+          propertyIds,
+          rights: profile?.rights || [],
+        };
+      }
+    } catch {}
+  }
+
+  // 2. Fall back to vistora-user workspace cookie with DB profile verification
+  const userCookie = request.cookies.get("vistora-user")?.value;
+  if (userCookie) {
+    try {
+      const parsed = JSON.parse(userCookie);
+      if (parsed?.email) {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("*")
+          .ilike("email", parsed.email)
+          .maybeSingle();
+
+        if (profile) {
+          const propertyIds: string[] = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
+            ? profile.property_ids
+            : profile.property_id
+            ? [profile.property_id]
+            : [];
+
+          return {
+            id: profile.id,
+            email: profile.email,
+            fullName: profile.full_name,
+            role: profile.role,
+            propertyId: profile.property_id || null,
+            propertyIds,
+            rights: profile.rights || [],
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Enforces that the request is made by a verified Administrator.
+ * Returns either { user } or { errorResponse }.
+ */
+export async function requireAdmin(request: NextRequest): Promise<
+  { user: VerifiedUser; errorResponse?: never } | { user?: never; errorResponse: NextResponse }
+> {
+  const user = await getAuthenticatedUser(request);
+
+  if (!user) {
+    return {
+      errorResponse: NextResponse.json(
+        { success: false, error: "Authentication required. Please sign in to continue." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (user.role !== "admin") {
+    return {
+      errorResponse: NextResponse.json(
+        { success: false, error: "Access denied. Administrator privileges required." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { user };
+}
+
+/**
+ * Determines property access scope for a user.
+ * Admin users have unrestricted global access.
+ * Non-admin users are strictly confined to their assigned property_ids.
+ */
+export function getPropertyAccessScope(user: VerifiedUser | null) {
+  if (!user || user.role === "admin") {
+    return { isGlobal: true, allowedPropertyIds: null as string[] | null };
+  }
+  return {
+    isGlobal: false,
+    allowedPropertyIds: user.propertyIds,
+  };
+}

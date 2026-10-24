@@ -35,6 +35,9 @@ export interface WorkspaceUser {
   email: string;
   fullName: string;
   role: "admin" | "staff" | "visitor";
+  propertyId?: string | null;
+  propertyIds?: string[];
+  rights?: string[];
 }
 
 const nav = [
@@ -388,14 +391,31 @@ export default function Dashboard({
 
   const data = initialData;
 
-  // Filter feedback dynamically by selectedProperty and dateFilter
+  const isUserAdmin = !user || user.role === "admin";
+  const userAllowedPropIds = isUserAdmin
+    ? null
+    : user?.propertyIds?.length
+    ? user.propertyIds
+    : user?.propertyId
+    ? [user.propertyId]
+    : [];
+
+  // Filter feedback dynamically with strict multi-tenant boundary
   const allFeedback = data?.recentFeedback || [];
   const filteredFeedback = allFeedback.filter((item) => {
+    // 1. Strict multi-tenant security boundary
+    if (userAllowedPropIds !== null) {
+      if (!item.propertyId || !userAllowedPropIds.includes(item.propertyId)) {
+        return false;
+      }
+    }
+    // 2. Selected property dropdown filter
     if (selectedProperty !== "all") {
       if (!item.propertyId || item.propertyId !== selectedProperty) {
         return false;
       }
     }
+    // 3. Date range filter
     if (!isDateInRange(item.createdAt, dateFilter)) {
       return false;
     }
@@ -448,7 +468,11 @@ export default function Dashboard({
           </div>
           <div className="page-heading-actions">
             <PropertyFilter
-              properties={data?.properties || []}
+              properties={
+                userAllowedPropIds !== null
+                  ? (data?.properties || []).filter((p) => userAllowedPropIds.includes(p.id))
+                  : data?.properties || []
+              }
               selectedId={selectedProperty}
               onChange={setSelectedProperty}
             />
