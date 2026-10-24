@@ -25,6 +25,7 @@ import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experi
 import { FeedbackStatus } from "../types/database";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
+import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 
 export interface WorkspaceUser {
   id?: string;
@@ -437,25 +438,24 @@ export default function Dashboard({
               A clear view of the guest moments that need attention today.
             </p>
           </div>
-          <Link href="/dashboard/reports" className="button button-dark compact">
-            Create report <span>↗</span>
-          </Link>
+          <div className="page-heading-actions">
+            <PropertyFilter
+              properties={data?.properties || []}
+              selectedId={selectedProperty}
+              onChange={setSelectedProperty}
+            />
+            <CustomDatePicker
+              value={dateFilter}
+              onChange={setDateFilter}
+            />
+            <Link href="/dashboard/reports" className="button button-dark compact">
+              Create report <span>↗</span>
+            </Link>
+          </div>
         </div>
 
         {data ? (
           <>
-            <div className="filter-controls-row">
-              <PropertyFilter
-                properties={data.properties}
-                selectedId={selectedProperty}
-                onChange={setSelectedProperty}
-              />
-              <CustomDatePicker
-                value={dateFilter}
-                onChange={setDateFilter}
-              />
-            </div>
-
             <section className="metric-grid">
               <Metric
                 label="Feedback received"
@@ -595,7 +595,14 @@ export function FeedbackTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Comments visibility toggle and filter
   const [showComments, setShowComments] = useState<boolean>(true);
-  const [commentsFilter, setCommentsFilter] = useState<"all" | "with_comments" | "without_comments">("all");
+  const [commentsFilter, setCommentsFilter] = useState<FeedbackCommentFilter>("all");
+
+  const truncateReview = (text?: string | null, max = 55): string => {
+    if (!text) return "";
+    const trimmed = text.trim();
+    if (trimmed.length <= max) return trimmed;
+    return trimmed.slice(0, max).trim() + "…";
+  };
 
   useEffect(() => {
     const user = getClientUser();
@@ -708,17 +715,11 @@ export function FeedbackTable({
           <p>Guest ratings, department signal, and resolution status</p>
         </div>
         <div className="table-header-controls">
-          {/* Comments Filter Dropdown */}
-          <select
-            className="compact-select"
+          {/* Comments Filter Dropdown matching PropertyFilter style */}
+          <FeedbackFilterDropdown
             value={commentsFilter}
-            onChange={(e) => setCommentsFilter(e.target.value as any)}
-            aria-label="Filter feedback comments"
-          >
-            <option value="all">All feedback</option>
-            <option value="with_comments">With comments only</option>
-            <option value="without_comments">Ratings only</option>
-          </select>
+            onChange={setCommentsFilter}
+          />
 
           {/* Toggle comments visibility */}
           <button
@@ -824,8 +825,8 @@ export function FeedbackTable({
                       <span className="department-tag">{item.department}</span>
                       {showComments && (
                         item.comment ? (
-                          <div className="table-comment-box">
-                            <p className="table-comment-text">“{item.comment}”</p>
+                          <div className="table-comment-box" title={item.comment}>
+                            <p className="table-comment-text">“{truncateReview(item.comment, 55)}”</p>
                           </div>
                         ) : (
                           <span className="table-no-comment">No written comment</span>

@@ -589,6 +589,13 @@ a {
   margin-bottom: 20px;
 }
 
+.nav-group {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .nav-group p {
   margin: 0 12px 6px;
   color: #9aa39d;
@@ -607,19 +614,22 @@ a {
   padding: 8px 12px;
   color: #5c6861;
   background: transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   text-align: left;
   transition: all var(--transition-fast);
+  margin: 1px 0;
 }
 
-.nav-item:hover, .nav-item.active {
+.nav-item:hover {
   background: #edf3ee;
   color: #213f2d;
 }
 
 .nav-item.active {
+  background: #edf3ee;
+  color: #213f2d;
   font-weight: 600;
 }
 
@@ -669,6 +679,7 @@ a {
 .main-content {
   flex: 1;
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .topbar {
@@ -747,6 +758,15 @@ a {
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .eyebrow {
@@ -2063,21 +2083,24 @@ tr:last-child td {
 }
 
 .table-comment-box {
-  padding: 6px 10px;
+  padding: 3px 8px;
   background: rgba(0, 0, 0, 0.025);
   border-left: 2px solid #829a8a;
   border-radius: 0 4px 4px 0;
-  max-width: 380px;
+  max-width: 250px;
   margin-top: 2px;
 }
 
 .table-comment-text {
   margin: 0;
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.35;
   color: #556259;
   font-style: italic;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .table-no-comment {
@@ -2134,6 +2157,119 @@ tr:last-child td {
 
 .compact-select:focus {
   border-color: #2b3a30;
+}
+
+/* Custom Dropdown (matching PropertyFilter) */
+.custom-dropdown-container {
+  position: relative;
+}
+
+.custom-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: 11px;
+  font-family: var(--font-dm-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-xs);
+}
+
+.custom-dropdown-trigger:hover {
+  border-color: #b0bcb2;
+  background: #fbfcfb;
+}
+
+.custom-dropdown-trigger.active {
+  border-color: #637f6b;
+  background: #f4f7f4;
+  color: #1e3024;
+}
+
+.dropdown-icon {
+  color: #647368;
+  flex-shrink: 0;
+}
+
+.dropdown-chevron {
+  color: #88968c;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.custom-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 1000;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(15, 23, 19, 0.12), 0 2px 6px rgba(15, 23, 19, 0.04);
+  min-width: 250px;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+}
+
+.custom-dropdown-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #88968c;
+  padding: 6px 8px 8px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.custom-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.custom-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  width: 100%;
+}
+
+.custom-dropdown-item:hover {
+  background: #f3f6f3;
+}
+
+.custom-dropdown-item.selected {
+  background: #eaf0eb;
+}
+
+.dropdown-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.dropdown-item-detail {
+  font-size: 10px;
+  color: #7d8b81;
+  margin-top: 1px;
+}
+
+.dropdown-check {
+  color: #2b3a30;
 }
 
 /* Admin Bulk Selection */
@@ -2226,25 +2362,28 @@ tr:last-child td {
 .custom-datepicker-popover {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
-  z-index: 999;
+  right: 0;
+  left: auto;
+  z-index: 1000;
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgba(15, 23, 19, 0.12), 0 2px 6px rgba(15, 23, 19, 0.04);
   display: flex;
-  min-width: 480px;
+  width: 440px;
+  max-width: calc(100vw - 32px);
   overflow: hidden;
 }
 
 .datepicker-presets {
-  width: 140px;
+  width: 135px;
   background: #f9faf9;
   border-right: 1px solid var(--line);
   padding: 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .datepicker-section-title {
@@ -2282,20 +2421,21 @@ tr:last-child td {
 
 .datepicker-calendar-panel {
   flex: 1;
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .calendar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .calendar-month-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
 }
@@ -2304,8 +2444,8 @@ tr:last-child td {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 4px;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -2325,7 +2465,7 @@ tr:last-child td {
   font-size: 10px;
   font-family: var(--font-dm-mono);
   color: #88968c;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-weight: 500;
 }
 
@@ -2386,13 +2526,13 @@ tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
 .datepicker-summary {
-  font-size: 11px;
+  font-size: 10px;
   font-family: var(--font-dm-mono);
   color: #55665b;
 }
@@ -2400,13 +2540,15 @@ tr:last-child td {
 .property-filter-popover {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
-  z-index: 999;
+  right: 0;
+  left: auto;
+  z-index: 1000;
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgba(15, 23, 19, 0.12), 0 2px 6px rgba(15, 23, 19, 0.04);
   min-width: 260px;
+  max-width: calc(100vw - 32px);
   padding: 8px;
 }
 
@@ -2464,12 +2606,12 @@ tr:last-child td {
   color: #2b3a30;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .custom-datepicker-popover {
     flex-direction: column;
-    min-width: 290px;
-    left: auto;
+    width: min(340px, calc(100vw - 24px));
     right: 0;
+    left: auto;
   }
   .datepicker-presets {
     width: 100%;
@@ -2477,6 +2619,11 @@ tr:last-child td {
     border-bottom: 1px solid var(--line);
     flex-direction: row;
     flex-wrap: wrap;
+    padding: 6px 8px;
+  }
+  .datepicker-preset-btn {
+    padding: 4px 6px;
+    font-size: 11px;
   }
 }
 

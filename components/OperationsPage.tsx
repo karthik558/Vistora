@@ -63,16 +63,27 @@ export default function OperationsPage({ section, data }: { section: string; dat
             <h1>{title}</h1>
             <p className="subheading">{descriptions[section]}</p>
           </div>
-          {section === "reports" && (
-            <button
-              className="button button-dark compact"
-              onClick={() => downloadCsv(data)}
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-            >
-              <Download size={13} />
-              <span>Download CSV</span>
-            </button>
-          )}
+          <div className="page-heading-actions">
+            <PropertyFilter
+              properties={data.properties}
+              selectedId={selectedProperty}
+              onChange={setSelectedProperty}
+            />
+            <CustomDatePicker
+              value={dateFilter}
+              onChange={setDateFilter}
+            />
+            {section === "reports" && (
+              <button
+                className="button button-dark compact"
+                onClick={() => downloadCsv(data)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <Download size={13} />
+                <span>Download CSV</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <motion.div
@@ -82,7 +93,11 @@ export default function OperationsPage({ section, data }: { section: string; dat
           transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
         >
           {section === "analytics" ? (
-            <Analytics data={data} />
+            <Analytics
+              data={data}
+              selectedProperty={selectedProperty}
+              dateFilter={dateFilter}
+            />
           ) : section === "directory" ? (
             <Directory data={data} query={query} setQuery={setQuery} />
           ) : section === "forms" ? (
@@ -99,16 +114,7 @@ export default function OperationsPage({ section, data }: { section: string; dat
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search guest, room, department, or comment…"
-                  style={{ minWidth: "220px", flex: 1 }}
-                />
-                <PropertyFilter
-                  properties={data.properties}
-                  selectedId={selectedProperty}
-                  onChange={setSelectedProperty}
-                />
-                <CustomDatePicker
-                  value={dateFilter}
-                  onChange={setDateFilter}
+                  style={{ maxWidth: "340px", flex: 1 }}
                 />
                 <span className="toolbar-count">{feedback.length} records</span>
               </div>
@@ -124,14 +130,15 @@ export default function OperationsPage({ section, data }: { section: string; dat
   );
 }
 
-function Analytics({ data }: { data: DashboardData }) {
-  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
-  const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
-    preset: "all",
-    startDate: null,
-    endDate: null,
-  });
-
+function Analytics({
+  data,
+  selectedProperty,
+  dateFilter,
+}: {
+  data: DashboardData;
+  selectedProperty: string | "all";
+  dateFilter: DateRangeFilter;
+}) {
   const filteredFeedback = useMemo(() => {
     return data.recentFeedback.filter((item) => {
       if (selectedProperty !== "all" && item.propertyId && item.propertyId !== selectedProperty) {
@@ -174,18 +181,6 @@ function Analytics({ data }: { data: DashboardData }) {
 
   return (
     <>
-      <div className="filter-controls-row">
-        <PropertyFilter
-          properties={data.properties}
-          selectedId={selectedProperty}
-          onChange={setSelectedProperty}
-        />
-        <CustomDatePicker
-          value={dateFilter}
-          onChange={setDateFilter}
-        />
-      </div>
-
       <section className="metric-grid">
         <div className="metric-card">
           <span className="metric-label">Average rating</span>
