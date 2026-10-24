@@ -1,6 +1,6 @@
 /* ==============================================================================
    VISTORA LUXURY HOSPITALITY OPERATIONS - GLOBAL DESIGN SYSTEM
-   Modern, responsive, ultra-premium aesthetics with real-time Supabase RBAC
+   Modern, responsive, ultra-premium aesthetics for guest experience operations
    ============================================================================== */
 
 :root {
@@ -240,432 +240,88 @@ a {
 }
 
 /* ==============================================================================
-   HOME / LANDING PAGE - ULTRA LUXURY HOSPITALITY SHOWCASE
+   HOME / LANDING PAGE (.landing-shell) - LUXURY EDITORIAL SHOWCASE
    ============================================================================== */
-.landing-navbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(246, 248, 245, 0.94);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--line);
-  padding: 14px 48px;
+.landing-shell {
+  min-height: 100vh;
+  padding: 6vh 9vw 36px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  background: var(--canvas);
 }
 
-.landing-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-
-.landing-brand .brand-mark {
-  width: 32px;
-  height: 32px;
+.landing-shell .landing-mark {
+  width: 38px;
+  height: 38px;
   background: var(--ink);
   color: #fff;
   display: grid;
   place-items: center;
   font-family: var(--font-playfair);
   font-style: italic;
-  font-size: 20px;
+  font-size: 22px;
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(18, 25, 23, 0.15);
+  box-shadow: 0 2px 8px rgba(18, 25, 23, 0.12);
+  transition: transform var(--transition-fast);
 }
 
-.landing-brand strong {
-  font-family: var(--font-dm-sans);
-  letter-spacing: 0.12em;
-  font-size: 13px;
+.landing-shell .landing-mark:hover {
+  transform: scale(1.04);
+}
+
+.landing-shell .eyebrow {
+  margin-bottom: 20px;
+  font-family: var(--font-dm-mono);
+  font-size: 11px;
   text-transform: uppercase;
-  color: var(--ink);
-}
-
-.landing-nav-links {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  font-size: 12px;
+  letter-spacing: 0.1em;
   color: var(--muted);
+}
+
+.landing-shell h1 {
+  font-size: clamp(48px, 7.5vw, 102px);
   font-weight: 500;
-}
-
-.landing-nav-links a {
-  transition: color var(--transition-fast);
-}
-
-.landing-nav-links a:hover {
+  letter-spacing: -0.06em;
+  line-height: 0.94;
+  margin: 0 0 28px;
+  max-width: 900px;
   color: var(--ink);
 }
 
-.landing-nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.badge-supabase-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #edf4ed;
-  color: #2e5239;
-  border: 1px solid #c9decb;
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-family: var(--font-dm-mono);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.badge-supabase-nav .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #3ecf8e;
-  box-shadow: 0 0 6px rgba(62, 207, 142, 0.6);
-  animation: blink 1.8s infinite;
-}
-
-/* Landing Hero */
-.landing-hero-section {
-  padding: 70px 48px 50px;
-  max-width: 1360px;
-  margin: 0 auto;
-}
-
-.hero-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #fff;
-  border: 1px solid var(--line-strong);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-family: var(--font-dm-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--warm-deep);
-  margin-bottom: 24px;
-  box-shadow: var(--shadow-xs);
-}
-
-.hero-title {
+.landing-shell h1 em {
   font-family: var(--font-playfair);
-  font-size: clamp(42px, 5.5vw, 76px);
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
-  margin: 0 0 24px;
-  color: var(--ink);
-  max-width: 950px;
-}
-
-.hero-title em {
   font-style: italic;
   font-weight: 400;
-  background: linear-gradient(135deg, #254230, #c59b58);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--sage-deep);
 }
 
-.hero-subtitle {
-  font-size: 17px;
-  line-height: 1.65;
+.landing-copy {
+  max-width: 440px;
   color: var(--muted);
-  max-width: 620px;
+  font-size: 16px;
+  line-height: 1.65;
   margin: 0 0 34px;
 }
 
-.hero-cta-group {
+.landing-actions {
   display: flex;
   align-items: center;
+  gap: 22px;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 50px;
 }
 
-/* Live Stats Ribbon */
-.stats-ribbon {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  padding: 24px 32px;
-  background: #ffffff;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 70px;
-}
-
-.stat-item {
-  border-right: 1px solid var(--line);
-  padding-right: 20px;
-}
-
-.stat-item:last-child {
-  border-right: none;
-  padding-right: 0;
-}
-
-.stat-label {
-  font-family: var(--font-dm-mono);
-  font-size: 10px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
-}
-
-.stat-value {
-  font-family: var(--font-dm-mono);
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -0.05em;
-  color: var(--ink);
-  margin-bottom: 4px;
-}
-
-.stat-meta {
-  font-size: 11px;
-  color: var(--sage);
-  font-weight: 500;
+.landing-foot {
+  margin-top: auto;
+  padding-top: 14vh;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 4px;
-}
-
-/* Role Showcase Grid */
-.section-heading-wrap {
-  text-align: center;
-  max-width: 700px;
-  margin: 0 auto 40px;
-}
-
-.section-eyebrow {
+  color: var(--muted-light);
   font-family: var(--font-dm-mono);
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--warm-deep);
-  margin-bottom: 10px;
-}
-
-.section-title {
-  font-family: var(--font-playfair);
-  font-size: 34px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  margin: 0 0 12px;
-  color: var(--ink);
-}
-
-.section-desc {
-  font-size: 14px;
-  color: var(--muted);
-  line-height: 1.6;
-  margin: 0;
-}
-
-.role-showcase-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-bottom: 70px;
-}
-
-.role-card {
-  background: #ffffff;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 32px 28px;
-  transition: all var(--transition-normal);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-.role-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow-md);
-}
-
-.role-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-}
-
-.role-card.admin-card::before {
-  background: linear-gradient(90deg, #254230, #4e6f5b);
-}
-
-.role-card.staff-card::before {
-  background: linear-gradient(90deg, #c59b58, #bd863e);
-}
-
-.role-card.visitor-card::before {
-  background: linear-gradient(90deg, #4a7590, #6997b5);
-}
-
-.role-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-.role-icon-box {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-size: 20px;
-}
-
-.admin-card .role-icon-box {
-  background: #edf4ed;
-}
-
-.staff-card .role-icon-box {
-  background: #fbf5e6;
-}
-
-.visitor-card .role-icon-box {
-  background: #eef4f8;
-}
-
-.role-card-title {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 0 0 8px;
-  color: var(--ink);
-}
-
-.role-card-desc {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.55;
-  margin-bottom: 20px;
-}
-
-.role-card-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 28px;
-  flex: 1;
-}
-
-.role-card-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--ink-light);
-  margin-bottom: 10px;
-  line-height: 1.4;
-}
-
-.role-card-features li i {
-  color: var(--sage);
-  font-style: normal;
-  font-weight: bold;
-}
-
-/* Hero Preview / Feature Showcase Card */
-.hero-preview-wrap {
-  background: linear-gradient(180deg, #ffffff, #fafbfa);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 36px 40px;
-  box-shadow: var(--shadow-lg);
-  margin-bottom: 70px;
-}
-
-.preview-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 24px;
-}
-
-.preview-mock-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 24px;
-}
-
-.mock-panel {
-  background: #ffffff;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 20px;
-}
-
-/* Supabase Architecture Banner */
-.supabase-arch-card {
-  background: #18201e;
-  color: #fff;
-  border-radius: 8px;
-  padding: 44px 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 36px;
-  margin-bottom: 60px;
-  box-shadow: var(--shadow-lg);
-}
-
-.arch-info h3 {
-  font-family: var(--font-playfair);
-  font-size: 26px;
-  margin: 0 0 10px;
-  font-weight: 500;
-}
-
-.arch-info p {
-  color: #a4b0a8;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 0;
-  max-width: 580px;
-}
-
-.arch-badges {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
-}
-
-/* Editorial Footer */
-.landing-footer {
+  letter-spacing: 0.05em;
   border-top: 1px solid var(--line);
-  padding: 40px 48px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--muted);
-  max-width: 1360px;
-  margin: 0 auto;
 }
 
 /* ==============================================================================
@@ -2000,32 +1656,8 @@ tr:last-child td {
    RESPONSIVE MEDIA QUERIES
    ============================================================================== */
 @media (max-width: 1080px) {
-  .landing-navbar {
-    padding: 14px 24px;
-  }
-  .landing-hero-section {
-    padding: 50px 24px 40px;
-  }
-  .stats-ribbon {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-  }
-  .stat-item:nth-child(2) {
-    border-right: none;
-  }
-  .role-showcase-grid {
-    grid-template-columns: 1fr;
-  }
-  .preview-mock-grid {
-    grid-template-columns: 1fr;
-  }
-  .supabase-arch-card {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 32px 28px;
-  }
-  .arch-badges {
-    align-items: flex-start;
+  .landing-shell {
+    padding: 6vh 6vw 36px;
   }
   .sidebar {
     width: 220px;
@@ -2043,8 +1675,24 @@ tr:last-child td {
 }
 
 @media (max-width: 768px) {
-  .landing-nav-links {
-    display: none;
+  .landing-shell {
+    padding: 28px 20px;
+  }
+  .landing-shell h1 {
+    font-size: 40px;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+  }
+  .landing-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .landing-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding-top: 40px;
   }
   .sidebar {
     display: none;
@@ -2066,27 +1714,8 @@ tr:last-child td {
     margin-top: 16px;
     justify-content: space-between;
   }
-  .stats-ribbon {
-    grid-template-columns: 1fr;
-    padding: 20px;
-  }
-  .stat-item {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 14px;
-  }
-  .stat-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
   .metric-grid {
     grid-template-columns: 1fr;
-  }
-  .landing-footer {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-    padding: 30px 20px;
   }
 }
 

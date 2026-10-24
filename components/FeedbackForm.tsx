@@ -44,7 +44,7 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
         }
       })
       .catch((err) => {
-        console.error("Error fetching stay from Supabase", err);
+        console.error("Error fetching stay details", err);
         if (mounted) setLoading(false);
       });
     return () => {
@@ -80,7 +80,7 @@ export default function FeedbackForm({ publicToken = "demo-stay" }: { publicToke
         setSubmitted(true);
       }
     } catch (err) {
-      console.error("Failed to submit feedback to Supabase", err);
+      console.error("Failed to submit feedback", err);
     } finally {
       setSubmitting(false);
     }

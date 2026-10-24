@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   try {
     initialData = await getDashboardData("all");
   } catch (err) {
-    console.error("Server-side Supabase fetch error:", err);
+    console.error("Server-side fetch error:", err);
   }
 
   return <Dashboard initialData={initialData} />;

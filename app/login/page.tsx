@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Sign In | Vistora Operations Workspace",
-  description: "Authenticate with your Supabase credentials to access the Vistora operations workspace.",
+  description: "Sign in with your workspace credentials to access the Vistora operations dashboard.",
 };
 
 export default function LoginPage() {

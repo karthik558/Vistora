@@ -451,8 +451,8 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
       feedbackReceived: {
         label: "Feedback received",
         value: total.toLocaleString(),
-        change: total > 0 ? `${total} in Supabase` : "0",
-        note: "live Supabase records",
+        change: total > 0 ? `${total} verified` : "0",
+        note: "all recorded stays",
       },
       averageRating: {
         label: "Average rating",

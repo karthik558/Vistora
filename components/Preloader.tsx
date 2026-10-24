@@ -11,16 +11,16 @@ interface PreloaderProps {
 export default function Preloader({
   isLoading,
   onFinish,
-  message = "Connecting to Supabase database…",
+  message = "Initializing operations workspace…",
 }: PreloaderProps) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
 
   const steps = [
-    "Connecting to Supabase operations database…",
+    "Initializing operations workspace…",
     "Loading verified hotel properties & stays…",
-    "Fetching guest experience records…",
+    "Synchronizing guest experience records…",
     "Workspace ready",
   ];
 

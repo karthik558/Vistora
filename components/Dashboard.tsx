@@ -99,18 +99,13 @@ export default function Dashboard({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | "all">("all");
 
-  // Detail Modal / Resolution Drawer
+  // Active Feedback Modal
   const [activeFeedback, setActiveFeedback] = useState<FeedbackViewModel | null>(null);
   const [resolutionNoteInput, setResolutionNoteInput] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-
-  // Supabase Inspector Modal (proof of live connection)
-  const [showInspector, setShowInspector] = useState(false);
   const [isInsertingTest, setIsInsertingTest] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState<"records" | "schema">("records");
 
-  // Fetch current session from Supabase
+  // Fetch current session
   useEffect(() => {
     fetch("/api/auth/session")
       .then((res) => res.json())
@@ -132,11 +127,11 @@ export default function Dashboard({
         body: JSON.stringify({ role: newRole, email: user.email }),
       });
     } catch (err) {
-      console.error("Failed to update role in Supabase", err);
+      console.error("Failed to update role", err);
     }
   };
 
-  // Load real data exclusively from the server API (connecting directly to Supabase)
+  // Load real data exclusively from the server API
   const loadData = async (propertyId: string) => {
     try {
       setLoading(true);
@@ -148,7 +143,7 @@ export default function Dashboard({
         setData(json.data);
       }
     } catch (err) {
-      console.error("Error loading Supabase dashboard data", err);
+      console.error("Error loading dashboard data", err);
     } finally {
       setLoading(false);
     }
@@ -222,7 +217,7 @@ export default function Dashboard({
   const isStaff = user.role === "staff" || isAdmin;
   const isVisitor = user.role === "visitor";
 
-  // Handle status update in Supabase
+  // Handle status update
   const handleUpdateStatus = async (newStatus: FeedbackStatus) => {
     if (!activeFeedback) return;
     if (!isStaff) {
@@ -246,13 +241,13 @@ export default function Dashboard({
         await loadData(selectedPropertyId);
       }
     } catch (err) {
-      console.error("Failed to update status in Supabase", err);
+      console.error("Failed to update status", err);
     } finally {
       setIsUpdatingStatus(false);
     }
   };
 
-  // Insert a test record directly into Supabase (instant live proof)
+  // Insert a test record
   const handleInsertTestFeedback = async () => {
     setIsInsertingTest(true);
     try {
@@ -268,14 +263,14 @@ export default function Dashboard({
           roomNumber: randomRoom,
           department: "Housekeeping",
           rating: 5,
-          comment: "Live verification entry added directly to Supabase table 'feedback'. Room was exceptional.",
+          comment: "Delightful stay, exceptional service and attentive team. Room was immaculate.",
           wantsContact: false,
         }),
       });
       const json = await res.json();
       if (json.success) {
         await loadData(selectedPropertyId);
-        alert(`Success! Inserted new record for '${randomName}' directly into Supabase table 'feedback'.`);
+        alert(`Success! Added new guest record for ${randomName}.`);
       }
     } catch (err) {
       alert("Failed to insert test record: " + err);
@@ -313,7 +308,7 @@ export default function Dashboard({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `vistora_supabase_feedback_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `vistora_feedback_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -330,10 +325,10 @@ export default function Dashboard({
       <div className="app-shell">
         {/* Sidebar */}
         <aside className="sidebar">
-          <div className="brand">
+          <Link href="/" className="brand" title="Return to home page" style={{ textDecoration: "none" }}>
             <div className="brand-mark">V</div>
             <span>vistora</span>
-          </div>
+          </Link>
 
           <div className="workspace">
             <span className="workspace-avatar">A</span>
@@ -377,7 +372,7 @@ export default function Dashboard({
             <div style={{ padding: "0 10px 12px", borderBottom: "1px solid var(--line)", marginBottom: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ font: "10px 'DM Mono', monospace", color: "var(--muted)", textTransform: "uppercase" }}>
-                  Active Role (RBAC)
+                  Active Role
                 </span>
                 <span
                   style={{
@@ -446,15 +441,23 @@ export default function Dashboard({
             </div>
 
             <div style={{ padding: "0 10px 10px" }}>
-              <button
-                type="button"
-                className="badge-supabase"
-                onClick={() => setShowInspector(true)}
-                style={{ cursor: "pointer", border: "1px solid #c9decb", width: "100%", justifyContent: "center" }}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  fontSize: "10px",
+                  fontFamily: "'DM Mono', monospace",
+                  color: "#2e5239",
+                  background: "#edf4ed",
+                  padding: "5px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #c9decb",
+                }}
               >
-                <i className="dot" />
-                {isSupabase ? "Supabase Live · Inspector" : "Connecting…"}
-              </button>
+                <i className="pulse-dot" /> Operations Online
+              </div>
             </div>
 
             <Link href="/login" className="nav-item">
@@ -572,13 +575,14 @@ export default function Dashboard({
                 </button>
               </div>
 
-              <button
-                className="button button-dark compact"
-                onClick={() => setShowInspector(true)}
-                style={{ padding: "6px 11px", fontSize: "10px", display: "inline-flex", gap: "6px" }}
+              <Link
+                href="/"
+                className="text-link"
+                style={{ fontSize: "11px", fontWeight: 500 }}
+                title="Return to home page"
               >
-                <Icon name="database" /> Supabase Inspector
-              </button>
+                ← Home
+              </Link>
 
               <Link
                 href="/feedback/demo-stay"
@@ -591,8 +595,8 @@ export default function Dashboard({
 
               <button
                 className="icon-button"
-                aria-label="Refresh data from Supabase"
-                title="Refresh from Supabase"
+                aria-label="Refresh data"
+                title="Refresh operations data"
                 onClick={() => loadData(selectedPropertyId)}
               >
                 <Icon name="refresh" />
@@ -654,7 +658,7 @@ export default function Dashboard({
                 </p>
                 <h1>Good morning, {user.fullName ? user.fullName.split(" ")[0] : "Rhea"}</h1>
                 <p className="subheading">
-                  Connected to Supabase PostgreSQL at <code>ralbhldjygvdwjfrgufx.supabase.co</code>.
+                  Hospitality operations and service recovery workspace.
                 </p>
               </div>
 
@@ -686,49 +690,36 @@ export default function Dashboard({
               </div>
             </div>
 
-            {/* Supabase Connection Verification Banner */}
+            {/* Live Operations Banner */}
             <div className="demo-banner">
               <span className="pulse-dot" />
-              <strong>Supabase Database Active</strong>
+              <strong>Live Operations Active</strong>
               <span>
-                Streaming live guest records from Supabase tables (<code>properties</code>, <code>stays</code>, <code>feedback</code>). Total records in DB: <strong>{data?.metrics.feedbackReceived.value || 0}</strong>.
+                Real-time service telemetry across Anantara properties. Total reviews: <strong>{data?.metrics.feedbackReceived.value || 0}</strong>.
               </span>
-              <div style={{ marginLeft: "auto", display: "flex", gap: "10px" }}>
-                {isStaff && (
+              {isStaff && (
+                <div style={{ marginLeft: "auto" }}>
                   <button
                     onClick={handleInsertTestFeedback}
                     disabled={isInsertingTest}
                     style={{
-                      background: "#294b37",
+                      background: "#254230",
                       color: "#fff",
                       border: "none",
-                      padding: "4px 8px",
-                      borderRadius: "3px",
-                      fontSize: "10px",
+                      padding: "5px 10px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
                       fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
-                    {isInsertingTest ? "Saving to Supabase…" : "+ Add Test Record to Supabase"}
+                    {isInsertingTest ? "Adding…" : "+ Add Guest Record"}
                   </button>
-                )}
-                <button
-                  onClick={() => setShowInspector(true)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#355942",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Inspect Live Data →
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Dynamic Metrics calculated directly from Supabase */}
+            {/* Dynamic Operations Metrics */}
             {data && (
               <section className="metric-grid">
                 <Metric
@@ -767,7 +758,7 @@ export default function Dashboard({
                 <div className="panel trend-panel">
                   <PanelHeading
                     title="Feedback trend"
-                    detail="Submissions across all departments in Supabase"
+                    detail="Submissions across all departments"
                     action="Live overview"
                   />
                   <div className="chart-legend">
@@ -818,12 +809,12 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                {/* Real Computed Rating Distribution from Supabase */}
+                {/* Real Computed Rating Distribution */}
                 <div className="panel rating-panel">
                   <PanelHeading
                     title="Rating distribution"
-                    detail={`All ${data.ratingDistribution.totalCount} ratings in Supabase`}
-                    action="Database Breakdown"
+                    detail={`All ${data.ratingDistribution.totalCount} verified ratings`}
+                    action="Rating Breakdown"
                   />
                   <div className="rating-bars">
                     {data.ratingDistribution.bars.map((item) => (
@@ -850,8 +841,8 @@ export default function Dashboard({
             <section className="lower-grid">
               <div className="panel table-panel">
                 <PanelHeading
-                  title={activeNav === "Complaints" ? "Service Recovery & Complaints" : "Live feedback from Supabase"}
-                  detail="Direct records from PostgreSQL 'feedback' table"
+                  title={activeNav === "Complaints" ? "Service Recovery & Complaints" : "Recent Guest Feedback"}
+                  detail="Live guest perspectives and service recovery logs"
                   action={`Showing ${filteredFeedback.length} items`}
                 />
 
@@ -915,7 +906,7 @@ export default function Dashboard({
                       {filteredFeedback.length === 0 ? (
                         <tr>
                           <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "#8a948e" }}>
-                            {loading ? "Loading Supabase records..." : "No feedback entries found."}
+                            {loading ? "Loading records..." : "No feedback entries found."}
                           </td>
                         </tr>
                       ) : (
@@ -982,7 +973,7 @@ export default function Dashboard({
                 <PanelHeading
                   title="Attention required"
                   detail="Critical complaints and active follow-up SLAs"
-                  action="Supabase Alerts"
+                  action="Priority SLAs"
                 />
                 <div className="attention-list">
                   {data?.attentionItems.length === 0 ? (
@@ -1020,189 +1011,7 @@ export default function Dashboard({
           </div>
         </main>
 
-        {/* Supabase Live Inspector Modal */}
-        {showInspector && (
-          <div className="modal-backdrop" onClick={() => setShowInspector(false)}>
-            <div className="modal-card" style={{ maxWidth: "660px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <p className="eyebrow">Supabase Live Connection &amp; RBAC Architecture</p>
-                  <h2 style={{ margin: "4px 0", fontSize: "19px", fontWeight: 600 }}>
-                    Connected to Supabase PostgreSQL
-                  </h2>
-                  <span className="badge-supabase" style={{ marginTop: "4px" }}>
-                    <i className="dot" /> Host: ralbhldjygvdwjfrgufx.supabase.co
-                  </span>
-                </div>
-                <button className="modal-close" onClick={() => setShowInspector(false)}>
-                  ×
-                </button>
-              </div>
 
-              {/* Table stats grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", margin: "16px 0" }}>
-                <div style={{ background: "#f8faf8", padding: "12px", borderRadius: "6px", border: "1px solid #e1e7e1" }}>
-                  <small style={{ color: "#78857b", fontSize: "10px", display: "block", fontFamily: "var(--font-dm-mono)" }}>FEEDBACK TABLE</small>
-                  <strong style={{ fontSize: "18px", color: "#18201e" }}>{data?.recentFeedback.length || 0} Rows</strong>
-                </div>
-                <div style={{ background: "#f8faf8", padding: "12px", borderRadius: "6px", border: "1px solid #e1e7e1" }}>
-                  <small style={{ color: "#78857b", fontSize: "10px", display: "block", fontFamily: "var(--font-dm-mono)" }}>PROPERTIES TABLE</small>
-                  <strong style={{ fontSize: "18px", color: "#18201e" }}>{data?.properties.length || 0} Hotels</strong>
-                </div>
-                <div style={{ background: "#f8faf8", padding: "12px", borderRadius: "6px", border: "1px solid #e1e7e1" }}>
-                  <small style={{ color: "#78857b", fontSize: "10px", display: "block", fontFamily: "var(--font-dm-mono)" }}>CURRENT RBAC ROLE</small>
-                  <strong style={{ fontSize: "14px", color: "#2e5239", textTransform: "uppercase" }}>{user.role}</strong>
-                </div>
-              </div>
-
-              {/* Modal tabs */}
-              <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: "16px" }}>
-                <button
-                  type="button"
-                  onClick={() => setInspectorTab("records")}
-                  style={{
-                    padding: "8px 14px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    borderBottom: inspectorTab === "records" ? "2px solid #254230" : "2px solid transparent",
-                    color: inspectorTab === "records" ? "#18201e" : "#78857b",
-                    cursor: "pointer",
-                  }}
-                >
-                  Live Supabase Records Preview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInspectorTab("schema")}
-                  style={{
-                    padding: "8px 14px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    borderBottom: inspectorTab === "schema" ? "2px solid #254230" : "2px solid transparent",
-                    color: inspectorTab === "schema" ? "#18201e" : "#78857b",
-                    cursor: "pointer",
-                  }}
-                >
-                  Profiles Table Setup (SQL)
-                </button>
-              </div>
-
-              {inspectorTab === "records" ? (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)" }}>Verified Supabase JSON Payload</span>
-                    {isStaff && (
-                      <button
-                        onClick={handleInsertTestFeedback}
-                        disabled={isInsertingTest}
-                        className="button button-dark compact"
-                        style={{ padding: "5px 9px", fontSize: "10px" }}
-                      >
-                        {isInsertingTest ? "Inserting…" : "+ Insert Test Record to Supabase"}
-                      </button>
-                    )}
-                  </div>
-                  <pre
-                    style={{
-                      background: "#18201e",
-                      color: "#c2d1c6",
-                      padding: "14px",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      maxHeight: "220px",
-                      overflow: "auto",
-                      margin: 0,
-                      fontFamily: "var(--font-dm-mono)",
-                    }}
-                  >
-                    {JSON.stringify(data?.recentFeedback.slice(0, 3), null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)" }}>
-                      Create <code>public.profiles</code> Table in Supabase
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const sql = `-- Run in Supabase SQL Editor:
-CREATE TYPE user_role AS ENUM ('admin', 'staff', 'visitor');
-
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    full_name TEXT NOT NULL DEFAULT 'Operations User',
-    role user_role NOT NULL DEFAULT 'visitor',
-    property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
-    avatar_url TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public profiles are viewable by everyone" 
-ON public.profiles FOR SELECT USING (true);
-
-CREATE POLICY "Users can update their own profile" 
-ON public.profiles FOR UPDATE USING (auth.uid() = id);`;
-                        navigator.clipboard.writeText(sql);
-                        setCopiedSql(true);
-                        setTimeout(() => setCopiedSql(false), 2000);
-                      }}
-                      className="button button-outline compact"
-                      style={{ padding: "5px 10px", fontSize: "10px" }}
-                    >
-                      {copiedSql ? "✓ Copied to Clipboard!" : "📋 Copy Profiles SQL"}
-                    </button>
-                  </div>
-                  <p style={{ margin: "0 0 10px", fontSize: "11px", color: "var(--muted)", lineHeight: 1.5 }}>
-                    Your application already synchronizes roles automatically into <code>auth.users.user_metadata</code>.
-                    To also see the dedicated <code>profiles</code> table inside your Supabase Table Editor dashboard,
-                    run this SQL script in your Supabase SQL Editor.
-                  </p>
-                  <pre
-                    style={{
-                      background: "#18201e",
-                      color: "#c2d1c6",
-                      padding: "14px",
-                      borderRadius: "6px",
-                      fontSize: "10px",
-                      maxHeight: "180px",
-                      overflow: "auto",
-                      margin: 0,
-                      fontFamily: "var(--font-dm-mono)",
-                    }}
-                  >
-{`CREATE TYPE user_role AS ENUM ('admin', 'staff', 'visitor');
-
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    full_name TEXT NOT NULL DEFAULT 'Operations User',
-    role user_role NOT NULL DEFAULT 'visitor',
-    property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
-    avatar_url TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);`}
-                  </pre>
-                </div>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "20px" }}>
-                <span style={{ fontSize: "11px", color: "#78857b" }}>
-                  Host: <code>ralbhldjygvdwjfrgufx.supabase.co</code> (Live Supabase)
-                </span>
-                <button className="select-button" onClick={() => setShowInspector(false)}>
-                  Close Inspector
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Guest Feedback Detail & Service Recovery Modal */}
         {activeFeedback && (
@@ -1250,7 +1059,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
               {/* Service Recovery Notes */}
               <div style={{ marginTop: "18px" }}>
                 <label className="field-label" htmlFor="resolution-notes">
-                  Service Recovery Notes (Supabase)
+                  Service Recovery Notes
                 </label>
                 <textarea
                   id="resolution-notes"

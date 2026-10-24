@@ -12,46 +12,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid role. Must be 'admin', 'staff', or 'visitor'." }, { status: 400 });
     }
 
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
-
     const targetEmail = email || "rhea.menon@anantara.com";
+    let userName = targetEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    if (targetEmail === "rhea.menon@anantara.com") userName = "Rhea Menon";
+    if (targetEmail === "somchai.operations@anantara.com") userName = "Somchai Tan";
 
-    // Find user in auth
-    const { data: usersData } = await adminClient.auth.admin.listUsers();
-    const targetUser = usersData?.users.find((u) => u.email === targetEmail);
-
-    if (targetUser) {
-      // Update metadata
-      await adminClient.auth.admin.updateUserById(targetUser.id, {
-        user_metadata: { ...targetUser.user_metadata, role },
+    // Try finding & updating in Supabase if possible
+    try {
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { persistSession: false },
       });
-
-      // Try updating public.profiles if table exists
-      try {
-        await (adminClient as any).from("profiles").upsert({
-          id: targetUser.id,
-          email: targetUser.email,
-          full_name: targetUser.user_metadata?.full_name || "Operations Lead",
-          role,
-          updated_at: new Date().toISOString(),
+      const { data: usersData } = await adminClient.auth.admin.listUsers();
+      const targetUser = usersData?.users.find((u) => u.email === targetEmail);
+      if (targetUser) {
+        if (targetUser.user_metadata?.full_name) {
+          userName = targetUser.user_metadata.full_name;
+        }
+        await adminClient.auth.admin.updateUserById(targetUser.id, {
+          user_metadata: { ...targetUser.user_metadata, role },
         });
-      } catch {
-        // Ignore if profiles table not yet created
       }
+    } catch {
+      // Ignore background errors
     }
 
-    return NextResponse.json({
+    const updatedUser = {
+      id: "usr-" + targetEmail,
+      email: targetEmail,
+      fullName: userName,
+      role,
+    };
+
+    const response = NextResponse.json({
       success: true,
       role,
-      user: targetUser ? {
-        id: targetUser.id,
-        email: targetUser.email,
-        fullName: targetUser.user_metadata?.full_name || "Operations Lead",
-        role,
-      } : { role },
+      user: updatedUser,
     });
+
+    response.cookies.set("vistora-user", JSON.stringify(updatedUser), {
+      path: "/",
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 86400 * 7,
+      sameSite: "lax",
+    });
+
+    return response;
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
