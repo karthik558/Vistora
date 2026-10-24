@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const SALT = "vistora_secret_salt";
-
-function hashPassword(password: string): string {
-  return "pwd:" + crypto.createHash("sha256").update(password + SALT).digest("hex");
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,12 +58,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Strict Password Verification
+    // 5. Strict Password Verification via native Supabase Auth (auth.users)
     let passwordValid = false;
     let supabaseToken: string | null = null;
     let userId = profile?.id || guest?.id || "usr-" + Date.now();
 
-    // A. Attempt Supabase Auth signInWithPassword
     try {
       const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { persistSession: false },
@@ -85,60 +77,7 @@ export async function POST(request: NextRequest) {
         supabaseToken = authData.session.access_token;
         userId = authData.user.id;
       }
-    } catch {
-      // Fall through to hash verification
-    }
-
-    // B. Check credentials in user_credentials table (fallback if Supabase Auth wasn't used)
-    const inputHash = hashPassword(cleanPassword);
-    if (!passwordValid && profile) {
-      try {
-        const { data: cred } = await adminClient
-          .from("user_credentials")
-          .select("password_hash")
-          .eq("user_id", profile.id)
-          .maybeSingle();
-
-        if (cred?.password_hash === inputHash) {
-          passwordValid = true;
-        }
-      } catch {}
-
-      // One-time legacy migration fallback if user previously had hash in avatar_url
-      if (!passwordValid && profile.avatar_url) {
-        if (
-          profile.avatar_url === inputHash ||
-          profile.avatar_url.includes(inputHash)
-        ) {
-          passwordValid = true;
-          // Clean avatar_url and migrate hash to user_credentials
-          try {
-            await adminClient.from("user_credentials").upsert({
-              user_id: profile.id,
-              password_hash: inputHash,
-              updated_at: new Date().toISOString(),
-            });
-            await adminClient.from("profiles").update({ avatar_url: null }).eq("id", profile.id);
-          } catch {}
-        }
-      } else if (!passwordValid) {
-        // First login: store this password hash in user_credentials
-        passwordValid = true;
-        try {
-          await adminClient.from("user_credentials").upsert({
-            user_id: profile.id,
-            password_hash: inputHash,
-            updated_at: new Date().toISOString(),
-          });
-        } catch {}
-      }
-    } else if (!passwordValid && guest) {
-      if (guest.phone && guest.phone.startsWith("pwd:")) {
-        if (guest.phone === inputHash) {
-          passwordValid = true;
-        }
-      }
-    }
+    } catch {}
 
     // If password does not match: STRICTLY REJECT!
     if (!passwordValid) {

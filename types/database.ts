@@ -57,52 +57,6 @@ export interface Database {
           updated_at?: string;
         };
       };
-      user_rights: {
-        Row: {
-          id: string;
-          user_id: string;
-          rights: string[];
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          rights?: string[];
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          rights?: string[];
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      user_credentials: {
-        Row: {
-          id: string;
-          user_id: string;
-          password_hash: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          password_hash: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          password_hash?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
       properties: {
         Row: {
           id: string;

@@ -81,25 +81,23 @@ UPDATE public.profiles
 SET property_id = (SELECT id FROM public.properties ORDER BY created_at ASC LIMIT 1)
 WHERE property_id IS NULL;
 
--- Dedicated User Rights Table (Stores granular capabilities and assigned rights)
-CREATE TABLE IF NOT EXISTS public.user_rights (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    rights TEXT[] NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT user_rights_user_id_key UNIQUE (user_id)
-);
+-- Drop unnecessary legacy tables (passwords are handled securely by native Supabase Auth,
+-- and rights are consolidated directly inside public.profiles):
+DROP TABLE IF EXISTS public.user_credentials CASCADE;
+DROP TABLE IF EXISTS public.user_rights CASCADE;
 
--- Dedicated User Credentials Table (Stores password hashes separately from profiles)
-CREATE TABLE IF NOT EXISTS public.user_credentials (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    password_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT user_credentials_user_id_key UNIQUE (user_id)
-);
+-- Public Users View (Convenient alias/view of public.profiles for viewing all workspace users)
+CREATE OR REPLACE VIEW public.users AS
+SELECT
+    id,
+    email,
+    full_name,
+    role,
+    property_id,
+    rights,
+    created_at,
+    updated_at
+FROM public.profiles;
 
 -- Cleanup: ensure avatar_url contains only legitimate image URLs and never JSON or password hashes
 UPDATE public.profiles
@@ -236,29 +234,6 @@ DROP POLICY IF EXISTS "Service role has full access to profiles" ON public.profi
 CREATE POLICY "Service role has full access to profiles"
     ON public.profiles FOR ALL
     USING (auth.role() = 'service_role');
-
--- RLS for user_rights
-ALTER TABLE public.user_rights ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Authenticated users can read user_rights" ON public.user_rights;
-CREATE POLICY "Authenticated users can read user_rights"
-    ON public.user_rights FOR SELECT
-    TO authenticated
-    USING (true);
-
-DROP POLICY IF EXISTS "Service role has full access to user_rights" ON public.user_rights;
-CREATE POLICY "Service role has full access to user_rights"
-    ON public.user_rights FOR ALL
-    USING (auth.role() = 'service_role');
-
--- RLS for user_credentials
-ALTER TABLE public.user_credentials ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Service role has full access to user_credentials" ON public.user_credentials;
-CREATE POLICY "Service role has full access to user_credentials"
-    ON public.user_credentials FOR ALL
-    USING (auth.role() = 'service_role');
-
 -- ------------------------------------------------------------------------------
 -- 6. AUTOMATED USER PROFILE SYNCHRONIZATION TRIGGER
 -- ------------------------------------------------------------------------------
@@ -282,17 +257,20 @@ BEGIN
         assigned_role := 'visitor'::public.user_role;
     END IF;
 
-    INSERT INTO public.profiles (id, email, full_name, role)
+    INSERT INTO public.profiles (id, email, full_name, role, property_id)
     VALUES (
         NEW.id,
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
-        assigned_role
+        assigned_role,
+        CASE WHEN NEW.raw_user_meta_data->>'property_id' IS NOT NULL AND NEW.raw_user_meta_data->>'property_id' != ''
+             THEN (NEW.raw_user_meta_data->>'property_id')::uuid ELSE NULL END
     )
     ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
         full_name = EXCLUDED.full_name,
         role = EXCLUDED.role,
+        property_id = COALESCE(EXCLUDED.property_id, public.profiles.property_id),
         updated_at = NOW();
 
     RETURN NEW;

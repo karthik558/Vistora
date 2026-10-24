@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-const SALT = "vistora_secret_salt";
-
-function hashPassword(password: string): string {
-  return "pwd:" + crypto.createHash("sha256").update(password + SALT).digest("hex");
-}
-
 const DEFAULT_RIGHTS = {
-  admin: ["manage_feedback", "manage_questionnaire", "export_reports", "manage_properties", "manage_users"],
-  staff: ["manage_feedback", "manage_questionnaire", "export_reports"],
-  visitor: [],
+  admin: [
+    "view_feedback",
+    "manage_complaints",
+    "reassign_property",
+    "manage_properties",
+    "manage_questionnaire",
+    "export_reports",
+    "manage_users",
+  ],
+  staff: ["view_feedback", "manage_complaints", "manage_questionnaire", "export_reports"],
+  visitor: ["view_feedback"],
 };
 
 export async function GET() {
@@ -33,44 +34,15 @@ export async function GET() {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // Try to load rights from dedicated public.user_rights table
-    const rightsMap = new Map<string, string[]>();
-    try {
-      const { data: rightsRows } = await adminClient
-        .from("user_rights")
-        .select("user_id, rights");
-      if (rightsRows) {
-        for (const row of rightsRows) {
-          if (row.user_id && Array.isArray(row.rights)) {
-            rightsMap.set(row.user_id, row.rights);
-          }
-        }
-      }
-    } catch {}
-
     const usersWithRights = (profiles || []).map((p: any) => {
-      let rights = rightsMap.get(p.id);
+      let rights = Array.isArray(p.rights) && p.rights.length > 0
+        ? p.rights
+        : DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
 
-      // Fallback check: profile direct rights or legacy avatar_url migration
-      if (!rights || rights.length === 0) {
-        if (Array.isArray(p.rights) && p.rights.length > 0) {
-          rights = p.rights;
-        } else if (p.avatar_url && p.avatar_url.startsWith("{")) {
-          try {
-            const parsed = JSON.parse(p.avatar_url);
-            if (Array.isArray(parsed.rights)) {
-              rights = parsed.rights;
-            }
-          } catch {}
-        }
-      }
-
-      if (!rights || rights.length === 0) {
-        rights = DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
-      }
-
-      // Clean avatar_url: if it ever contained JSON or password hash, return null
-      const cleanAvatar = p.avatar_url && (p.avatar_url.startsWith("{") || p.avatar_url.startsWith("pwd:")) ? null : p.avatar_url;
+      // Clean avatar_url: if it ever contained legacy JSON or password hashes, return null
+      const cleanAvatar = p.avatar_url && (p.avatar_url.startsWith("{") || p.avatar_url.startsWith("pwd:"))
+        ? null
+        : p.avatar_url;
 
       return {
         id: p.id,
@@ -123,7 +95,6 @@ export async function POST(request: NextRequest) {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = fullName.trim();
-    const passwordHash = hashPassword(password.trim());
     const assignedRights = Array.isArray(rights)
       ? rights
       : DEFAULT_RIGHTS[role as keyof typeof DEFAULT_RIGHTS] || [];
@@ -146,7 +117,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in Supabase Auth
+    // 1. Create user natively in Supabase Auth (auth.users manages encrypted passwords securely)
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: cleanEmail,
       password: password.trim(),
@@ -155,6 +126,7 @@ export async function POST(request: NextRequest) {
         full_name: cleanName,
         role,
         rights: assignedRights,
+        property_id: propertyId || null,
       },
     });
 
@@ -167,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     const newUserId = authData.user.id;
 
-    // 2. Insert into public.profiles (avatar_url is strictly NULL, never password or JSON!)
+    // 2. Insert user directly into public.profiles (all operational user data in one clean table)
     const { data: profileInsert, error: profileError } = await adminClient
       .from("profiles")
       .upsert({
@@ -180,30 +152,12 @@ export async function POST(request: NextRequest) {
         rights: assignedRights,
         updated_at: new Date().toISOString(),
       })
-      .select("id, email, full_name, role, property_id, properties(id, name, code), created_at")
+      .select("id, email, full_name, role, property_id, properties(id, name, code), rights, created_at")
       .single();
 
     if (profileError) {
       return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
-
-    // 3. Store rights in dedicated public.user_rights table
-    try {
-      await adminClient.from("user_rights").upsert({
-        user_id: newUserId,
-        rights: assignedRights,
-        updated_at: new Date().toISOString(),
-      });
-    } catch {}
-
-    // 4. Store password hash fallback in dedicated public.user_credentials table
-    try {
-      await adminClient.from("user_credentials").upsert({
-        user_id: newUserId,
-        password_hash: passwordHash,
-        updated_at: new Date().toISOString(),
-      });
-    } catch {}
 
     return NextResponse.json({
       success: true,
@@ -225,7 +179,7 @@ export async function PATCH(request: NextRequest) {
     const { userId, role, propertyId, rights } = await request.json();
 
     if (!userId) {
-      return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
@@ -255,7 +209,7 @@ export async function PATCH(request: NextRequest) {
       updatePayload.rights = rights;
     }
 
-    // Clean avatar_url if it had legacy JSON/pwd
+    // Clean avatar_url if it had legacy artifacts
     if (
       currentProfile?.avatar_url &&
       (currentProfile.avatar_url.startsWith("{") || currentProfile.avatar_url.startsWith("pwd:"))
@@ -263,6 +217,7 @@ export async function PATCH(request: NextRequest) {
       updatePayload.avatar_url = null;
     }
 
+    // Update single profiles table
     const { data, error } = await adminClient
       .from("profiles")
       .update(updatePayload)
@@ -274,18 +229,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // Save assigned rights into dedicated public.user_rights table
-    if (Array.isArray(rights)) {
-      try {
-        await adminClient.from("user_rights").upsert({
-          user_id: userId,
-          rights,
-          updated_at: new Date().toISOString(),
-        });
-      } catch {}
-    }
-
-    // Also update Supabase auth metadata
+    // Sync metadata in Supabase Auth
     try {
       await adminClient.auth.admin.updateUserById(userId, {
         user_metadata: {
