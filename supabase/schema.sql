@@ -81,25 +81,12 @@ UPDATE public.profiles
 SET property_id = (SELECT id FROM public.properties ORDER BY created_at ASC LIMIT 1)
 WHERE property_id IS NULL;
 
--- Drop unnecessary legacy tables (passwords are handled securely by native Supabase Auth,
--- and rights are consolidated directly inside public.profiles):
+-- Clean up: Drop unnecessary views and legacy tables.
+-- All operational user data (role, property_id, rights) is consolidated directly inside public.profiles,
+-- and passwords/credentials are handled natively by Supabase Auth (auth.users).
+DROP VIEW IF EXISTS public.users CASCADE;
 DROP TABLE IF EXISTS public.user_credentials CASCADE;
 DROP TABLE IF EXISTS public.user_rights CASCADE;
-
--- Public Users View (Convenient alias/view of public.profiles for viewing all workspace users)
--- Uses security_invoker = true so PostgreSQL Row Level Security (RLS) is evaluated for the querying user
-CREATE OR REPLACE VIEW public.users
-WITH (security_invoker = true) AS
-SELECT
-    id,
-    email,
-    full_name,
-    role,
-    property_id,
-    rights,
-    created_at,
-    updated_at
-FROM public.profiles;
 
 -- Cleanup: ensure avatar_url contains only legitimate image URLs and never JSON or password hashes
 UPDATE public.profiles
