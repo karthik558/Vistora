@@ -421,14 +421,17 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
     feedbackRows = feedData || [];
   } else {
     propertiesList = fallbackProperties;
-    feedbackRows = memoryFeedbackStore;
+    feedbackRows =
+      propertyId !== "all"
+        ? memoryFeedbackStore.filter((r) => r.property_id === propertyId)
+        : memoryFeedbackStore;
   }
 
   const total = feedbackRows.length;
   const totalRatingSum = feedbackRows.reduce((acc, curr) => acc + curr.rating, 0);
-  const averageRatingVal = total > 0 ? (totalRatingSum / total).toFixed(2) : "5.00";
+  const averageRatingVal = total > 0 ? (totalRatingSum / total).toFixed(2) : "0.0";
   const satisfiedCount = feedbackRows.filter((r) => r.rating >= 4).length;
-  const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "100.0";
+  const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0.0";
   const openComplaintsCount = feedbackRows.filter(
     (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
   ).length;
@@ -483,14 +486,14 @@ export async function getDashboardData(propertyId: string | "all" = "all"): Prom
         value: averageRatingVal,
         suffix: "/ 5",
         change: `${averageRatingVal}`,
-        note: `from ${total} reviews`,
+        note: total > 0 ? `from ${total} reviews` : "no reviews recorded",
       },
       satisfactionRate: {
         label: "Guest satisfaction",
         value: satisfactionRateVal,
         suffix: "%",
         change: `${satisfiedCount} satisfied`,
-        note: "rated 4★ or 5★",
+        note: total > 0 ? "rated 4★ or 5★" : "no ratings logged",
       },
       openComplaints: {
         label: "Open complaints",

@@ -1181,8 +1181,28 @@ a {
   background: #e4ece4;
 }
 
+.table-panel {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+}
+
+.table-panel th {
+  border-top: none;
+}
+
+.table-panel table th:first-child {
+  border-top-left-radius: 7px;
+}
+
+.table-panel table th:last-child {
+  border-top-right-radius: 7px;
+}
+
 .table-wrap {
   overflow-x: auto;
+  border-radius: 7px;
 }
 
 table {

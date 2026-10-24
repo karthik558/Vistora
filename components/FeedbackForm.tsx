@@ -40,7 +40,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [isUrlPreselected, setIsUrlPreselected] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Dynamic Questionnaire from Supabase
+  // Dynamic Questionnaire
   const [questions, setQuestions] = useState<Array<{
     id: string;
     question_text: string;
@@ -235,8 +235,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
         <form onSubmit={handleSubmit}>
           {/* Mandatory Property Selection */}
-          <div style={{ marginBottom: "22px", padding: "14px 16px", background: "#f8faf8", border: propertyError ? "1px solid #8b261a" : "1px solid #e1e7e1", borderRadius: "6px" }}>
-            <label className="field-label" htmlFor="property-select" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <div style={{ marginBottom: "24px", padding: "16px 18px", background: "#fbfdfb", border: propertyError ? "1px solid #8b261a" : "1px solid var(--line)", borderRadius: "8px", boxShadow: "var(--shadow-xs)" }}>
+            <label className="field-label" htmlFor="property-select" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
               <span>Which Vistora property are you reviewing? <strong style={{ color: "#8b261a" }}>*</strong></span>
               {selectedPropertyId && isUrlPreselected && (
                 <span style={{ fontSize: "11px", color: "#254230", fontWeight: 600 }}>
@@ -355,15 +355,13 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             <div
               style={{
                 marginBottom: "24px",
-                padding: "16px",
-                background: "#f9faf9",
-                borderRadius: "6px",
-                border: "1px solid #e5ebe5",
+                padding: "16px 18px",
+                background: "#fbfdfb",
+                borderRadius: "8px",
+                border: "1px solid var(--line)",
+                boxShadow: "var(--shadow-xs)",
               }}
             >
-              <p className="eyebrow" style={{ marginBottom: "14px", color: "var(--muted)", letterSpacing: "0.06em" }}>
-                Experience Questionnaire
-              </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                 {questions.map((q) => (
                   <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

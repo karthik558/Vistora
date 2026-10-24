@@ -96,8 +96,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           success: true,
           questions: list,
-          syncedWithSupabase: false,
-          notice: "Using active questionnaire items. Run the updated supabase/schema.sql in Supabase to sync live database tables.",
+          notice: "Using active questionnaire items.",
         });
       }
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -106,7 +105,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       questions: data || [],
-      syncedWithSupabase: true,
+      synced: true,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -162,13 +161,13 @@ export async function POST(request: NextRequest) {
       if (!error && data) {
         newQuestion.id = data.id;
         fallbackQuestionsStore.push(data);
-        return NextResponse.json({ success: true, question: data, syncedWithSupabase: true }, { status: 201 });
+        return NextResponse.json({ success: true, question: data, synced: true }, { status: 201 });
       }
     } catch {}
 
     // Fallback store
     fallbackQuestionsStore.push(newQuestion);
-    return NextResponse.json({ success: true, question: newQuestion, syncedWithSupabase: false }, { status: 201 });
+    return NextResponse.json({ success: true, question: newQuestion, synced: false }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || "Failed to create question" },
@@ -202,7 +201,7 @@ export async function PATCH(request: NextRequest) {
         .single();
 
       if (!error && data) {
-        return NextResponse.json({ success: true, question: data, syncedWithSupabase: true });
+        return NextResponse.json({ success: true, question: data, synced: true });
       }
     } catch {}
 
@@ -212,7 +211,7 @@ export async function PATCH(request: NextRequest) {
       if (isActive !== undefined) item.is_active = Boolean(isActive);
       if (questionText !== undefined) item.question_text = questionText.trim();
       if (isRequired !== undefined) item.is_required = Boolean(isRequired);
-      return NextResponse.json({ success: true, question: item, syncedWithSupabase: false });
+      return NextResponse.json({ success: true, question: item, synced: false });
     }
 
     return NextResponse.json({ success: false, error: "Question not found" }, { status: 404 });

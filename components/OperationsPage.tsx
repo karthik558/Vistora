@@ -178,8 +178,10 @@ function Analytics({
 }) {
   const filteredFeedback = useMemo(() => {
     return data.recentFeedback.filter((item) => {
-      if (selectedProperty !== "all" && item.propertyId && item.propertyId !== selectedProperty) {
-        return false;
+      if (selectedProperty !== "all") {
+        if (!item.propertyId || item.propertyId !== selectedProperty) {
+          return false;
+        }
       }
       if (!isDateInRange(item.createdAt, dateFilter)) {
         return false;
@@ -190,9 +192,9 @@ function Analytics({
 
   const total = filteredFeedback.length;
   const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);
-  const avgRating = total > 0 ? (totalRatingSum / total).toFixed(2) : "5.00";
+  const avgRating = total > 0 ? (totalRatingSum / total).toFixed(2) : "0.0";
   const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
-  const satisfactionRate = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "100.0";
+  const satisfactionRate = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0.0";
   const openComplaintsCount = filteredFeedback.filter(
     (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
   ).length;
@@ -214,7 +216,15 @@ function Analytics({
     };
   });
 
-  const departments = Array.from(new Set(filteredFeedback.map((item) => item.department)));
+  const ALL_DEPARTMENTS = [
+    "Front Desk",
+    "Housekeeping",
+    "Food & Beverage",
+    "Concierge",
+    "Facilities & Room",
+    "Spa & Wellness",
+    "Valet & Transfers",
+  ];
 
   return (
     <>
@@ -225,7 +235,9 @@ function Analytics({
             {avgRating}
             <small>/ 5</small>
           </div>
-          <div className="metric-change">Across {total} responses</div>
+          <div className="metric-change">
+            {total > 0 ? `Across ${total} responses` : "No reviews recorded"}
+          </div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Satisfaction rate</span>
@@ -233,7 +245,9 @@ function Analytics({
             {satisfactionRate}
             <small>%</small>
           </div>
-          <div className="metric-change">{satisfiedCount} satisfied responses (4★ & 5★)</div>
+          <div className="metric-change">
+            {total > 0 ? `${satisfiedCount} satisfied responses (4★ & 5★)` : "No ratings logged"}
+          </div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Open complaints</span>
@@ -251,7 +265,7 @@ function Analytics({
         </div>
       </section>
 
-      <div className="panel analytics-panel">
+      <div className="panel analytics-panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
         <div className="panel-heading">
           <div>
             <h2>Rating distribution</h2>
@@ -274,26 +288,43 @@ function Analytics({
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
         <div className="panel-heading">
           <div>
             <h2>Department signal</h2>
-            <p>Where guest feedback is being generated</p>
+            <p>Where guest feedback is being generated across operational touchpoints</p>
           </div>
+          <span className="panel-action">{total} total reviews</span>
         </div>
         <div className="department-grid">
-          {departments.length > 0 ? (
-            departments.map((department) => (
-              <div className="department-stat" key={department}>
-                <strong>{department}</strong>
-                <span>
-                  {filteredFeedback.filter((item) => item.department === department).length} responses
+          {ALL_DEPARTMENTS.map((dept) => {
+            const count = filteredFeedback.filter((item) => item.department === dept).length;
+            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+            return (
+              <div className="department-stat" key={dept}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <strong>{dept}</strong>
+                  <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "11px", color: count > 0 ? "var(--ink)" : "var(--muted)" }}>
+                    {pct}%
+                  </span>
+                </div>
+                <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                  {count} {count === 1 ? "response" : "responses"}
                 </span>
+                <div style={{ width: "100%", height: "4px", background: "#f0f4f0", borderRadius: "2px", overflow: "hidden", marginTop: "4px" }}>
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      height: "100%",
+                      background: count > 0 ? "#254230" : "transparent",
+                      borderRadius: "2px",
+                      transition: "width 0.25s ease",
+                    }}
+                  />
+                </div>
               </div>
-            ))
-          ) : (
-            <p className="empty-state">No department signal data available for this filter.</p>
-          )}
+            );
+          })}
         </div>
       </div>
     </>
@@ -349,35 +380,37 @@ function Directory({
 
 function Forms() {
   return (
-    <>
-      <div className="form-grid">
-        <div className="panel form-card">
-          <span className="form-status">ACTIVE</span>
-          <h2>Guest feedback form</h2>
-          <p>Public form for collecting ratings, department context, comments, and optional manager follow-up.</p>
-          <code>/feedback</code>
-          <div className="form-card-actions">
-            <Link className="button button-dark compact" href="/feedback">
-              Open form ↗
-            </Link>
-            <Link className="panel-action" href="/dashboard/qr-codes">
-              Create QR link
-            </Link>
-          </div>
-        </div>
-        <div className="panel form-card muted-card">
-          <span className="form-status">CONFIGURATION</span>
-          <h2>What the form captures</h2>
-          <ul>
-            <li>1–5 guest rating & experience department</li>
-            <li>Customizable multi-question questionnaire options</li>
-            <li>Written guest commentary & contact request</li>
-            <li>Direct database sync with operational dashboard</li>
-          </ul>
+    <div className="form-grid">
+      <div className="panel form-card">
+        <span className="form-status">ACTIVE</span>
+        <h2>Guest feedback form</h2>
+        <p>Public form for collecting ratings, department context, comments, and optional manager follow-up.</p>
+        <code>/feedback</code>
+        <div className="form-card-actions">
+          <Link className="button button-dark compact" href="/feedback">
+            Open form ↗
+          </Link>
+          <Link className="panel-action" href="/dashboard/qr-codes">
+            Create QR link
+          </Link>
         </div>
       </div>
-      <QuestionnaireBuilder />
-    </>
+      <div className="panel form-card muted-card">
+        <span className="form-status">CONFIGURATION</span>
+        <h2>What the form captures</h2>
+        <ul>
+          <li>1–5 guest rating & experience department</li>
+          <li>Customizable multi-question questionnaire options</li>
+          <li>Written guest commentary & contact request</li>
+          <li>Real-time synchronization with operational dashboard</li>
+        </ul>
+        <div className="form-card-actions" style={{ marginTop: "16px" }}>
+          <Link className="button button-outline compact" href="/dashboard/questionnaire">
+            Design questionnaire questions →
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 

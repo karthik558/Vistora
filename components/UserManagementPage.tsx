@@ -706,6 +706,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             display: "flex",
                             flexDirection: "column",
                             gap: "6px",
+                            marginTop: "10px",
+                            marginBottom: "20px",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -717,7 +719,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           </p>
                         </div>
                       ) : (
-                        <div>
+                        <div style={{ marginTop: "10px", marginBottom: "20px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <span className="field-label" style={{ margin: 0 }}>
                               Assigned Rights & Capabilities ({addRights.length} active)
@@ -794,14 +796,24 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
-                      <button
-                        type="submit"
-                        className="button button-dark"
-                        disabled={submitting}
-                        style={{ marginTop: "12px", padding: "12px" }}
-                      >
-                        {submitting ? "Creating member…" : "Save and Grant Access →"}
-                      </button>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>
+                        <button
+                          type="button"
+                          className="button button-outline"
+                          onClick={() => setShowAddModal(false)}
+                          disabled={submitting}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="button button-dark"
+                          disabled={submitting}
+                          style={{ padding: "10px 18px" }}
+                        >
+                          {submitting ? "Creating member…" : "Save and Grant Access →"}
+                        </button>
+                      </div>
                     </form>
                   </motion.div>
                 </motion.div>
@@ -903,6 +915,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             display: "flex",
                             flexDirection: "column",
                             gap: "6px",
+                            marginTop: "12px",
+                            marginBottom: "28px",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -914,7 +928,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           </p>
                         </div>
                       ) : (
-                        <div>
+                        <div style={{ marginBottom: "24px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <span className="field-label" style={{ margin: 0 }}>
                               Assigned Rights & Capabilities ({editRights.length} active)
@@ -991,14 +1005,24 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
-                      <button
-                        type="submit"
-                        className="button button-dark"
-                        disabled={savingAccess}
-                        style={{ padding: "12px" }}
-                      >
-                        {savingAccess ? "Saving changes…" : "Save Permissions →"}
-                      </button>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>
+                        <button
+                          type="button"
+                          className="button button-outline"
+                          onClick={() => setEditAccessUser(null)}
+                          disabled={savingAccess}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="button button-dark"
+                          disabled={savingAccess}
+                          style={{ padding: "10px 18px" }}
+                        >
+                          {savingAccess ? "Saving changes…" : "Save Permissions →"}
+                        </button>
+                      </div>
                     </form>
                   </motion.div>
                 </motion.div>

@@ -391,8 +391,10 @@ export default function Dashboard({
   // Filter feedback dynamically by selectedProperty and dateFilter
   const allFeedback = data?.recentFeedback || [];
   const filteredFeedback = allFeedback.filter((item) => {
-    if (selectedProperty !== "all" && item.propertyId && item.propertyId !== selectedProperty) {
-      return false;
+    if (selectedProperty !== "all") {
+      if (!item.propertyId || item.propertyId !== selectedProperty) {
+        return false;
+      }
     }
     if (!isDateInRange(item.createdAt, dateFilter)) {
       return false;
@@ -402,9 +404,9 @@ export default function Dashboard({
 
   const total = filteredFeedback.length;
   const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);
-  const averageRatingVal = total > 0 ? (totalRatingSum / total).toFixed(2) : "5.00";
+  const averageRatingVal = total > 0 ? (totalRatingSum / total).toFixed(2) : "0.0";
   const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
-  const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "100.0";
+  const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0";
   const openComplaintsCount = filteredFeedback.filter(
     (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
   ).length;
@@ -472,13 +474,13 @@ export default function Dashboard({
                 label="Average rating"
                 value={averageRatingVal}
                 suffix="/ 5"
-                note={`from ${total} reviews`}
+                note={total > 0 ? `from ${total} reviews` : "no reviews recorded"}
               />
               <Metric
                 label="Guest satisfaction"
                 value={satisfactionRateVal}
                 suffix="%"
-                note="rated 4 or 5 stars"
+                note={total > 0 ? "rated 4 or 5 stars" : "no ratings logged"}
               />
               <Metric
                 label="Open complaints"

@@ -20,7 +20,6 @@ export interface QuestionData {
 export default function QuestionnaireBuilder() {
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncedWithDb, setSyncedWithDb] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -31,7 +30,6 @@ export default function QuestionnaireBuilder() {
   const [optionsStr, setOptionsStr] = useState("Seamless, Standard, Delayed");
   const [isRequired, setIsRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
 
   async function loadQuestions() {
     setLoading(true);
@@ -40,7 +38,6 @@ export default function QuestionnaireBuilder() {
       const data = await res.json();
       if (data.success && data.questions) {
         setQuestions(data.questions);
-        setSyncedWithDb(Boolean(data.syncedWithSupabase));
       }
     } catch {
       setError("Failed to load questionnaire questions.");
@@ -143,96 +140,25 @@ export default function QuestionnaireBuilder() {
     }
   }
 
-  const sqlMigrationCode = `-- Run this in your Supabase SQL Editor:
-CREATE TABLE IF NOT EXISTS public.feedback_questions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID REFERENCES public.properties(id) ON DELETE CASCADE,
-    question_text TEXT NOT NULL,
-    question_type TEXT NOT NULL DEFAULT 'choice',
-    options JSONB DEFAULT '[]'::jsonb,
-    department department_type,
-    is_required BOOLEAN NOT NULL DEFAULT false,
-    display_order INTEGER NOT NULL DEFAULT 0,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.feedback_answers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    feedback_id UUID NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
-    question_id UUID REFERENCES public.feedback_questions(id) ON DELETE SET NULL,
-    question_text TEXT NOT NULL,
-    answer_value TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE public.feedback_questions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.feedback_answers ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public questions are viewable by everyone" ON public.feedback_questions FOR SELECT USING (true);
-CREATE POLICY "Service role full access to questions" ON public.feedback_questions FOR ALL USING (true);
-CREATE POLICY "Public can submit feedback answers" ON public.feedback_answers FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role full access to answers" ON public.feedback_answers FOR ALL USING (true);`;
-
-  function copySql() {
-    navigator.clipboard.writeText(sqlMigrationCode);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2500);
-  }
-
   return (
-    <div style={{ marginTop: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <h2 style={{ fontSize: "18px", margin: 0 }}>Feedback Questionnaire & Questions</h2>
-            <span
-              style={{
-                fontSize: "10px",
-                fontFamily: "var(--font-dm-mono)",
-                padding: "2px 8px",
-                borderRadius: "12px",
-                background: syncedWithDb ? "#edf4ed" : "#fef6e7",
-                color: syncedWithDb ? "#254230" : "#8f5e08",
-                fontWeight: 600,
-                letterSpacing: "0.04em",
-              }}
-            >
-              {syncedWithDb ? "SUPABASE LIVE" : "ACTIVE (SQL PENDING)"}
-            </span>
-          </div>
-          <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
-            Configure questions shown to guests on the public feedback form. All responses sync to your operational dashboard.
-          </p>
-        </div>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+        <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
+          {questions.length} active question{questions.length === 1 ? "" : "s"} configured for guest feedback
+        </p>
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          {!syncedWithDb && (
-            <button
-              type="button"
-              onClick={copySql}
-              className="button button-outline compact"
-              style={{ fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-              title="Copy SQL for Supabase"
-            >
-              <Copy size={12} />
-              {copiedSql ? "SQL Copied!" : "Copy Supabase SQL"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="button button-dark compact"
-            onClick={() => {
-              setError(null);
-              setSuccess(null);
-              setShowAddModal(true);
-            }}
-          >
-            <Plus size={14} strokeWidth={2} style={{ marginRight: "6px" }} />
-            Add question
-          </button>
-        </div>
+        <button
+          type="button"
+          className="button button-dark compact"
+          onClick={() => {
+            setError(null);
+            setSuccess(null);
+            setShowAddModal(true);
+          }}
+        >
+          <Plus size={14} strokeWidth={2} style={{ marginRight: "6px" }} />
+          Add question
+        </button>
       </div>
 
       {error && (
@@ -248,7 +174,7 @@ CREATE POLICY "Service role full access to answers" ON public.feedback_answers F
         </div>
       )}
 
-      <div className="panel table-panel">
+      <div className="panel table-panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
         <div className="table-wrap">
           <table>
             <thead>
