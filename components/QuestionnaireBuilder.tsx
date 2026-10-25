@@ -471,7 +471,7 @@ export default function QuestionnaireBuilder() {
           alignItems: "center",
           justifyContent: "space-between",
           gap: "16px",
-          background: "linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(15,23,42,0.02) 100%)",
+          background: "var(--canvas-alt)",
           border: "1px solid var(--line-strong)",
           borderRadius: "8px",
         }}

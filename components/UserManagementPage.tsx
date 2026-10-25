@@ -606,9 +606,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       style={{
                                         background:
                                           orgRole === "super_admin"
-                                            ? "linear-gradient(135deg, #1b3824 0%, #2e593b 100%)"
+                                            ? "var(--sage-deep)"
                                             : orgRole === "admin"
-                                            ? "#254230"
+                                            ? "var(--sage)"
                                             : orgRole === "general_manager" || orgRole === "executive"
                                             ? "#1e293b"
                                             : orgRole === "analyst" || orgRole === "report"

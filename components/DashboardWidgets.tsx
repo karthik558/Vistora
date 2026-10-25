@@ -78,18 +78,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
     <div className="panel" style={{ overflow: "hidden", marginBottom: "22px" }}>
       <div className="panel-heading">
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "var(--sage)",
-                display: "inline-block",
-              }}
-            />
-            <h2 style={{ fontSize: "16px", margin: 0 }}>Feedback trend &amp; volume</h2>
-          </div>
+          <h2 style={{ fontSize: "16px", margin: 0 }}>Feedback trend &amp; volume</h2>
           <p style={{ margin: "4px 0 0" }}>Daily submission volume with CSAT rating curve</p>
         </div>
 
@@ -103,7 +92,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
                 fontSize: "11px",
                 fontWeight: 600,
                 background: rangeDays === 7 ? "var(--ink)" : "transparent",
-                color: rangeDays === 7 ? "#fff" : "var(--muted)",
+                color: rangeDays === 7 ? "var(--panel)" : "var(--muted)",
                 border: "none",
                 cursor: "pointer",
               }}
@@ -118,7 +107,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
                 fontSize: "11px",
                 fontWeight: 600,
                 background: rangeDays === 14 ? "var(--ink)" : "transparent",
-                color: rangeDays === 14 ? "#fff" : "var(--muted)",
+                color: rangeDays === 14 ? "var(--panel)" : "var(--muted)",
                 border: "none",
                 cursor: "pointer",
               }}
@@ -131,7 +120,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
       </div>
 
       <div style={{ padding: "20px 24px" }}>
-        {/* Trend Graphic Bars */}
+        {/* Trend Graphic Bars - Clean solid luxury styling matching light & dark modes */}
         <div
           style={{
             display: "grid",
@@ -164,11 +153,9 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
                     width: "100%",
                     maxWidth: "36px",
                     height: `${heightPct}%`,
-                    background: day.isToday
-                      ? "var(--warm)"
-                      : "linear-gradient(180deg, var(--sage) 0%, var(--sage-deep) 100%)",
+                    background: day.isToday ? "var(--warm)" : "var(--sage)",
                     borderRadius: "4px 4px 0 0",
-                    transition: "height 0.3s ease",
+                    transition: "height 0.3s ease, opacity 0.2s ease",
                     position: "relative",
                   }}
                   title={`${day.dateStr}: ${day.count} responses (${day.avgRating > 0 ? `${day.avgRating}★` : "No ratings"})`}
@@ -211,8 +198,8 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
             </span>
           </div>
 
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--sage-deep)", fontWeight: 600 }}>
-            <TrendingUp size={13} />
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink)", fontWeight: 600 }}>
+            <TrendingUp size={13} style={{ color: "var(--sage)" }} />
             <span>+14.2% response volume vs preceding cycle</span>
           </div>
         </div>
@@ -229,35 +216,35 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
       name: "In-Room Keycard QR",
       detail: "Bedside nightstand & door keycard sleeve",
       percentage: 46,
-      color: "#254230",
+      color: "var(--sage)",
     },
     {
       id: "qr_dining",
       name: "Restaurant & Bar Table QR",
       detail: "All-day dining & rooftop lounge acrylics",
       percentage: 26,
-      color: "#c59b58",
+      color: "var(--warm)",
     },
     {
       id: "guest_invite",
       name: "Tracked Guest Invitation Link",
       detail: "Concierge VIP dispatch via email & SMS",
       percentage: 18,
-      color: "#4a7590",
+      color: "var(--blue)",
     },
     {
       id: "front_desk",
       name: "Front Desk Tablet & Check-in",
       detail: "Reception departure concierge desk",
       percentage: 7,
-      color: "#6f7c75",
+      color: "var(--muted)",
     },
     {
       id: "post_stay",
       name: "Post-Stay Automated Follow-up",
       detail: "Scheduled checkout survey email",
       percentage: 3,
-      color: "#98a59e",
+      color: "var(--muted-light)",
     },
   ];
 
