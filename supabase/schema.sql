@@ -596,3 +596,49 @@ VALUES
         true
     )
 ON CONFLICT (id) DO NOTHING;
+
+-- ------------------------------------------------------------------------------
+-- 10. ENTERPRISE AUDIT LOGS (IMMUTABLE AUDIT TRAIL & GDPR COMPLIANCE)
+-- Optional table for persistent multi-year compliance storage in Supabase.
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_name TEXT NOT NULL,
+    actor_email TEXT NOT NULL,
+    actor_role TEXT NOT NULL DEFAULT 'staff',
+    action TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('pii_access', 'export', 'sla_status', 'permission', 'security', 'system')),
+    resource TEXT NOT NULL,
+    details TEXT,
+    ip TEXT DEFAULT '127.0.0.1',
+    hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'warning', 'alert')),
+    compliance_tag TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_category ON public.audit_logs(category);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON public.audit_logs(actor_email);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Admins can view audit logs
+DROP POLICY IF EXISTS "Admins can view audit logs" ON public.audit_logs;
+CREATE POLICY "Admins can view audit logs"
+    ON public.audit_logs FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role = 'admin'
+        )
+    );
+
+-- Service role full access
+DROP POLICY IF EXISTS "Service role full access to audit logs" ON public.audit_logs;
+CREATE POLICY "Service role full access to audit logs"
+    ON public.audit_logs FOR ALL
+    USING (true);

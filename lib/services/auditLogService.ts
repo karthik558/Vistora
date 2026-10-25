@@ -221,5 +221,34 @@ export function logAuditEvent(entry: {
   if (auditLogStore.length > 500) {
     auditLogStore.pop();
   }
+
+  // Optional background persistence to Supabase if audit_logs table exists
+  try {
+    import("../supabase/server").then(({ createServerSupabaseClient }) => {
+      const supabase = createServerSupabaseClient();
+      if (supabase) {
+        (supabase as any)
+          .from("audit_logs")
+          .insert({
+            id: newLog.id,
+            actor_name: newLog.actorName,
+            actor_email: newLog.actorEmail,
+            actor_role: newLog.actorRole,
+            action: newLog.action,
+            category: newLog.category,
+            resource: newLog.resource,
+            details: newLog.details,
+            ip: newLog.ip,
+            hash: newLog.hash,
+            status: newLog.status,
+            compliance_tag: newLog.complianceTag,
+            created_at: newLog.timestamp,
+          })
+          .then(() => {})
+          .catch(() => {});
+      }
+    }).catch(() => {});
+  } catch {}
+
   return newLog;
 }
