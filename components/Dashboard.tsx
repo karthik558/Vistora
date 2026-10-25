@@ -24,6 +24,8 @@ import {
   Send,
   History,
   Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
@@ -170,6 +172,26 @@ export function AppShell({
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("vistora-sidebar-collapsed");
+      if (saved !== null) {
+        setSidebarCollapsed(saved === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("vistora-sidebar-collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (propUser) {
@@ -246,7 +268,7 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
         {mobileNavOpen && (
@@ -263,25 +285,50 @@ export function AppShell({
         )}
       </AnimatePresence>
 
-      <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
-        {/* Vistora Official Logo in Sidebar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px 22px" }}>
-          <Link
-            href="/"
-            className="brand"
-            title="Vistora Home"
-            onClick={() => setMobileNavOpen(false)}
-            style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
-          >
-            <Image
-              src="/logo1.webp"
-              alt="Vistora"
-              width={130}
-              height={34}
-              priority
-              style={{ height: "28px", width: "auto", objectFit: "contain" }}
-            />
-          </Link>
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
+        {/* Vistora Sidebar Header with Single Desktop Collapse Toggle */}
+        <div className="sidebar-brand-row">
+          {!sidebarCollapsed ? (
+            <>
+              <Link
+                href="/"
+                className="brand brand-full"
+                title="Vistora Home"
+                onClick={() => setMobileNavOpen(false)}
+                style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
+              >
+                <Image
+                  src="/logo1.webp"
+                  alt="Vistora"
+                  width={130}
+                  height={34}
+                  priority
+                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
+                />
+              </Link>
+              <button
+                type="button"
+                className="sidebar-collapse-btn desktop-only"
+                onClick={toggleSidebar}
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeftClose size={16} strokeWidth={1.8} />
+              </button>
+            </>
+          ) : (
+            <div className="sidebar-collapsed-header">
+              <button
+                type="button"
+                className="sidebar-collapse-btn desktop-only"
+                onClick={toggleSidebar}
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen size={16} strokeWidth={1.8} />
+              </button>
+            </div>
+          )}
           {mobileNavOpen && (
             <button
               type="button"
@@ -303,7 +350,7 @@ export function AppShell({
           ) : (
             groups.map((group) => (
               <div className="nav-group" key={group}>
-                <p>{group}</p>
+                <p className="nav-group-title">{group}</p>
                 {visibleNav
                   .filter((item) => item.group === group)
                   .map((item) => {
@@ -323,6 +370,7 @@ export function AppShell({
                         prefetch={true}
                         className={`nav-item ${isActive ? "active" : ""}`}
                         onClick={() => setMobileNavOpen(false)}
+                        title={item.label}
                       >
                         <Icon
                           size={16}
@@ -330,7 +378,7 @@ export function AppShell({
                           style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }}
                           aria-hidden="true"
                         />
-                        <span style={{ flex: 1 }}>{item.label}</span>
+                        <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
                         {(item.label === "Complaints & SLA" || item.label === "Complaints") && complaints > 0 && (
                           <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
                             {complaints}
@@ -349,15 +397,16 @@ export function AppShell({
             href="/feedback"
             className="sidebar-guest-link"
             onClick={() => setMobileNavOpen(false)}
+            title="Open guest feedback form"
           >
-            <span>Open guest feedback form</span>
+            <span className="guest-link-text">Open guest feedback form</span>
             <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />
           </Link>
 
-          {/* Dynamic Authenticated User Profile without hover tooltip */}
-          <div className="user-row">
+          {/* Dynamic Authenticated User Profile */}
+          <div className="user-row" title={`${displayName} (${displayEmail})`}>
             <span className="user-avatar">{initials}</span>
-            <div style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
+            <div className="user-info" style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
               <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {displayName}
               </strong>
@@ -370,6 +419,7 @@ export function AppShell({
               type="button"
               onClick={handleSignOut}
               className="signout-button"
+              title="Sign out"
               aria-label="Sign out"
               style={{
                 background: "transparent",
@@ -397,7 +447,7 @@ export function AppShell({
         {/* Topbar: clean breadcrumbs, mobile hamburger toggle, responsive logo, ThemeToggle, NotificationCenter */}
         <header className="topbar">
           <div className="topbar-inner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <button
                 type="button"
                 className="mobile-menu-btn"
@@ -549,6 +599,35 @@ export default function Dashboard({
     };
   });
 
+  // Real Net Promoter Score (NPS) dynamically calculated from original verified feedback records
+  const npsPromoters = filteredFeedback.filter((r) => r.rating === 5).length;
+  const npsPassives = filteredFeedback.filter((r) => r.rating === 4).length;
+  const npsDetractors = filteredFeedback.filter((r) => r.rating <= 3).length;
+  const npsTotal = filteredFeedback.length;
+
+  const npsPromoterPct = npsTotal > 0 ? Math.round((npsPromoters / npsTotal) * 100) : 0;
+  const npsPassivePct = npsTotal > 0 ? Math.round((npsPassives / npsTotal) * 100) : 0;
+  const npsDetractorPct = npsTotal > 0 ? Math.max(0, 100 - npsPromoterPct - npsPassivePct) : 0;
+  const npsScore = npsTotal > 0 ? Math.round(((npsPromoters - npsDetractors) / npsTotal) * 100) : 0;
+
+  const activePropertyName =
+    selectedProperty === "all"
+      ? "All Properties"
+      : (data?.properties || []).find((p) => p.id === selectedProperty)?.name || "Selected Property";
+
+  const npsTier =
+    npsTotal === 0
+      ? "Awaiting guest submissions"
+      : npsScore >= 70
+      ? "World-Class Hospitality Tier"
+      : npsScore >= 50
+      ? "Excellent Guest Loyalty"
+      : npsScore >= 30
+      ? "Strong Performance Tier"
+      : npsScore >= 0
+      ? "Positive Growth Tier"
+      : "Action & Recovery Needed";
+
   const complaints = openComplaintsCount;
   const firstName = user?.fullName
     ? user.fullName.split(" ")[0]
@@ -682,23 +761,32 @@ export default function Dashboard({
               </div>
 
               <div className="panel" style={{ padding: "24px" }}>
-                <p className="eyebrow">Hospitality Benchmark</p>
+                <p className="eyebrow">Hospitality Benchmark · {activePropertyName}</p>
                 <h3 style={{ margin: "6px 0 10px", fontSize: "16px" }}>Net Promoter Score (NPS)</h3>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "8px", margin: "14px 0" }}>
-                  <span style={{ fontSize: "36px", fontWeight: 700, fontFamily: "var(--font-dm-mono)", color: "var(--sage-deep)" }}>
-                    +68
+                  <span
+                    style={{
+                      fontSize: "36px",
+                      fontWeight: 700,
+                      fontFamily: "var(--font-dm-mono)",
+                      color: npsTotal === 0 ? "var(--muted)" : npsScore >= 0 ? "var(--sage-deep)" : "var(--red)",
+                    }}
+                  >
+                    {npsTotal > 0 ? (npsScore > 0 ? `+${npsScore}` : `${npsScore}`) : "0"}
                   </span>
-                  <small style={{ color: "var(--muted)", fontSize: "12px" }}>World-Class Hospitality Tier</small>
+                  <small style={{ color: "var(--muted)", fontSize: "12px" }}>
+                    {npsTier} ({npsTotal} {npsTotal === 1 ? "review" : "reviews"})
+                  </small>
                 </div>
                 <div style={{ width: "100%", height: "8px", background: "var(--canvas-alt)", borderRadius: "4px", overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: "74%", background: "var(--sage)", height: "100%" }} title="Promoters: 74%" />
-                  <div style={{ width: "20%", background: "var(--warm)", height: "100%" }} title="Passives: 20%" />
-                  <div style={{ width: "6%", background: "var(--red)", height: "100%" }} title="Detractors: 6%" />
+                  <div style={{ width: `${npsPromoterPct}%`, background: "var(--sage)", height: "100%" }} title={`Promoters (5★): ${npsPromoterPct}% (${npsPromoters})`} />
+                  <div style={{ width: `${npsPassivePct}%`, background: "var(--warm)", height: "100%" }} title={`Passives (4★): ${npsPassivePct}% (${npsPassives})`} />
+                  <div style={{ width: `${npsDetractorPct}%`, background: "var(--red)", height: "100%" }} title={`Detractors (1-3★): ${npsDetractorPct}% (${npsDetractors})`} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--muted)", marginTop: "8px", fontFamily: "var(--font-dm-mono)" }}>
-                  <span>74% Promoters</span>
-                  <span>20% Passives</span>
-                  <span>6% Detractors</span>
+                  <span>{npsPromoterPct}% Promoters ({npsPromoters})</span>
+                  <span>{npsPassivePct}% Passives ({npsPassives})</span>
+                  <span>{npsDetractorPct}% Detractors ({npsDetractors})</span>
                 </div>
               </div>
             </section>

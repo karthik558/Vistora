@@ -97,7 +97,7 @@ export default function PropertyFilter({
               ))}
             </div>
 
-            <div style={{ borderTop: "1px solid var(--line)", padding: "6px 8px", background: "#fbfcfb" }}>
+            <div style={{ borderTop: "1px solid var(--line)", padding: "6px 8px", background: "var(--canvas-alt)" }}>
               <a
                 href="/dashboard/properties"
                 style={{

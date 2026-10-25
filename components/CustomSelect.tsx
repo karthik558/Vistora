@@ -84,15 +84,15 @@ export default function CustomSelect({
           justifyContent: "space-between",
           gap: "8px",
           padding: "9px 12px",
-          background: "#ffffff",
-          border: isOpen ? "1px solid #637f6b" : "1px solid var(--line)",
+          background: "var(--panel)",
+          border: isOpen ? "1px solid var(--sage)" : "1px solid var(--line)",
           borderRadius: "6px",
           color: selectedOption ? "var(--ink)" : "var(--muted)",
           fontSize: "12px",
           fontFamily: "var(--font-dm-sans)",
           fontWeight: selectedOption ? 500 : 400,
           cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: isOpen ? "0 0 0 2px rgba(99, 127, 107, 0.12)" : "var(--shadow-xs)",
+          boxShadow: isOpen ? "0 0 0 2px rgba(99, 127, 107, 0.16)" : "var(--shadow-xs)",
           transition: "all 0.15s ease",
           textAlign: "left",
           outline: "none",
@@ -102,7 +102,7 @@ export default function CustomSelect({
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {selectedOption?.icon && (
-            <span style={{ display: "inline-flex", color: "#647368", flexShrink: 0 }}>
+            <span style={{ display: "inline-flex", color: "var(--muted)", flexShrink: 0 }}>
               {selectedOption.icon}
             </span>
           )}
@@ -115,7 +115,7 @@ export default function CustomSelect({
           size={13}
           style={{
             flexShrink: 0,
-            color: "#647368",
+            color: "var(--muted)",
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.16s ease",
           }}
@@ -136,10 +136,10 @@ export default function CustomSelect({
               left: 0,
               right: 0,
               zIndex: 1100,
-              background: "#ffffff",
-              border: "1px solid var(--line)",
+              background: "var(--panel)",
+              border: "1px solid var(--line-strong)",
               borderRadius: "8px",
-              boxShadow: "0 12px 32px rgba(15, 23, 19, 0.14), 0 2px 6px rgba(15, 23, 19, 0.05)",
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.08)",
               maxHeight: "260px",
               overflowY: "auto",
               padding: "6px",
@@ -152,7 +152,7 @@ export default function CustomSelect({
                   fontSize: "10px",
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
-                  color: "#88968c",
+                  color: "var(--muted)",
                   padding: "5px 8px 7px",
                   fontWeight: 600,
                   borderBottom: "1px solid var(--line)",
@@ -181,7 +181,7 @@ export default function CustomSelect({
                       justifyContent: "space-between",
                       gap: "8px",
                       padding: "8px 10px",
-                      background: isSelected ? "#eaf0eb" : "transparent",
+                      background: isSelected ? "var(--sage-soft)" : "transparent",
                       border: "none",
                       borderRadius: "5px",
                       cursor: "pointer",
@@ -191,7 +191,7 @@ export default function CustomSelect({
                     }}
                     onMouseEnter={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.background = "#f3f6f3";
+                        e.currentTarget.style.background = "var(--line)";
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -202,7 +202,7 @@ export default function CustomSelect({
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
                       {option.icon && (
-                        <span style={{ display: "inline-flex", color: "#647368", flexShrink: 0 }}>
+                        <span style={{ display: "inline-flex", color: "var(--muted)", flexShrink: 0 }}>
                           {option.icon}
                         </span>
                       )}
@@ -223,7 +223,7 @@ export default function CustomSelect({
                           <small
                             style={{
                               fontSize: "10px",
-                              color: "#7d8b81",
+                              color: "var(--muted)",
                               marginTop: "1px",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -240,7 +240,7 @@ export default function CustomSelect({
                       <Check
                         size={14}
                         strokeWidth={2.2}
-                        style={{ color: "#254230", flexShrink: 0 }}
+                        style={{ color: "var(--sage)", flexShrink: 0 }}
                       />
                     )}
                   </button>

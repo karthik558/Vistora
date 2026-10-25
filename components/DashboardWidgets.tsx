@@ -335,13 +335,13 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
 // 3. DEPARTMENT PERFORMANCE MATRIX COMPONENT
 export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
   const departments = [
-    { name: "Front Desk", icon: Building2, color: "#166534", bg: "rgba(22, 101, 52, 0.1)", targetSla: "10 min" },
-    { name: "Housekeeping", icon: BedDouble, color: "#0f766e", bg: "rgba(15, 118, 110, 0.1)", targetSla: "15 min" },
-    { name: "Food & Beverage", icon: Utensils, color: "#b45309", bg: "rgba(180, 83, 9, 0.1)", targetSla: "12 min" },
-    { name: "Concierge", icon: Compass, color: "#4338ca", bg: "rgba(67, 56, 202, 0.1)", targetSla: "8 min" },
-    { name: "Spa & Wellness", icon: Flower2, color: "#047857", bg: "rgba(4, 120, 87, 0.1)", targetSla: "15 min" },
-    { name: "Facilities & Room", icon: Wrench, color: "#475569", bg: "rgba(71, 85, 105, 0.1)", targetSla: "20 min" },
-    { name: "Valet & Transfers", icon: Car, color: "#831843", bg: "rgba(131, 24, 67, 0.1)", targetSla: "5 min" },
+    { name: "Front Desk", targetSla: "10 min" },
+    { name: "Housekeeping", targetSla: "15 min" },
+    { name: "Food & Beverage", targetSla: "12 min" },
+    { name: "Concierge", targetSla: "8 min" },
+    { name: "Spa & Wellness", targetSla: "15 min" },
+    { name: "Facilities & Room", targetSla: "20 min" },
+    { name: "Valet & Transfers", targetSla: "5 min" },
   ];
 
   return (
@@ -379,29 +379,11 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
 
               const isExcellence = Number(avg) >= 4.5;
               const isWarning = Number(avg) < 3.5;
-              const IconComp = dept.icon;
 
               return (
                 <tr key={dept.name}>
                   <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div
-                        style={{
-                          width: "26px",
-                          height: "26px",
-                          borderRadius: "6px",
-                          background: dept.bg,
-                          color: dept.color,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <IconComp size={14} strokeWidth={2} />
-                      </div>
-                      <strong style={{ fontSize: "13px" }}>{dept.name}</strong>
-                    </div>
+                    <strong style={{ fontSize: "13px", color: "var(--ink)" }}>{dept.name}</strong>
                   </td>
                   <td>
                     <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "12px" }}>
@@ -469,9 +451,9 @@ export function SlaRecoveryBanner({ openComplaintsCount }: { openComplaintsCount
   return (
     <div
       style={{
-        padding: "16px 22px",
-        background: openComplaintsCount > 0 ? "var(--red-soft)" : "var(--sage-soft)",
-        border: `1px solid ${openComplaintsCount > 0 ? "var(--red)" : "var(--sage)"}`,
+        padding: "16px 20px",
+        background: "var(--panel)",
+        border: "1px solid var(--line)",
         borderRadius: "8px",
         display: "flex",
         alignItems: "center",
@@ -484,20 +466,21 @@ export function SlaRecoveryBanner({ openComplaintsCount }: { openComplaintsCount
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div
           style={{
-            width: "36px",
-            height: "36px",
-            borderRadius: "50%",
+            width: "32px",
+            height: "32px",
+            borderRadius: "5px",
             display: "grid",
             placeItems: "center",
-            background: openComplaintsCount > 0 ? "var(--red)" : "var(--sage-deep)",
-            color: "#fff",
+            background: "var(--canvas-alt)",
+            border: "1px solid var(--line)",
+            color: "var(--ink)",
             flexShrink: 0,
           }}
         >
-          {openComplaintsCount > 0 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+          {openComplaintsCount > 0 ? <AlertTriangle size={16} strokeWidth={1.75} /> : <CheckCircle2 size={16} strokeWidth={1.75} />}
         </div>
         <div>
-          <strong style={{ display: "block", fontSize: "13px", color: openComplaintsCount > 0 ? "var(--red)" : "var(--sage-deep)" }}>
+          <strong style={{ display: "block", fontSize: "13px", color: "var(--ink)" }}>
             {openComplaintsCount > 0
               ? `${openComplaintsCount} Service Recovery Cases Requiring Attention`
               : "Complaints & SLA: All Guest Recovery Targets Within Standard"}
