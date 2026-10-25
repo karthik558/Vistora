@@ -43,9 +43,8 @@ export function getUserDepartment(user: WorkspaceUserItem): string {
 }
 
 export function canUserViewPii(user: WorkspaceUserItem): boolean {
-  if (user.role === "admin") return true;
   const org = getUserOrgRole(user);
-  if (org === "super_admin" || org === "admin" || org === "general_manager") return true;
+  if (org === "super_admin" || (user.rights || []).includes("org_role:super_admin")) return true;
   return (user.rights || []).includes("view_guest_pii");
 }
 
@@ -63,21 +62,21 @@ export const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
     id: "super_admin",
     name: "Super Admin",
     tagline: "Organization Executive & Full Platform Authority",
-    description: "Complete unrestricted access across all properties, system settings, audit logs, and security controls.",
+    description: "Complete unrestricted access across all properties globally, corporate settings, audit logs, and security controls.",
     mappedRole: "admin",
     defaultRights: SYSTEM_RIGHTS.map((r) => r.id),
   },
   {
     id: "admin",
-    name: "Admin",
-    tagline: "General Hotel & Operations Administrator",
-    description: "Full management of team members, properties, questionnaires, feedback, and complaint recovery queues.",
+    name: "Hotel Admin",
+    tagline: "Assigned Property Administrator",
+    description: "Full management within assigned hotel property/properties: complaints, questionnaires, feedback, reports, and staff access.",
     mappedRole: "admin",
     defaultRights: [
       "view_feedback",
+      "view_guest_pii",
       "manage_complaints",
       "reassign_property",
-      "manage_properties",
       "manage_questionnaire",
       "export_reports",
       "view_audit_log",
@@ -304,13 +303,15 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSubmitting(true);
 
     try {
-      const isFullAdmin = addRole === "admin" || addRole === "super_admin";
-      const propIdsToSend = isFullAdmin
+      const isSuper = addRole === "super_admin";
+      const propIdsToSend = isSuper
         ? properties.map((p) => p.id)
-        : addPropertyIds;
+        : addPropertyIds.length > 0
+        ? addPropertyIds
+        : (properties[0]?.id ? [properties[0].id] : []);
 
-      const rightsToSend = isFullAdmin
-        ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${addRole}`, `dept_scope:${addDepartment}`]
+      const rightsToSend = isSuper
+        ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:super_admin`, `dept_scope:All Departments`]
         : [
             ...addRights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")),
             `org_role:${addRole}`,
@@ -453,19 +454,21 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSuccess(null);
     setSavingAccess(true);
 
-    // Admins and Super Admins always have all rights at all times
-    const isFullAdmin = editRole === "admin" || editRole === "super_admin";
-    const rightsToSend = isFullAdmin
-      ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${editRole}`, `dept_scope:${editDepartment}`]
+    // Only Super Admins hold unconditional full platform rights across all properties
+    const isSuper = editRole === "super_admin";
+    const rightsToSend = isSuper
+      ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:super_admin`, `dept_scope:All Departments`]
       : [
           ...editRights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")),
           `org_role:${editRole}`,
           `dept_scope:${editDepartment}`,
         ];
 
-    const propIdsToSend = isFullAdmin
+    const propIdsToSend = isSuper
       ? properties.map((p) => p.id)
-      : editPropertyIds;
+      : editPropertyIds.length > 0
+      ? editPropertyIds
+      : (properties[0]?.id ? [properties[0].id] : []);
 
     try {
       const res = await fetch("/api/users", {
@@ -660,20 +663,21 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             <td>
                               {(() => {
                                 const orgRole = getUserOrgRole(user);
+                                const isSuperAdmin = orgRole === "super_admin" || (user.rights || []).includes("org_role:super_admin");
+                                const isHotelAdmin = orgRole === "admin" || (!isSuperAdmin && user.role === "admin");
                                 const roleMeta = ORGANIZATIONAL_ROLES.find((r) => r.id === orgRole) || {
-                                  name: orgRole.replace(/_/g, " "),
-                                  tagline: "Team Member",
+                                  name: isHotelAdmin ? "Hotel Admin" : orgRole.replace(/_/g, " "),
+                                  tagline: isHotelAdmin ? "Assigned Property Administrator" : "Team Member",
                                 };
-                                const isFullAdmin = orgRole === "super_admin" || orgRole === "admin" || user.role === "admin";
                                 return (
                                   <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
                                     <span
                                       className="status"
                                       style={{
                                         background:
-                                          orgRole === "super_admin"
+                                          isSuperAdmin
                                             ? "var(--sage-deep)"
-                                            : orgRole === "admin"
+                                            : isHotelAdmin
                                             ? "var(--sage)"
                                             : orgRole === "general_manager" || orgRole === "executive"
                                             ? "#1e293b"
@@ -682,14 +686,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                             : orgRole === "feedback"
                                             ? "#0f766e"
                                             : "var(--line)",
-                                        color: isFullAdmin || orgRole !== "front_office_staff" ? "#fff" : "var(--ink)",
+                                        color: isSuperAdmin || isHotelAdmin || orgRole !== "front_office_staff" ? "#fff" : "var(--ink)",
                                         fontFamily: "var(--font-dm-mono)",
                                         fontSize: "9px",
                                         letterSpacing: "0.06em",
                                         textTransform: "uppercase",
                                         padding: "3px 8px",
                                         borderRadius: "3px",
-                                        boxShadow: orgRole === "super_admin" ? "0 1px 3px rgba(0,0,0,0.15)" : undefined,
+                                        boxShadow: isSuperAdmin ? "0 1px 3px rgba(0,0,0,0.15)" : undefined,
                                       }}
                                     >
                                       {roleMeta.name}
@@ -705,8 +709,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       }}
                                     >
                                       <Shield size={10} strokeWidth={1.75} />
-                                      {isFullAdmin
-                                        ? "Full administrator access"
+                                      {isSuperAdmin
+                                        ? "Full global platform authority"
                                         : Array.isArray(user.rights)
                                         ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
                                           ? `${user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length} rights active`
@@ -719,8 +723,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             </td>
                             <td>
                               {(() => {
+                                const orgRole = getUserOrgRole(user);
+                                const isSuperAdmin = orgRole === "super_admin" || (user.rights || []).includes("org_role:super_admin");
                                 const dept = getUserDepartment(user);
-                                const isFullAdmin = user.role === "admin" || (user.rights || []).includes("org_role:super_admin");
                                 const piiAllowed = canUserViewPii(user);
                                 return (
                                   <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
@@ -734,12 +739,16 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         fontSize: "10px",
                                         fontWeight: 600,
                                         fontFamily: "var(--font-dm-mono)",
-                                        background: isFullAdmin || dept === "All Departments" ? "var(--canvas-alt)" : "var(--sage-soft)",
-                                        color: isFullAdmin || dept === "All Departments" ? "var(--ink)" : "var(--sage-deep)",
+                                        background: isSuperAdmin ? "var(--canvas-alt)" : dept === "All Departments" ? "#edf4ed" : "var(--sage-soft)",
+                                        color: isSuperAdmin ? "var(--ink)" : dept === "All Departments" ? "#254230" : "var(--sage-deep)",
                                         border: "1px solid var(--line)",
                                       }}
                                     >
-                                      {isFullAdmin ? "Global (All Divisions)" : dept}
+                                      {isSuperAdmin
+                                        ? "Global (All Divisions)"
+                                        : dept === "All Departments"
+                                        ? "All Departments (Property-wide)"
+                                        : dept}
                                     </span>
                                     <span style={{ fontSize: "9px", color: piiAllowed ? "var(--warm-deep)" : "var(--muted)" }}>
                                       {piiAllowed ? "✓ PII Unmasked" : "⊘ PII Masked"}
@@ -751,8 +760,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             <td>
                               {(() => {
                                 const orgRole = getUserOrgRole(user);
-                                const isFullAdmin = orgRole === "super_admin" || orgRole === "admin" || user.role === "admin";
-                                return isFullAdmin ? (
+                                const isSuperAdmin = orgRole === "super_admin" || (user.rights || []).includes("org_role:super_admin");
+                                return isSuperAdmin ? (
                                   <span
                                     style={{
                                       display: "inline-flex",
@@ -870,12 +879,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       ? [user.property_id]
                                       : [];
                                     setEditPropertyIds(initialPropIds);
+                                    const isSuper = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
                                     setEditRights(
-                                      org === "admin" || org === "super_admin" || user.role === "admin"
+                                      isSuper
                                         ? SYSTEM_RIGHTS.map((r) => r.id)
                                         : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
                                         ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:"))
-                                        : ROLE_DEFAULT_RIGHTS[org] || []
+                                        : ROLE_DEFAULT_RIGHTS[org] || ROLE_DEFAULT_RIGHTS.admin || []
                                     );
                                     setError(null);
                                     setSuccess(null);
@@ -982,13 +992,20 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(val) => {
                             const newRole = val as string;
                             setAddRole(newRole);
-                            if (newRole === "admin" || newRole === "super_admin") {
+                            if (newRole === "super_admin") {
                               setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setAddPropertyIds(properties.map((p) => p.id));
+                              setAddDepartment("All Departments");
+                            } else if (newRole === "admin") {
+                              setAddRights(ROLE_DEFAULT_RIGHTS.admin || []);
+                              setAddDepartment("All Departments");
+                              if (addPropertyIds.length === 0 && properties.length > 0) {
+                                setAddPropertyIds([properties[0].id]);
+                              }
                             } else {
                               setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
                               if (addPropertyIds.length === 0 && properties.length > 0) {
-                                setAddPropertyIds(properties.map((p) => p.id));
+                                setAddPropertyIds([properties[0].id]);
                               }
                             }
                           }}
@@ -1001,7 +1018,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </div>
 
-                      {addRole !== "admin" && addRole !== "super_admin" && (
+                      {addRole !== "super_admin" && (
                         <div style={{ marginBottom: "16px" }}>
                           <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
                             Department Operational Scope (RBAC Boundary)
@@ -1015,18 +1032,18 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               label: dept,
                               detail:
                                 dept === "All Departments"
-                                  ? "Unrestricted cross-division oversight"
+                                  ? (addRole === "admin" ? "Property-wide oversight across all departments" : "Unrestricted cross-division oversight")
                                   : `Strictly scoped to ${dept} complaints and guest moments`,
                             }))}
                           />
                         </div>
                       )}
 
-                      {addRole !== "admin" && addRole !== "super_admin" && (
+                      {addRole !== "super_admin" && (
                         <div style={{ marginBottom: "18px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <label className="field-label" style={{ margin: 0 }}>
-                              Assigned Properties ({addPropertyIds.length} of {properties.length} selected)
+                              {addRole === "admin" ? "Administered Hotel Properties" : "Assigned Properties"} ({addPropertyIds.length} of {properties.length} selected)
                             </label>
                             <div style={{ display: "flex", gap: "6px" }}>
                               <button
@@ -1125,7 +1142,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </label>
 
-                      {addRole === "admin" || addRole === "super_admin" ? (
+                      {addRole === "super_admin" ? (
                         <div
                           style={{
                             padding: "14px 16px",
@@ -1142,7 +1159,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
                             <strong style={{ fontSize: "12px", color: "#254230" }}>
-                              {addRole === "super_admin" ? "Super Administrator Access" : "Administrator Full Access"}
+                              Super Administrator Access
                             </strong>
                           </div>
                           <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
@@ -1325,9 +1342,15 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(val) => {
                             const newRole = val as string;
                             setEditRole(newRole);
-                            if (newRole === "admin" || newRole === "super_admin") {
+                            if (newRole === "super_admin") {
                               setEditRights(SYSTEM_RIGHTS.map((r) => r.id));
-                              setEditPropertyId("");
+                              setEditDepartment("All Departments");
+                              setEditPropertyIds(properties.map((p) => p.id));
+                            } else if (newRole === "admin") {
+                              setEditRights(ROLE_DEFAULT_RIGHTS.admin || []);
+                              if (editPropertyIds.length === 0 && properties.length > 0) {
+                                setEditPropertyIds([properties[0].id]);
+                              }
                             } else {
                               setEditRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
                             }
@@ -1341,7 +1364,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </div>
 
-                      {editRole !== "admin" && editRole !== "super_admin" && (
+                      {editRole !== "super_admin" && (
                         <div style={{ marginBottom: "20px" }}>
                           <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
                             Department Operational Scope (RBAC Boundary)
@@ -1355,18 +1378,18 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               label: dept,
                               detail:
                                 dept === "All Departments"
-                                  ? "Unrestricted cross-division oversight"
+                                  ? (editRole === "admin" ? "Property-wide oversight across all departments" : "Unrestricted cross-division oversight")
                                   : `Strictly scoped to ${dept} complaints and guest moments`,
                             }))}
                           />
                         </div>
                       )}
 
-                      {editRole !== "admin" && editRole !== "super_admin" && (
+                      {editRole !== "super_admin" && (
                         <div style={{ marginBottom: "20px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <label className="field-label" style={{ margin: 0 }}>
-                              Assigned Properties ({editPropertyIds.length} of {properties.length} selected)
+                              {editRole === "admin" ? "Administered Hotel Properties" : "Assigned Properties"} ({editPropertyIds.length} of {properties.length} selected)
                             </label>
                             <div style={{ display: "flex", gap: "6px" }}>
                               <button
@@ -1452,7 +1475,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
-                      {editRole === "admin" || editRole === "super_admin" ? (
+                      {editRole === "super_admin" ? (
                         <div
                           style={{
                             padding: "14px 16px",
@@ -1469,11 +1492,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
                             <strong style={{ fontSize: "12px", color: "#254230" }}>
-                              {editRole === "super_admin" ? "Super Administrator Access" : "Administrator Full Access"}
+                              Super Administrator Access
                             </strong>
                           </div>
                           <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
-                            Full operational capabilities and portfolio-wide authority automatically applied. No manual configuration required.
+                            Full operational capabilities and portfolio-wide authority across all properties automatically applied.
                           </p>
                         </div>
                       ) : (

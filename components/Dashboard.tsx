@@ -233,18 +233,18 @@ export function AppShell({
 
   // Dynamic rights-based sidebar navigation filtering for 9 organizational roles
   const effectiveRole = currentUser?.orgRole || currentUser?.role;
-  const isSuperAdmin = effectiveRole === "super_admin";
-  const isAdmin = effectiveRole === "admin" || isSuperAdmin;
+  const isSuperAdmin =
+    effectiveRole === "super_admin" ||
+    (currentUser?.rights || []).includes("org_role:super_admin");
   const isAnalyst = effectiveRole === "analyst";
   const isReport = effectiveRole === "report";
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
   const visibleNav = nav.filter((item) => {
-    // Administrator & Super Admin hold all operational capabilities
-    if (isAdmin) return true;
+    // Super Admin holds unconditional full platform capabilities
+    if (isSuperAdmin) return true;
 
     // Strict organizational role restrictions:
-    // For report and analyst roles, strictly limit visible modules
     if (isAnalyst) {
       return ["Dashboard", "Analytics", "All feedback"].includes(item.label);
     }
@@ -252,8 +252,8 @@ export function AppShell({
       return ["Dashboard", "Reports"].includes(item.label);
     }
 
-    // System settings is strictly for admin only
-    if (item.label === "System settings" && !isAdmin) {
+    // System settings is strictly for super admin or explicit manage_settings capability
+    if (item.label === "System settings" && !isSuperAdmin && !userRights.has("manage_settings")) {
       return false;
     }
 

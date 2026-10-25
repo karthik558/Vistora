@@ -46,10 +46,10 @@ export async function GET(request: NextRequest) {
     }
 
     const usersWithRights = (profiles || []).map((p: any) => {
-      let rights = p.role === "admin"
-        ? DEFAULT_RIGHTS.admin
-        : Array.isArray(p.rights) && p.rights.length > 0
+      let rights = Array.isArray(p.rights) && p.rights.length > 0
         ? p.rights
+        : p.role === "admin"
+        ? DEFAULT_RIGHTS.admin
         : DEFAULT_RIGHTS[p.role as keyof typeof DEFAULT_RIGHTS] || [];
 
       const cleanAvatar = p.avatar_url && (p.avatar_url.startsWith("{") || p.avatar_url.startsWith("pwd:"))
@@ -143,9 +143,9 @@ export async function POST(request: NextRequest) {
       `org_role:${role}`,
     ];
 
-    // Parse multi-property access
+    // Parse multi-property access: only super_admin has global access across all properties
     let resolvedPropertyIds: string[] = [];
-    if (dbRole === "admin") {
+    if (role === "super_admin") {
       resolvedPropertyIds = [];
     } else if (Array.isArray(propertyIds)) {
       resolvedPropertyIds = propertyIds.filter((id) => typeof id === "string" && id.trim().length > 0);
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
       resolvedPropertyIds = [propertyId.trim()];
     }
 
-    const primaryPropertyId = resolvedPropertyIds.length === 1 ? resolvedPropertyIds[0] : null;
+    const primaryPropertyId = resolvedPropertyIds.length > 0 ? resolvedPropertyIds[0] : null;
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
@@ -294,13 +294,17 @@ export async function PATCH(request: NextRequest) {
 
     const effectiveRole = chosenRole || currentProfile?.role;
 
-    // Resolve property access
-    if (effectiveRole === "admin" || effectiveRole === "super_admin") {
+    // Resolve property access: only super_admin has global access across all properties
+    if (effectiveRole === "super_admin") {
       updatePayload.property_id = null;
       updatePayload.property_ids = [];
       updatePayload.rights = [
         ...DEFAULT_RIGHTS.admin,
-        `org_role:${effectiveRole}`,
+        "view_guest_pii",
+        "manage_settings",
+        "view_audit_log",
+        `org_role:super_admin`,
+        `dept_scope:All Departments`,
       ];
     } else {
       let resolvedPropertyIds: string[] | undefined = undefined;
@@ -312,7 +316,7 @@ export async function PATCH(request: NextRequest) {
 
       if (resolvedPropertyIds !== undefined) {
         updatePayload.property_ids = resolvedPropertyIds;
-        updatePayload.property_id = resolvedPropertyIds.length === 1 ? resolvedPropertyIds[0] : null;
+        updatePayload.property_id = resolvedPropertyIds.length > 0 ? resolvedPropertyIds[0] : null;
       }
 
       if (Array.isArray(rights)) {

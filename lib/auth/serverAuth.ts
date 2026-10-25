@@ -94,14 +94,18 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
           ? [profile.property_id]
           : [];
 
+        const rights = profile?.rights || [];
+        const orgRole = (rights as string[]).find((r) => r.startsWith("org_role:"))?.replace("org_role:", "") || role;
+
         return {
           id: data.user.id,
           email: data.user.email || "",
           fullName: profile?.full_name || data.user.user_metadata?.full_name || "User",
           role,
+          orgRole,
           propertyId: profile?.property_id || null,
           propertyIds,
-          rights: profile?.rights || [],
+          rights,
         };
       }
     } catch {}
@@ -133,14 +137,18 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
             ? [profile.property_id]
             : [];
 
+          const rights = profile.rights || [];
+          const orgRole = (rights as string[]).find((r) => r.startsWith("org_role:"))?.replace("org_role:", "") || parsed.orgRole || profile.role;
+
           const verified: VerifiedUser = {
             id: profile.id,
             email: profile.email,
             fullName: profile.full_name,
             role: profile.role,
+            orgRole,
             propertyId: profile.property_id || null,
             propertyIds,
-            rights: profile.rights || [],
+            rights,
           };
           verifiedUserCache.set(cacheKey, { user: verified, timestamp: now });
           return verified;

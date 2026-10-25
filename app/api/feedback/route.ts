@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     let effectivePropertyId = propertyId;
 
-    if (user && user.role !== "admin") {
+    // Strict multi-tenant property access validation:
+    // Super Admins can query all properties globally. Hotel Admins and staff are strictly scoped.
+    const isSuperAdmin = user?.orgRole === "super_admin" || (user?.rights || []).includes("org_role:super_admin");
+    if (user && !isSuperAdmin) {
       const allowed = user.propertyIds?.length
         ? user.propertyIds
         : user.propertyId

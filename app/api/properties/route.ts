@@ -24,8 +24,10 @@ export async function GET(request: NextRequest) {
       .select("*, profiles:profiles(id, full_name, email, role)")
       .order("name", { ascending: true });
 
-    // Multi-tenant isolation: non-admins only see properties they are assigned to
-    if (user && user.role !== "admin") {
+    // Multi-tenant isolation: Only Super Admins see all properties globally.
+    // Hotel Admins and staff only see properties they are assigned to.
+    const isSuperAdmin = user?.orgRole === "super_admin" || (user?.rights || []).includes("org_role:super_admin");
+    if (user && !isSuperAdmin) {
       const allowed = user.propertyIds?.length
         ? user.propertyIds
         : user.propertyId
