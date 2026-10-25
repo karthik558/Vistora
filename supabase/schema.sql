@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Ensure profile columns exist even if the table was created earlier without them
+-- Ensure profile and property columns exist even if created earlier
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS rights TEXT[] DEFAULT '{}';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS property_ids UUID[] DEFAULT '{}';
@@ -504,6 +505,7 @@ CREATE TABLE IF NOT EXISTS public.feedback_questions (
     question_text TEXT NOT NULL,
     question_type TEXT NOT NULL DEFAULT 'choice', -- 'choice', 'rating', 'yes_no', 'text'
     options JSONB DEFAULT '[]'::jsonb,
+    translations JSONB DEFAULT '{}'::jsonb,
     department department_type,
     is_required BOOLEAN NOT NULL DEFAULT false,
     display_order INTEGER NOT NULL DEFAULT 0,
@@ -511,6 +513,8 @@ CREATE TABLE IF NOT EXISTS public.feedback_questions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.feedback_questions ADD COLUMN IF NOT EXISTS translations JSONB DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS public.feedback_answers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
