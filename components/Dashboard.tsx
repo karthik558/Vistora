@@ -307,7 +307,12 @@ export function AppShell({
               width={130}
               height={34}
               priority
-              style={{ height: "28px", width: "auto", objectFit: "contain" }}
+              style={{
+                height: "28px",
+                width: "auto",
+                objectFit: "contain",
+                filter: "brightness(0) invert(1)",
+              }}
             />
           </Link>
           {!sidebarCollapsed && (
@@ -355,7 +360,19 @@ export function AppShell({
           ) : (
             groups.map((group) => (
               <div className="nav-group" key={group}>
-                <p className="nav-group-title">{group}</p>
+                <p
+                  className="nav-group-title"
+                  style={{
+                    color: "#9ec9b0",
+                    fontSize: "10.5px",
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    margin: "16px 8px 6px",
+                  }}
+                >
+                  {group}
+                </p>
                 {visibleNav
                   .filter((item) => item.group === group)
                   .map((item) => {
@@ -414,10 +431,32 @@ export function AppShell({
           <div className="user-row" title={`${displayName} (${displayEmail})`}>
             <span className="user-avatar">{initials}</span>
             <div className="user-info" style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
-              <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <strong
+                style={{
+                  color: "#ffffff",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  display: "block",
+                }}
+              >
                 {displayName}
               </strong>
-              <small style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+              <small
+                style={{
+                  color: "#b4d8c4",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  display: "block",
+                  marginTop: "2px",
+                }}
+                title={displayEmail}
+              >
                 {displayEmail}
               </small>
             </div>
@@ -429,22 +468,23 @@ export function AppShell({
               title="Log out"
               aria-label="Log out"
               style={{
-                background: "transparent",
-                border: "1px solid var(--line)",
-                borderRadius: "4px",
-                padding: "5px 8px",
+                background: "rgba(255, 255, 255, 0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.24)",
+                borderRadius: "6px",
+                padding: "6px 10px",
                 cursor: "pointer",
-                color: "var(--muted)",
+                color: "#ffffff",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
-                fontSize: "10px",
-                fontFamily: "var(--font-dm-mono)",
+                gap: "5px",
+                fontSize: "11px",
+                fontFamily: "var(--font-dm-sans)",
+                fontWeight: 500,
                 flexShrink: 0,
               }}
             >
-              <LogOut size={12} strokeWidth={1.75} />
-              <span>Log out</span>
+              <LogOut size={13} strokeWidth={1.8} style={{ color: "#ffffff" }} />
+              <span style={{ color: "#ffffff", fontWeight: 500 }}>Log out</span>
             </button>
           </div>
         </div>

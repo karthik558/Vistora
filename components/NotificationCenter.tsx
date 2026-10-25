@@ -15,51 +15,121 @@ export interface SystemNotification {
   read: boolean;
 }
 
-const INITIAL_NOTIFICATIONS: SystemNotification[] = [
-  {
-    id: "notif-1",
-    title: "New 5-Star Review Received",
-    message: "Lady Caroline Montagu (Suite 408) submitted a 5★ review for Concierge.",
-    type: "feedback",
-    time: "12 min ago",
-    href: "/dashboard/feedback",
-    read: false,
-  },
-  {
-    id: "notif-2",
-    title: "Urgent SLA Alert",
-    message: "Room 204 air conditioning complaint has 14 minutes left within SLA response target.",
-    type: "sla",
-    time: "24 min ago",
-    href: "/dashboard/complaints",
-    read: false,
-  },
-  {
-    id: "notif-3",
-    title: "Guest Invitation Completed",
-    message: "Kenjiro Takahashi submitted feedback through tracked invite link (inv_4b12c6f1).",
-    type: "invitation",
-    time: "1 hour ago",
-    href: "/dashboard/invitations",
-    read: false,
-  },
-  {
-    id: "notif-4",
-    title: "Daily SLA Compliance Report Ready",
-    message: "Yesterday's overall hospitality service recovery SLA closed at 96.4%.",
-    type: "feedback",
-    time: "3 hours ago",
-    href: "/dashboard/reports",
-    read: true,
-  },
-];
-
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [loading, setLoading] = useState(true);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  useEffect(() => {
+    let active = true;
+
+    async function fetchLiveNotifications() {
+      try {
+        setLoading(true);
+        let readIds: string[] = [];
+        try {
+          const stored = localStorage.getItem("vistora_read_notifications");
+          if (stored) readIds = JSON.parse(stored);
+        } catch {}
+
+        // Fetch live feedback records
+        const feedbackRes = await fetch("/api/feedback");
+        const feedbackJson = await feedbackRes.json();
+        const feedbackList: any[] = Array.isArray(feedbackJson?.data) ? feedbackJson.data : [];
+
+        // Fetch live audit logs if available
+        let auditList: any[] = [];
+        try {
+          const auditRes = await fetch("/api/audit-log");
+          const auditJson = await auditRes.json();
+          if (auditJson?.success && Array.isArray(auditJson?.data)) {
+            auditList = auditJson.data;
+          }
+        } catch {}
+
+        const realList: SystemNotification[] = [];
+
+        // Sort real feedback latest first
+        const sortedFeedback = [...feedbackList].sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+
+        for (const item of sortedFeedback.slice(0, 8)) {
+          const notifId = `fb-${item.id}`;
+          const isComplaint = item.rating <= 2 || item.status === "needs_attention" || item.status === "escalated";
+          const isSla = item.status === "needs_attention" || item.status === "escalated";
+
+          let title = "";
+          let message = "";
+          let type: SystemNotification["type"] = "feedback";
+          let href = "/dashboard/feedback";
+
+          if (isComplaint) {
+            type = isSla ? "sla" : "complaint";
+            title = item.status === "escalated"
+              ? `Escalated: ${item.department || "Guest Recovery"}`
+              : item.rating <= 2
+              ? `Service Recovery Alert (${item.rating}★)`
+              : `Needs Attention: ${item.department || "Hospitality"}`;
+            message = `${item.name || "Guest"}${item.roomNumber ? ` (Room ${item.roomNumber})` : ""}: ${item.comment ? (item.comment.length > 70 ? item.comment.slice(0, 70) + "…" : item.comment) : "Guest submitted service request requiring review."}`;
+            href = "/dashboard/complaints";
+          } else if (item.rating >= 4) {
+            type = "feedback";
+            title = `New ${item.rating}-Star Review`;
+            message = `${item.name || "Guest"}${item.roomNumber ? ` (Room ${item.roomNumber})` : ""} submitted a ${item.rating}★ review for ${item.department || "the hotel"}.`;
+            href = "/dashboard/feedback";
+          } else {
+            type = "feedback";
+            title = `Guest Rating Received (${item.rating}★)`;
+            message = `${item.name || "Guest"}${item.roomNumber ? ` (Room ${item.roomNumber})` : ""} rated ${item.department || "Services"} ${item.rating}★.`;
+            href = "/dashboard/feedback";
+          }
+
+          realList.push({
+            id: notifId,
+            title,
+            message,
+            type,
+            time: item.timeAgo || "Recently",
+            href,
+            read: readIds.includes(notifId),
+          });
+        }
+
+        // Add real audit log actions if any
+        for (const log of auditList.slice(0, 3)) {
+          const notifId = `audit-${log.id}`;
+          const actor = log.actor_name || log.actor_email || "Staff member";
+          realList.push({
+            id: notifId,
+            title: log.action || "Compliance Event",
+            message: `${actor} recorded a compliance audit action${log.target_user ? ` on ${log.target_user}` : ""}.`,
+            type: "invitation",
+            time: new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            href: "/dashboard/audit-log",
+            read: readIds.includes(notifId),
+          });
+        }
+
+        if (active) {
+          setNotifications(realList);
+        }
+      } catch (err) {
+        console.error("Failed to load notifications:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    fetchLiveNotifications();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -76,11 +146,24 @@ export default function NotificationCenter() {
   }, [isOpen]);
 
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      try {
+        localStorage.setItem("vistora_read_notifications", JSON.stringify(updated.map((n) => n.id)));
+      } catch {}
+      return updated;
+    });
   };
 
   const markItemRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setNotifications((prev) => {
+      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
+      try {
+        const readIds = updated.filter((n) => n.read).map((n) => n.id);
+        localStorage.setItem("vistora_read_notifications", JSON.stringify(readIds));
+      } catch {}
+      return updated;
+    });
   };
 
   return (
@@ -220,7 +303,11 @@ export default function NotificationCenter() {
 
             {/* Notification items */}
             <div style={{ maxHeight: "360px", overflowY: "auto" }}>
-              {notifications.length === 0 ? (
+              {loading ? (
+                <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+                  Loading live notifications…
+                </div>
+              ) : notifications.length === 0 ? (
                 <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
                   All caught up! No recent notifications.
                 </div>
