@@ -262,19 +262,11 @@ export default function OperationsPage({
                 </div>
               )}
 
-              <div className="table-toolbar page-toolbar">
-                <input
-                  className="auth-input"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search guest, room, department, or comment…"
-                  style={{ maxWidth: "340px", flex: 1 }}
-                />
-                <span className="toolbar-count">{feedback.length} records</span>
-              </div>
               <FeedbackTable
                 feedback={feedback}
                 title={section === "complaints" ? "Open recovery queue" : "Feedback records"}
+                searchQuery={query}
+                onSearchChange={setQuery}
               />
             </>
           )}

@@ -26,6 +26,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
@@ -481,6 +482,62 @@ export function AppShell({
         </header>
         {children}
       </main>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
+        <Link
+          href="/dashboard"
+          className={`mobile-nav-tab ${pathname === "/dashboard" ? "active" : ""}`}
+          onClick={() => setMobileNavOpen(false)}
+          title="Dashboard overview"
+        >
+          <LayoutDashboard size={19} strokeWidth={pathname === "/dashboard" ? 2.2 : 1.75} />
+          <span>Dashboard</span>
+        </Link>
+        <Link
+          href="/dashboard/feedback"
+          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/feedback") ? "active" : ""}`}
+          onClick={() => setMobileNavOpen(false)}
+          title="All guest feedback"
+        >
+          <MessageSquare size={19} strokeWidth={pathname?.startsWith("/dashboard/feedback") ? 2.2 : 1.75} />
+          <span>Feedback</span>
+        </Link>
+        <Link
+          href="/dashboard/complaints"
+          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/complaints") ? "active" : ""}`}
+          onClick={() => setMobileNavOpen(false)}
+          title="Complaints & SLA recovery"
+        >
+          <div className="mobile-nav-icon-wrap">
+            <AlertCircle size={19} strokeWidth={pathname?.startsWith("/dashboard/complaints") ? 2.2 : 1.75} />
+            {complaints > 0 && <span className="mobile-nav-badge">{complaints}</span>}
+          </div>
+          <span>SLA &amp; Ops</span>
+        </Link>
+        <Link
+          href="/dashboard/analytics"
+          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/analytics") ? "active" : ""}`}
+          onClick={() => setMobileNavOpen(false)}
+          title="Analytics & trends"
+        >
+          <BarChart3 size={19} strokeWidth={pathname?.startsWith("/dashboard/analytics") ? 2.2 : 1.75} />
+          <span>Analytics</span>
+        </Link>
+        <button
+          type="button"
+          className={`mobile-nav-tab ${mobileNavOpen ? "active" : ""}`}
+          onClick={() => setMobileNavOpen(!mobileNavOpen)}
+          aria-label={mobileNavOpen ? "Close menu" : "Open all modules menu"}
+        >
+          {mobileNavOpen ? (
+            <X size={19} strokeWidth={2.2} />
+          ) : (
+            <Menu size={19} strokeWidth={1.75} />
+          )}
+          <span>{mobileNavOpen ? "Close" : "Menu"}</span>
+        </button>
+      </nav>
     </div>
   );
 }
@@ -1073,12 +1130,26 @@ export function FeedbackTable({
   feedback: initialFeedback,
   title = "Feedback",
   onResetProperty,
+  searchQuery: propSearchQuery,
+  onSearchChange,
 }: {
   feedback: FeedbackViewModel[];
   title?: string;
   onResetProperty?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (val: string) => void;
 }) {
   const router = useRouter();
+  const [internalQuery, setInternalQuery] = useState("");
+  const activeQuery = propSearchQuery !== undefined ? propSearchQuery : internalQuery;
+  const handleQueryChange = (val: string) => {
+    if (onSearchChange) {
+      onSearchChange(val);
+    } else {
+      setInternalQuery(val);
+    }
+  };
+
   const [selected, setSelected] = useState<FeedbackViewModel | null>(null);
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [notes, setNotes] = useState("");
@@ -1122,8 +1193,19 @@ export function FeedbackTable({
 
   const isAdmin = userRole === "admin";
 
-  // Filter feedback by commentsFilter
+  // Filter feedback by search query and commentsFilter
   const visibleFeedback = initialFeedback.filter((item) => {
+    if (activeQuery && activeQuery.trim()) {
+      const q = activeQuery.toLowerCase().trim();
+      const match =
+        item.name.toLowerCase().includes(q) ||
+        item.roomNumber.toLowerCase().includes(q) ||
+        item.department.toLowerCase().includes(q) ||
+        (item.comment && item.comment.toLowerCase().includes(q)) ||
+        (item.guestEmail && item.guestEmail.toLowerCase().includes(q)) ||
+        (item.detail && item.detail.toLowerCase().includes(q));
+      if (!match) return false;
+    }
     if (commentsFilter === "with_comments") {
       return Boolean(item.comment && item.comment.trim());
     }
@@ -1224,6 +1306,28 @@ export function FeedbackTable({
           <p>Guest ratings, department signal, and resolution status</p>
         </div>
         <div className="table-header-controls">
+          {/* Integrated Search Box */}
+          <div className="table-search-box">
+            <Search size={13} className="table-search-icon" />
+            <input
+              type="text"
+              value={activeQuery}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="Search guest, room, department, or comment…"
+              className="table-search-field"
+            />
+            {activeQuery && (
+              <button
+                type="button"
+                onClick={() => handleQueryChange("")}
+                className="table-search-clear"
+                title="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
           {/* Comments Filter Dropdown matching PropertyFilter style */}
           <FeedbackFilterDropdown
             value={commentsFilter}

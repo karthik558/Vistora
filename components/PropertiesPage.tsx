@@ -62,6 +62,113 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const [totalRooms, setTotalRooms] = useState("200");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
+  // Property Settings Modal states (configured directly inside Properties section)
+  const [selectedSettingProperty, setSelectedSettingProperty] = useState<PropertyItem | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [savingPropSettings, setSavingPropSettings] = useState(false);
+  const [settingName, setSettingName] = useState("");
+  const [settingCode, setSettingCode] = useState("");
+  const [settingBrand, setSettingBrand] = useState("Vistora Hotels & Resorts");
+  const [settingRooms, setSettingRooms] = useState("200");
+  const [settingLocation, setSettingLocation] = useState("");
+  const [settingEmail, setSettingEmail] = useState("");
+  const [settingPhone, setSettingPhone] = useState("");
+  const [settingWelcome, setSettingWelcome] = useState("");
+  const [settingIsActive, setSettingIsActive] = useState(true);
+
+  async function handleOpenSettings(prop: PropertyItem) {
+    setSelectedSettingProperty(prop);
+    setSettingName(prop.name);
+    setSettingCode(prop.code);
+    setSettingBrand(prop.brand || "Vistora Hotels & Resorts");
+    setSettingRooms(String(prop.total_rooms || 200));
+    setSettingLocation(`${prop.location}, ${prop.country}`);
+    setSettingEmail(`${prop.code.toLowerCase()}@vistora.app`);
+    setSettingPhone("");
+    setSettingWelcome(`Welcome to ${prop.name}. Your comfort is our supreme honor.`);
+    setSettingIsActive(prop.is_active !== false);
+    setShowSettingsModal(true);
+
+    try {
+      const res = await fetch(`/api/settings?propertyId=${prop.id}`);
+      const json = await res.json();
+      if (json.success && json.propertySetting) {
+        const s = json.propertySetting;
+        if (s.propertyName) setSettingName(s.propertyName);
+        if (s.propertyCode) setSettingCode(s.propertyCode);
+        if (s.brand) setSettingBrand(s.brand);
+        if (s.totalRooms) setSettingRooms(String(s.totalRooms));
+        if (s.location) setSettingLocation(s.location);
+        if (s.contactEmail) setSettingEmail(s.contactEmail);
+        if (s.contactPhone) setSettingPhone(s.contactPhone);
+        if (s.welcomeMessage) setSettingWelcome(s.welcomeMessage);
+        if (typeof s.isActive === "boolean") setSettingIsActive(s.isActive);
+      }
+    } catch {}
+  }
+
+  async function handleSavePropertySettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedSettingProperty) return;
+
+    setSavingPropSettings(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const configObj = {
+        propertyId: selectedSettingProperty.id,
+        propertyName: settingName.trim(),
+        propertyCode: settingCode.trim().toUpperCase(),
+        brand: settingBrand.trim(),
+        isActive: settingIsActive,
+        totalRooms: parseInt(settingRooms, 10) || 100,
+        location: settingLocation.trim(),
+        contactEmail: settingEmail.trim(),
+        contactPhone: settingPhone.trim(),
+        welcomeMessage: settingWelcome.trim(),
+      };
+
+      // 1. Save to settings service
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "property",
+          propertyId: selectedSettingProperty.id,
+          propertySetting: configObj,
+        }),
+      });
+
+      // 2. Also update properties table
+      const resProp = await fetch("/api/properties", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: selectedSettingProperty.id,
+          name: settingName.trim(),
+          code: settingCode.trim().toUpperCase(),
+          brand: settingBrand.trim(),
+          totalRooms: parseInt(settingRooms, 10) || 100,
+          isActive: settingIsActive,
+        }),
+      });
+
+      const resJson = await resProp.json();
+      if (!resProp.ok || !resJson.success) {
+        throw new Error(resJson.error || "Failed to update property settings.");
+      }
+
+      setSuccess(`Property settings for "${settingName}" updated successfully.`);
+      setShowSettingsModal(false);
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || "Failed to save property settings.");
+    } finally {
+      setSavingPropSettings(false);
+    }
+  }
+
   async function loadData() {
     setLoading(true);
     try {
@@ -380,15 +487,16 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
 
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #edf1ed", paddingTop: "12px", gap: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <a
-                            href={`/dashboard/settings?tab=property&property=${prop.id}`}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSettings(prop)}
                             className="button button-outline compact"
                             style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                            title="Configure property-specific settings"
+                            title="Configure property-specific operational settings"
                           >
                             <Settings size={11} strokeWidth={1.75} />
                             Settings
-                          </a>
+                          </button>
                           <a
                             href={`/dashboard?property=${prop.id}`}
                             className="button button-outline compact"
@@ -607,6 +715,229 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                   </button>
                   <button type="submit" className="button button-dark" disabled={submitting}>
                     {submitting ? "Creating…" : "Create property"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* PROPERTY SETTINGS MODAL */}
+        {showSettingsModal && selectedSettingProperty && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(11, 16, 15, 0.45)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "16px",
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              style={{
+                background: "var(--panel, #ffffff)",
+                border: "1px solid var(--line)",
+                borderRadius: "8px",
+                width: "100%",
+                maxWidth: "600px",
+                padding: "26px",
+                boxShadow: "0 20px 48px rgba(0,0,0,0.18)",
+                maxHeight: "90vh",
+                overflowY: "auto",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px 0", fontSize: "17px", color: "var(--ink)" }}>
+                    Property Settings · {selectedSettingProperty.name}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>
+                    Configure hotel parameters, operational keys, contact routes, and public form visibility.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "4px" }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSavePropertySettings}>
+                {/* Active / Disabled Status Toggle Banner */}
+                <div
+                  style={{
+                    padding: "14px 16px",
+                    background: settingIsActive ? "var(--sage-soft, #f0fdf4)" : "var(--red-soft, #fef2f2)",
+                    border: `1px solid ${settingIsActive ? "var(--sage, #bbf7d0)" : "var(--red, #fecaca)"}`,
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "18px",
+                  }}
+                >
+                  <div>
+                    <strong style={{ display: "block", fontSize: "12px", color: settingIsActive ? "var(--sage-deep, #15803d)" : "var(--red, #b91c1c)" }}>
+                      Operational Status: {settingIsActive ? "ACTIVE & LIVE" : "DISABLED / INACTIVE"}
+                    </strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--muted)" }}>
+                      {settingIsActive
+                        ? "Visible to guests on public feedback forms and touchpoints."
+                        : "Hidden from guest feedback forms and QR codes."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettingIsActive(!settingIsActive)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "4px",
+                      border: "1px solid var(--line)",
+                      background: "var(--panel, #ffffff)",
+                      color: "var(--ink)",
+                      fontWeight: 600,
+                      fontSize: "11px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {settingIsActive ? "Set Inactive" : "Set Active"}
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gap: "14px", marginBottom: "18px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Property Name *
+                      </label>
+                      <input
+                        type="text"
+                        className="auth-input"
+                        value={settingName}
+                        onChange={(e) => setSettingName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Code (e.g. VRB) *
+                      </label>
+                      <input
+                        type="text"
+                        className="auth-input"
+                        value={settingCode}
+                        onChange={(e) => setSettingCode(e.target.value)}
+                        maxLength={5}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Brand / Collection
+                      </label>
+                      <input
+                        type="text"
+                        className="auth-input"
+                        value={settingBrand}
+                        onChange={(e) => setSettingBrand(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Total Rooms / Keys
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        className="auth-input"
+                        value={settingRooms}
+                        onChange={(e) => setSettingRooms(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                      Location &amp; Country
+                    </label>
+                    <input
+                      type="text"
+                      className="auth-input"
+                      value={settingLocation}
+                      onChange={(e) => setSettingLocation(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Concierge Alert Email
+                      </label>
+                      <input
+                        type="email"
+                        className="auth-input"
+                        value={settingEmail}
+                        onChange={(e) => setSettingEmail(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                        Contact Phone
+                      </label>
+                      <input
+                        type="text"
+                        className="auth-input"
+                        value={settingPhone}
+                        onChange={(e) => setSettingPhone(e.target.value)}
+                        placeholder="+66 2 123 4567"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="field-label" style={{ display: "block", marginBottom: "4px", fontSize: "11px" }}>
+                      Guest Welcome Message (Shown on Public Feedback Form)
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="auth-input"
+                      value={settingWelcome}
+                      onChange={(e) => setSettingWelcome(e.target.value)}
+                      style={{ resize: "vertical" }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
+                  <button
+                    type="button"
+                    className="button button-outline"
+                    onClick={() => setShowSettingsModal(false)}
+                    disabled={savingPropSettings}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="button button-dark"
+                    disabled={savingPropSettings}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <Settings size={13} />
+                    <span>{savingPropSettings ? "Saving…" : "Save Property Settings"}</span>
                   </button>
                 </div>
               </form>
