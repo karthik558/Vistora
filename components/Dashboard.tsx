@@ -1193,6 +1193,7 @@ export default function Dashboard({
                   : "Recent feedback · All properties"
               }
               onResetProperty={() => setSelectedProperty("all")}
+              isDashboard={true}
             />
           </>
         ) : (
@@ -1270,18 +1271,33 @@ function splitGuestStatement(comment: string) {
   return { note, answers };
 }
 
+function getPaginationPages(currentPage: number, totalPages: number): (number | "...")[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 3) {
+    return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+}
+
 export function FeedbackTable({
   feedback: initialFeedback,
   title = "Feedback",
   onResetProperty,
   searchQuery: propSearchQuery,
   onSearchChange,
+  isDashboard = false,
 }: {
   feedback: FeedbackViewModel[];
   title?: string;
   onResetProperty?: () => void;
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
+  isDashboard?: boolean;
 }) {
   const router = useRouter();
   const [internalQuery, setInternalQuery] = useState("");
@@ -1317,6 +1333,19 @@ export function FeedbackTable({
   // Comments visibility toggle and filter
   const [showComments, setShowComments] = useState<boolean>(true);
   const [commentsFilter, setCommentsFilter] = useState<FeedbackCommentFilter>("all");
+
+  // Pagination & Compact Display State
+  const [isCompact, setIsCompact] = useState<boolean>(isDashboard);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  useEffect(() => {
+    setIsCompact(isDashboard);
+  }, [isDashboard]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeQuery, commentsFilter]);
 
   // GDPR PII reveal state (audit logged on disclosure)
   const [revealedPii, setRevealedPii] = useState<Record<string, boolean>>({});
@@ -1451,15 +1480,28 @@ export function FeedbackTable({
     return true;
   });
 
-  const allVisibleSelected =
-    visibleFeedback.length > 0 &&
-    visibleFeedback.every((item) => selectedIds.includes(item.id));
+  const totalItems = visibleFeedback.length;
+  const effectivePageSize = isDashboard && isCompact ? 5 : pageSize;
+  const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
+  const activePage = Math.min(currentPage, totalPages);
+
+  const startIndex = (activePage - 1) * effectivePageSize;
+  const endIndex = isDashboard && isCompact ? 5 : startIndex + effectivePageSize;
+  const paginatedFeedback = isDashboard && isCompact
+    ? visibleFeedback.slice(0, 5)
+    : visibleFeedback.slice(startIndex, endIndex);
+
+  const allPageSelected =
+    paginatedFeedback.length > 0 &&
+    paginatedFeedback.every((item) => selectedIds.includes(item.id));
 
   const handleToggleAll = () => {
-    if (allVisibleSelected) {
-      setSelectedIds([]);
+    if (allPageSelected) {
+      const pageIds = new Set(paginatedFeedback.map((item) => item.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.has(id)));
     } else {
-      setSelectedIds(visibleFeedback.map((item) => item.id));
+      const pageIds = paginatedFeedback.map((item) => item.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
     }
   };
 
@@ -1609,7 +1651,11 @@ export function FeedbackTable({
             <span>Export CSV</span>
           </button>
 
-          <span className="panel-action">{visibleFeedback.length} records</span>
+          <span className="panel-action">
+            {isDashboard && isCompact && totalItems > 5
+              ? `5 of ${totalItems} records`
+              : `${totalItems} records`}
+          </span>
         </div>
       </div>
       {rowError && <p className="notice notice-error">{rowError}</p>}
@@ -1650,7 +1696,7 @@ export function FeedbackTable({
                   <input
                     type="checkbox"
                     className="custom-table-checkbox"
-                    checked={allVisibleSelected}
+                    checked={allPageSelected}
                     onChange={handleToggleAll}
                     aria-label="Select all rows"
                   />
@@ -1665,8 +1711,8 @@ export function FeedbackTable({
             </tr>
           </thead>
           <tbody>
-            {visibleFeedback.length > 0 ? (
-              visibleFeedback.map((item) => (
+            {paginatedFeedback.length > 0 ? (
+              paginatedFeedback.map((item) => (
                 <tr
                   className="clickable-row"
                   key={item.id}
@@ -1785,6 +1831,105 @@ export function FeedbackTable({
           </tbody>
         </table>
       </div>
+
+      {/* Table Pagination & Display Controls */}
+      {totalItems > 0 && (
+        <div className="table-pagination-bar">
+          <div className="pagination-info">
+            <span>
+              Showing{" "}
+              <strong>
+                {startIndex + 1}–{Math.min(endIndex, totalItems)}
+              </strong>{" "}
+              of <strong>{totalItems}</strong> records
+            </span>
+            {isDashboard && isCompact && totalItems > 5 && (
+              <span className="pagination-badge-preview">First 5 preview</span>
+            )}
+          </div>
+
+          <div className="pagination-controls">
+            {/* Dashboard "Show all" / "Show first 5" button */}
+            {isDashboard && totalItems > 5 && (
+              <button
+                type="button"
+                className="button button-outline compact pagination-toggle-btn"
+                onClick={() => {
+                  setIsCompact(!isCompact);
+                  setCurrentPage(1);
+                }}
+              >
+                {isCompact ? `Show all (${totalItems}) ↗` : "Show first 5 only"}
+              </button>
+            )}
+
+            {/* Page Size Selector (when in full pagination mode and more than 10 records) */}
+            {!isCompact && totalItems > 10 && (
+              <div className="pagination-size-select">
+                <label htmlFor="feedbackPageSize">Per page:</label>
+                <select
+                  id="feedbackPageSize"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="pagination-select"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                </select>
+              </div>
+            )}
+
+            {/* Pagination Navigation (when not in compact mode and totalPages > 1) */}
+            {!isCompact && totalPages > 1 && (
+              <div className="pagination-nav-group">
+                <button
+                  type="button"
+                  className="pagination-nav-btn"
+                  disabled={activePage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                >
+                  ← Prev
+                </button>
+
+                <div className="pagination-pages">
+                  {getPaginationPages(activePage, totalPages).map((pageNum, idx) =>
+                    pageNum === "..." ? (
+                      <span key={`ellipsis-${idx}`} className="pagination-ellipsis">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={`page-${pageNum}`}
+                        type="button"
+                        className={`pagination-page-btn ${activePage === pageNum ? "active" : ""}`}
+                        onClick={() => setCurrentPage(Number(pageNum))}
+                        aria-label={`Go to page ${pageNum}`}
+                      >
+                        {pageNum}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="pagination-nav-btn"
+                  disabled={activePage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {selected && (
