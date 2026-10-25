@@ -25,6 +25,8 @@ import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Da
 import { PropertyRow } from "../types/experience";
 import CustomSelect from "./CustomSelect";
 import { GuestInvitation } from "../lib/services/invitationsService";
+import { ConfirmDrawer } from "./ConfirmDrawer";
+import { TableLoadingRows } from "./TableLoadingRows";
 
 export default function GuestInvitationsPage({
   initialUser,
@@ -47,6 +49,8 @@ export default function GuestInvitationsPage({
   const [qrModalInvite, setQrModalInvite] = useState<GuestInvitation | null>(null);
   const [qrModalDataUrl, setQrModalDataUrl] = useState<string>("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<GuestInvitation | null>(null);
+  const [deletingInvite, setDeletingInvite] = useState(false);
 
   // Form states
   const [guestName, setGuestName] = useState("");
@@ -130,12 +134,17 @@ export default function GuestInvitationsPage({
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("Remove this invitation record?")) return;
+  async function handleDelete() {
+    if (!pendingDelete) return;
+    setDeletingInvite(true);
     try {
-      await fetch(`/api/invitations?id=${id}`, { method: "DELETE" });
-      setInvitations((prev) => prev.filter((i) => i.id !== id));
-    } catch {}
+      await fetch(`/api/invitations?id=${pendingDelete.id}`, { method: "DELETE" });
+      setInvitations((prev) => prev.filter((i) => i.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch {
+    } finally {
+      setDeletingInvite(false);
+    }
   }
 
   async function openQrModal(inv: GuestInvitation) {
@@ -293,10 +302,12 @@ export default function GuestInvitationsPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {loading ? (
+                  <TableLoadingRows columns={6} />
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: "center", padding: "48px 16px", color: "var(--muted)" }}>
-                      {loading ? "Loading invitations…" : "No invitations match your filter criteria."}
+                      No invitations match your filter criteria.
                     </td>
                   </tr>
                 ) : (
@@ -437,7 +448,7 @@ export default function GuestInvitationsPage({
                         <td style={{ textAlign: "right" }}>
                           <button
                             type="button"
-                            onClick={() => handleDelete(inv.id)}
+                            onClick={() => setPendingDelete(inv)}
                             style={{
                               background: "transparent",
                               border: "none",
@@ -683,6 +694,16 @@ export default function GuestInvitationsPage({
             </motion.div>
           )}
         </AnimatePresence>
+        <ConfirmDrawer
+          open={pendingDelete !== null}
+          title="Remove invitation"
+          recordName={pendingDelete ? `${pendingDelete.guestName}${pendingDelete.roomNumber ? ` · ${pendingDelete.roomNumber}` : ""}` : ""}
+          consequence="This removes the invitation record. The guest link will stop working."
+          confirmLabel="Remove invitation"
+          pending={deletingInvite}
+          onCancel={() => { if (!deletingInvite) setPendingDelete(null); }}
+          onConfirm={handleDelete}
+        />
       </div>
     </AppShell>
   );

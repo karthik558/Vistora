@@ -349,7 +349,8 @@ export async function updateFeedbackProperty(id: string, propertyId: string): Pr
 export async function updateFeedbackStatus(
   id: string,
   newStatus: FeedbackStatus,
-  notes?: string
+  notes?: string,
+  assignedTo?: string | null
 ): Promise<FeedbackViewModel | null> {
   const tone: FeedbackTone =
     newStatus === "needs_attention" || newStatus === "escalated"
@@ -368,6 +369,9 @@ export async function updateFeedbackStatus(
     };
     if (notes !== undefined) {
       updatePayload.resolution_notes = notes;
+    }
+    if (assignedTo !== undefined) {
+      updatePayload.assigned_to = assignedTo && assignedTo.trim() ? assignedTo.trim() : null;
     }
 
     const { data, error } = await supabase
@@ -390,6 +394,10 @@ export async function updateFeedbackStatus(
     memoryFeedbackStore[idx].status = newStatus;
     memoryFeedbackStore[idx].tone = tone;
     if (notes !== undefined) memoryFeedbackStore[idx].resolution_notes = notes;
+    if (assignedTo !== undefined) {
+      memoryFeedbackStore[idx].assigned_to = assignedTo && assignedTo.trim() ? assignedTo.trim() : null;
+    }
+    memoryFeedbackStore[idx].resolved_at = newStatus === "resolved" ? new Date().toISOString() : null;
     invalidateDashboardCache();
     return toViewModel(memoryFeedbackStore[idx]);
   }

@@ -23,6 +23,20 @@ import {
 } from "lucide-react";
 import { FeedbackViewModel } from "../types/experience";
 
+function showAxisLabel(index: number, total: number) {
+  const step = total > 7 ? 4 : 2;
+  if (index === total - 1) return true;
+  if (total - 1 - index < Math.ceil(step / 2)) return false;
+  return index % step === 0;
+}
+
+function axisDate(date: Date) {
+  return {
+    label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    fullLabel: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+  };
+}
+
 // 1. VERIFIED FEEDBACK VOLUME
 export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
   const [rangeDays, setRangeDays] = useState<7 | 14>(7);
@@ -44,7 +58,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
       date.setDate(today.getDate() - rangeDays + index + 1);
       const key = localDate(date);
       const records = feedback.filter(item => localDate(new Date(item.createdAt)) === key);
-      return { key, label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: records.length };
+      return { key, ...axisDate(date), count: records.length };
     });
   }, [feedback, rangeDays]);
   const max = Math.max(4, ...days.map(day => day.count));
@@ -75,7 +89,7 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
       </div>
       <div className="volume-chart">
         <div ref={plotRef} className="volume-plot">
-        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily feedback volume. ${days.map(day => `${day.label}: ${day.count}`).join(", ")}`}>
+        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily feedback volume. ${days.map(day => `${day.fullLabel}: ${day.count}`).join(", ")}`}>
           {[0, 1, 2, 3, 4].map(index => {
             const y = 158 - index * 33;
             return <g key={index}><line x1="32" x2={chartWidth - 24} y1={y} y2={y} className="volume-grid" /><text x="21" y={y + 4} textAnchor="end" className="volume-axis">{Math.round(max * index / 4)}</text></g>;
@@ -83,12 +97,12 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
           <path d={path} className="volume-line" />
           {points.map((point, index) => <g key={days[index].key}>
             <circle cx={point.x} cy={point.y} r={selectedDay === index ? 4 : 2.5} className="volume-point" />
-            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].label}: ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
-            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
+            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].fullLabel}: ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
+            {showAxisLabel(index, rangeDays) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
           </g>)}
         </svg>
         </div>
-        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? `${active.label} · ${active.count} responses` : "Daily guest responses · select a point to inspect"}</div>
+        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? `${active.fullLabel} · ${active.count} responses` : "Daily guest responses · select a point to inspect"}</div>
       </div>
     </section>
   );
@@ -132,7 +146,7 @@ export function SatisfactionTrendChart({ feedback = [] }: { feedback: FeedbackVi
       const key = localDate(date);
       const records = feedback.filter(item => localDate(new Date(item.createdAt)) === key);
       const average = records.length ? records.reduce((sum, item) => sum + item.rating, 0) / records.length : null;
-      return { key, label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: records.length, average };
+      return { key, ...axisDate(date), count: records.length, average };
     });
   }, [feedback, rangeDays]);
   const ratedTotal = days.reduce((sum, day) => sum + day.count, 0);
@@ -169,7 +183,7 @@ export function SatisfactionTrendChart({ feedback = [] }: { feedback: FeedbackVi
       </div>
       <div className="volume-chart">
         <div ref={plotRef} className="volume-plot">
-        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily average rating. ${days.map(day => `${day.label}: ${day.average === null ? "no responses" : day.average.toFixed(1)}`).join(", ")}`}>
+        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily average rating. ${days.map(day => `${day.fullLabel}: ${day.average === null ? "no responses" : day.average.toFixed(1)}`).join(", ")}`}>
           {scale.map(value => {
             const y = 158 - (value / 5) * 132;
             return <g key={value}><line x1="32" x2={chartWidth - 24} y1={y} y2={y} className="volume-grid" /><text x="21" y={y + 4} textAnchor="end" className="volume-axis">{value}</text></g>;
@@ -177,15 +191,15 @@ export function SatisfactionTrendChart({ feedback = [] }: { feedback: FeedbackVi
           {paths.map((path, index) => <path key={index} d={path} className="volume-line" />)}
           {points.map((point, index) => point.y !== null && <g key={days[index].key}>
             <circle cx={point.x} cy={point.y} r={selectedDay === index ? 4 : 2.5} className="volume-point" />
-            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].label}: ${days[index].average?.toFixed(1)} average from ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
-            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
+            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].fullLabel}: ${days[index].average?.toFixed(1)} average from ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
+            {showAxisLabel(index, rangeDays) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
           </g>)}
-          {points.map((point, index) => point.y === null && (rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && (
+          {points.map((point, index) => point.y === null && showAxisLabel(index, rangeDays) && (
             <text key={`${days[index].key}-label`} x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>
           ))}
         </svg>
         </div>
-        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? (active.average === null ? `${active.label} · no responses` : `${active.label} · ${active.average.toFixed(1)} average · ${active.count} responses`) : "Daily average rating · select a point to inspect"}</div>
+        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? (active.average === null ? `${active.fullLabel} · no responses` : `${active.fullLabel} · ${active.average.toFixed(1)} average · ${active.count} responses`) : "Daily average rating · select a point to inspect"}</div>
       </div>
     </section>
   );

@@ -185,8 +185,11 @@ export default function SystemSettingsPage({
               </p>
             </div>
           ) : loading ? (
-            <div className="panel" style={{ padding: "48px 24px", textAlign: "center", color: "var(--muted)" }}>
-              Loading system settings…
+            <div className="panel loading-panel" aria-busy="true">
+              <span className="table-loading-bar" />
+              <span className="table-loading-bar short" />
+              <span className="table-loading-bar" />
+              <span className="sr-only">Loading system settings</span>
             </div>
           ) : (
             <form onSubmit={handleSaveAppSettings}>

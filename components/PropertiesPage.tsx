@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { Building2, Plus, Trash2, X, Check, Users, Settings, Power } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ConfirmDrawer } from "./ConfirmDrawer";
 
 export interface PropertyItem {
   id: string;
@@ -44,6 +45,8 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const [sessionLoading, setSessionLoading] = useState(!initialUser?.role && !activeUser?.role);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deletingProperty, setDeletingProperty] = useState(false);
 
   const isUserAdmin = activeUser?.role === "admin" || currentUserRole === "admin";
   const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
@@ -258,25 +261,26 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
     }
   }
 
-  async function handleDeleteProperty(propertyId: string, propName: string) {
-    if (!window.confirm(`Are you sure you want to remove "${propName}"? Associated stays and records will be unlinked.`)) {
-      return;
-    }
-
+  async function handleDeleteProperty() {
+    if (!pendingDelete) return;
+    setDeletingProperty(true);
     try {
       const res = await fetch("/api/properties", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId }),
+        body: JSON.stringify({ propertyId: pendingDelete.id }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to delete property.");
       }
-      setSuccess(`Property "${propName}" removed.`);
+      setSuccess(`Property "${pendingDelete.name}" removed.`);
+      setPendingDelete(null);
       await loadData();
     } catch (err: any) {
       setError(err.message || "Failed to delete property.");
+    } finally {
+      setDeletingProperty(false);
     }
   }
 
@@ -352,13 +356,11 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
             </div>
 
             {error && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--red-soft)", color: "var(--red)", border: "1px solid #ebd3cf", fontSize: "12px" }}>
-                {error}
-              </div>
+              <div className="panel notice notice-error">{error}</div>
             )}
 
             {success && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--sage-soft)", color: "var(--sage-deep)", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="panel notice notice-success">
                 <Check size={14} strokeWidth={2} />
                 {success}
               </div>
@@ -366,9 +368,11 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px", marginBottom: "32px" }}>
               {loading ? (
-                <div className="panel" style={{ padding: "32px", textAlign: "center", color: "var(--muted)", gridColumn: "1 / -1" }}>
-                  Loading property locations…
-                </div>
+                [0, 1, 2].map((slot) => (
+                  <div key={slot} className="panel loading-card" aria-hidden={slot > 0 ? true : undefined}>
+                    {slot === 0 && <span className="sr-only">Loading property locations</span>}
+                  </div>
+                ))
               ) : properties.length === 0 ? (
                 <div className="panel" style={{ padding: "32px", textAlign: "center", color: "var(--muted)", gridColumn: "1 / -1" }}>
                   No properties registered yet. Click &ldquo;New property&rdquo; to add your first hotel location.
@@ -507,7 +511,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleDeleteProperty(prop.id, prop.name)}
+                          onClick={() => setPendingDelete({ id: prop.id, name: prop.name })}
                           className="button button-outline compact"
                           style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "#eddcd9" }}
                           title="Delete property"
@@ -952,6 +956,16 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
           </div>
         )}
       </AnimatePresence>
+      <ConfirmDrawer
+        open={pendingDelete !== null}
+        title="Remove property"
+        recordName={pendingDelete?.name || ""}
+        consequence="Associated stays and records will be unlinked. This cannot be undone."
+        confirmLabel="Remove property"
+        pending={deletingProperty}
+        onCancel={() => { if (!deletingProperty) setPendingDelete(null); }}
+        onConfirm={handleDeleteProperty}
+      />
     </AppShell>
   );
 }

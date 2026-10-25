@@ -188,12 +188,19 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     }
   }
 
+  const progressStep = !selectedPropertyId ? 1 : !rating ? 2 : 3;
+  const ratingWord = rating === 1 ? "Needs work" : rating === 2 ? "Fair" : rating === 3 ? "Good" : rating === 4 ? "Very good" : rating === 5 ? "Exceptional" : "";
+  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+  const managerFollowUp = rating !== null && (rating <= 2 || wantsContact);
+
   if (loading) {
     return (
       <main className="guest-shell">
-        <div className="guest-card" style={{ textAlign: "center", padding: "60px 20px" }}>
+        <div className="guest-card guest-card-waiting" aria-busy="true">
           <p className="eyebrow">Guest feedback</p>
-          <p className="guest-intro" style={{ margin: "auto" }}>Preparing feedback form…</p>
+          <span className="table-loading-bar" />
+          <span className="table-loading-bar short" />
+          <span className="sr-only">Preparing feedback form</span>
         </div>
       </main>
     );
@@ -207,19 +214,22 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           <p className="eyebrow">Thank you</p>
           <h1>Your feedback is<br /><em>with our team.</em></h1>
           <p>
-            We appreciate you taking a moment to tell us about your experience{roomNumber ? ` in ${roomNumber}` : ""}.
-            {rating !== null && rating <= 2
-              ? " A duty manager has been notified and our service recovery team will follow up promptly."
-              : " Your comments help our team refine the thoughtful details our guests remember."}
+            We received this note{roomNumber.trim() ? ` for ${roomNumber.trim()}` : ""}{selectedProperty ? ` at ${selectedProperty.name.trim()}` : ""}.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "24px" }}>
-            <Link className="button button-dark" href="/dashboard">
-              View in Operations Dashboard <span>↗</span>
-            </Link>
-            <Link className="text-link" href="/" style={{ textAlign: "center" }}>
-              Return to Vistora Home
-            </Link>
-          </div>
+          <dl className="guest-receipt">
+            {selectedProperty && <div><dt>Property</dt><dd>{selectedProperty.name}</dd></div>}
+            <div><dt>Rating</dt><dd>{rating} · {ratingWord}</dd></div>
+            <div><dt>Area</dt><dd>{department}</dd></div>
+            {roomNumber.trim() && <div><dt>Room</dt><dd>{roomNumber.trim()}</dd></div>}
+            {guestName.trim() && <div><dt>Name</dt><dd>{guestName.trim()}</dd></div>}
+            {comment.trim() && <div><dt>Note</dt><dd>{comment.trim()}</dd></div>}
+          </dl>
+          {managerFollowUp && (
+            <p className="guest-followup-note">
+              {`A manager will follow up on this stay${wantsContact && contactValue.trim() ? ` by ${contactPreference === "email" ? "email" : "phone"} at ${contactValue.trim()}` : ""}.`}
+            </p>
+          )}
+          <Link className="text-link guest-home-link" href="/">Return to Vistora Home</Link>
         </div>
       </main>
     );
@@ -240,7 +250,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             />
           </Link>
         </div>
-        <div className="guest-progress"><span /><span /><span /></div>
+        <div className="guest-progress" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={progressStep} aria-label={`Step ${progressStep} of 3`}>
+          <span className={progressStep > 1 ? "done" : "current"} />
+          <span className={progressStep > 2 ? "done" : progressStep === 2 ? "current" : ""} />
+          <span className={progressStep === 3 ? "current" : ""} />
+        </div>
+        <ol className="guest-progress-labels">
+          <li className={progressStep > 1 ? "done" : "current"}>Property</li>
+          <li className={progressStep > 2 ? "done" : progressStep === 2 ? "current" : ""}>Rating</li>
+          <li className={progressStep === 3 ? "current" : ""}>Note</li>
+        </ol>
 
         <h1>How did we make<br /><em>you feel?</em></h1>
         <p className="guest-intro">
@@ -249,11 +268,11 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
         <form onSubmit={handleSubmit}>
           {/* Mandatory Property Selection */}
-          <div style={{ marginBottom: "24px", padding: "16px 18px", background: "#fbfdfb", border: propertyError ? "1px solid #8b261a" : "1px solid var(--line)", borderRadius: "8px", boxShadow: "var(--shadow-xs)" }}>
-            <label className="field-label" htmlFor="property-select" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-              <span>Which Vistora property are you reviewing? <strong style={{ color: "var(--red)" }}>*</strong></span>
+          <div className={`guest-callout${propertyError ? " has-error" : ""}`}>
+            <label className="field-label guest-callout-label" htmlFor="property-select">
+              <span>Which Vistora property are you reviewing? <strong className="guest-required">*</strong></span>
               {selectedPropertyId && isUrlPreselected && (
-                <span style={{ fontSize: "11px", color: "var(--sage-deep)", fontWeight: 600 }}>
+                <span className="guest-preselected">
                   ✓ {isDemoMode ? "Demo link · Property pre-selected" : "Property pre-selected"}
                 </span>
               )}
@@ -276,9 +295,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             />
 
             {propertyError && (
-              <p style={{ color: "var(--red)", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
-                {propertyError}
-              </p>
+              <p className="guest-error">{propertyError}</p>
             )}
           </div>
 
@@ -304,7 +321,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           </fieldset>
 
           {/* Department / Experience Area */}
-          <div style={{ marginBottom: "20px" }}>
+          <div className="guest-field-block">
             <label className="field-label" htmlFor="department-select">
               Which area is this feedback about?
             </label>
@@ -321,7 +338,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           </div>
 
           {/* Guest Name & Room confirmation */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
+          <div className="guest-split">
             <div>
               <label className="field-label" htmlFor="guest-name">
                 Your name
@@ -332,14 +349,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
                 placeholder="Your name (optional)"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e1e7e1",
-                  fontSize: "12px",
-                  outline: "none",
-                }}
+                className="guest-field"
               />
             </div>
             <div>
@@ -352,142 +362,86 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 value={roomNumber}
                 onChange={(e) => setRoomNumber(e.target.value)}
                 placeholder="e.g. 304 or Poolside"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e1e7e1",
-                  fontSize: "12px",
-                  outline: "none",
-                }}
+                className="guest-field"
               />
             </div>
           </div>
 
           {/* Dynamic Questionnaire Questions */}
           {questions.length > 0 && (
-            <div
-              style={{
-                marginBottom: "24px",
-                padding: "16px 18px",
-                background: "#fbfdfb",
-                borderRadius: "8px",
-                border: "1px solid var(--line)",
-                boxShadow: "var(--shadow-xs)",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                {questions.map((q) => (
-                  <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      {q.question_text}
-                      {q.is_required && <span style={{ color: "#a84232", fontSize: "11px" }}>*</span>}
-                    </label>
+            <div className="guest-question-block">
+              {questions.map((q) => (
+                <div key={q.id} className="guest-question">
+                  <label className="guest-question-label">
+                    {q.question_text}
+                    {q.is_required && <span className="guest-required">*</span>}
+                  </label>
 
-                    {q.question_type === "choice" && q.options && q.options.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        {q.options.map((opt) => {
-                          const isSelected = answers[q.id] === opt;
-                          return (
-                            <button
-                              type="button"
-                              key={opt}
-                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
-                              style={{
-                                padding: "6px 14px",
-                                borderRadius: "6px",
-                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
-                                background: isSelected ? "#0b100f" : "#ffffff",
-                                color: isSelected ? "#ffffff" : "var(--ink)",
-                                fontSize: "11px",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                  {q.question_type === "choice" && q.options && q.options.length > 0 && (
+                    <div className="guest-choice-row">
+                      {q.options.map((opt) => {
+                        const isSelected = answers[q.id] === opt;
+                        return (
+                          <button
+                            type="button"
+                            key={opt}
+                            className={`guest-choice${isSelected ? " selected" : ""}`}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    {q.question_type === "yes_no" && (
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        {(q.options && q.options.length > 0 ? q.options : ["Yes", "No"]).map((opt) => {
-                          const isSelected = answers[q.id] === opt;
-                          return (
-                            <button
-                              type="button"
-                              key={opt}
-                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
-                              style={{
-                                padding: "6px 16px",
-                                borderRadius: "4px",
-                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
-                                background: isSelected ? "#0b100f" : "#ffffff",
-                                color: isSelected ? "#ffffff" : "var(--ink)",
-                                fontSize: "11px",
-                                cursor: "pointer",
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                  {q.question_type === "yes_no" && (
+                    <div className="guest-choice-row">
+                      {(q.options && q.options.length > 0 ? q.options : ["Yes", "No"]).map((opt) => {
+                        const isSelected = answers[q.id] === opt;
+                        return (
+                          <button
+                            type="button"
+                            key={opt}
+                            className={`guest-choice${isSelected ? " selected" : ""}`}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    {q.question_type === "rating" && (
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        {[1, 2, 3, 4, 5].map((val) => {
-                          const isSelected = answers[q.id] === `${val}/5`;
-                          return (
-                            <button
-                              type="button"
-                              key={val}
-                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : `${val}/5` }))}
-                              style={{
-                                width: "38px",
-                                height: "36px",
-                                borderRadius: "4px",
-                                border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
-                                background: isSelected ? "#0b100f" : "#ffffff",
-                                color: isSelected ? "#ffffff" : "var(--ink)",
-                                fontSize: "12px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              {val}★
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                  {q.question_type === "rating" && (
+                    <div className="guest-rating-mini">
+                      {[1, 2, 3, 4, 5].map((val) => {
+                        const isSelected = answers[q.id] === `${val}/5`;
+                        return (
+                          <button
+                            type="button"
+                            key={val}
+                            className={`guest-choice${isSelected ? " selected" : ""}`}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : `${val}/5` }))}
+                          >
+                            {val}★
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    {q.question_type === "text" && (
-                      <input
-                        type="text"
-                        value={answers[q.id] || ""}
-                        onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                        placeholder="Your thoughts…"
-                        style={{
-                          width: "100%",
-                          padding: "8px 12px",
-                          borderRadius: "4px",
-                          border: "1px solid #d8dfd8",
-                          fontSize: "12px",
-                          outline: "none",
-                          background: "#fff",
-                        }}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
+                  {q.question_type === "text" && (
+                    <input
+                      type="text"
+                      className="guest-field"
+                      value={answers[q.id] || ""}
+                      onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                      placeholder="Your thoughts…"
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
@@ -514,9 +468,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           </label>
 
           {wantsContact && (
-            <div style={{ padding: "14px", background: "var(--canvas)", border: "1px solid #e3e8e3", borderRadius: "4px", marginBottom: "20px" }}>
-              <div style={{ display: "flex", gap: "16px", marginBottom: "10px", fontSize: "11px", color: "var(--ink)" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+            <div className="guest-followup">
+              <div className="guest-choice-row">
+                <label className="guest-radio">
                   <input
                     type="radio"
                     name="pref"
@@ -525,7 +479,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   />
                   Follow up via Email
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                <label className="guest-radio">
                   <input
                     type="radio"
                     name="pref"
@@ -536,18 +490,11 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 </label>
               </div>
               <input
+                className="guest-field"
                 type={contactPreference === "email" ? "email" : "tel"}
                 value={contactValue}
                 onChange={(e) => setContactValue(e.target.value)}
                 placeholder={contactPreference === "email" ? "your.email@example.com" : "+65 9123 4567"}
-                style={{
-                  width: "100%",
-                  padding: "9px 11px",
-                  borderRadius: "4px",
-                  border: "1px solid #d8dfd8",
-                  fontSize: "12px",
-                  outline: "none",
-                }}
               />
             </div>
           )}
@@ -559,7 +506,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             {submitting ? "Submitting..." : "Send feedback"} <span>→</span>
           </button>
           {(!selectedPropertyId || !rating) && (
-            <p style={{ textAlign: "center", fontSize: "11px", color: "var(--muted)", margin: "8px 0 0 0" }}>
+            <p className="guest-hint">
               {!selectedPropertyId ? "Please select a hotel property location above to proceed." : "Please select an overall rating (1-5) above."}
             </p>
           )}

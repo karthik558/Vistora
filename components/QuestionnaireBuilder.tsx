@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
+import { ConfirmDrawer } from "./ConfirmDrawer";
+import { TableLoadingRows } from "./TableLoadingRows";
 
 export interface QuestionData {
   id: string;
@@ -230,6 +232,8 @@ export default function QuestionnaireBuilder() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; text: string } | null>(null);
+  const [deletingQuestion, setDeletingQuestion] = useState(false);
 
   // Modal / Add Question states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -439,22 +443,27 @@ export default function QuestionnaireBuilder() {
     }
   }
 
-  async function handleDeleteQuestion(id: string, text: string) {
-    if (!window.confirm(`Delete question: "${text}"?`)) return;
-
+  async function handleDeleteQuestion() {
+    if (!pendingDelete) return;
+    setDeletingQuestion(true);
     try {
       const res = await fetch("/api/questions", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id: pendingDelete.id }),
       });
       const data = await res.json();
       if (data.success) {
         setSuccess("Question removed.");
+        setPendingDelete(null);
         await loadQuestions();
+      } else {
+        setError("Failed to delete question.");
       }
     } catch {
       setError("Failed to delete question.");
+    } finally {
+      setDeletingQuestion(false);
     }
   }
 
@@ -596,7 +605,7 @@ export default function QuestionnaireBuilder() {
       )}
 
       {/* QUESTIONS TABLE */}
-      <div className="panel table-panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
+      <div className="panel table-panel">
         <div className="table-wrap">
           <table>
             <thead>
@@ -613,11 +622,7 @@ export default function QuestionnaireBuilder() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
-                    Loading questionnaire questions…
-                  </td>
-                </tr>
+                <TableLoadingRows columns={8} />
               ) : questions.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
@@ -827,7 +832,7 @@ export default function QuestionnaireBuilder() {
                       <td style={{ textAlign: "right" }}>
                         <button
                           type="button"
-                          onClick={() => handleDeleteQuestion(q.id, q.question_text)}
+                          onClick={() => setPendingDelete({ id: q.id, text: q.question_text })}
                           className="button compact"
                           style={{
                             padding: "4px 8px",
@@ -1363,6 +1368,15 @@ export default function QuestionnaireBuilder() {
           </div>
         )}
       </AnimatePresence>
+      <ConfirmDrawer
+        open={pendingDelete !== null}
+        title="Delete question"
+        recordName={pendingDelete?.text || ""}
+        consequence="Guests will no longer see this question. This cannot be undone."
+        pending={deletingQuestion}
+        onCancel={() => { if (!deletingQuestion) setPendingDelete(null); }}
+        onConfirm={handleDeleteQuestion}
+      />
     </div>
   );
 }

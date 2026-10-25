@@ -5,6 +5,8 @@ import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Da
 import { UserPlus, Key, Trash2, X, Check, Building2, Shield, Settings2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
+import { ConfirmDrawer } from "./ConfirmDrawer";
+import { TableLoadingRows } from "./TableLoadingRows";
 
 export interface UserRight {
   id: string;
@@ -199,6 +201,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<WorkspaceUserItem | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   // User session
   const [activeUser, setActiveUser] = useState<WorkspaceUser | null>(
@@ -513,24 +517,25 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     }
   }
 
-  async function handleDeleteUser(user: WorkspaceUserItem) {
-    if (!window.confirm(`Are you sure you want to remove ${user.full_name} (${user.email})?`)) {
-      return;
-    }
-
+  async function handleDeleteUser() {
+    if (!pendingDelete) return;
+    setDeletingUser(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/users/${pendingDelete.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to remove user.");
       }
-      setSuccess(`User ${user.full_name} removed.`);
+      setSuccess(`User ${pendingDelete.full_name} removed.`);
+      setPendingDelete(null);
       await loadData();
     } catch (err: any) {
       setError(err.message || "Failed to remove user.");
+    } finally {
+      setDeletingUser(false);
     }
   }
 
@@ -591,13 +596,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
             </div>
 
             {error && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--red-soft)", color: "var(--red)", border: "1px solid #ebd3cf", fontSize: "12px" }}>
-                {error}
-              </div>
+              <div className="panel notice notice-error">{error}</div>
             )}
 
             {success && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--sage-soft)", color: "var(--sage-deep)", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="panel notice notice-success">
                 <Check size={14} strokeWidth={2} />
                 {success}
               </div>
@@ -627,11 +630,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr>
-                        <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
-                          Loading team members…
-                        </td>
-                      </tr>
+                      <TableLoadingRows columns={7} />
                     ) : users.length === 0 ? (
                       <tr>
                         <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
@@ -914,7 +913,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   type="button"
                                   className="button compact"
                                   style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
-                                  onClick={() => handleDeleteUser(user)}
+                                  onClick={() => setPendingDelete(user)}
                                   title="Remove user"
                                 >
                                   <Trash2 size={12} strokeWidth={1.75} />
@@ -1863,6 +1862,16 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                 </motion.div>
               )}
             </AnimatePresence>
+            <ConfirmDrawer
+              open={pendingDelete !== null}
+              title="Remove team member"
+              recordName={pendingDelete ? `${pendingDelete.full_name} (${pendingDelete.email})` : ""}
+              consequence="This removes their workspace access. It cannot be undone."
+              confirmLabel="Remove member"
+              pending={deletingUser}
+              onCancel={() => { if (!deletingUser) setPendingDelete(null); }}
+              onConfirm={handleDeleteUser}
+            />
           </>
         )}
       </div>

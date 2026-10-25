@@ -41,6 +41,7 @@ import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterD
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
+import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
   SatisfactionTrendChart,
@@ -1179,6 +1180,13 @@ export function RatingBars({ bars }: { bars: RatingBarItem[] }) {
   );
 }
 
+const FEEDBACK_STATUSES: { value: FeedbackStatus; label: string }[] = [
+  { value: "needs_attention", label: "Needs attention" },
+  { value: "under_review", label: "Under review" },
+  { value: "resolved", label: "Resolved" },
+  { value: "escalated", label: "Escalated" },
+];
+
 export function FeedbackTable({
   feedback: initialFeedback,
   title = "Feedback",
@@ -1209,6 +1217,11 @@ export function FeedbackTable({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [userRole, setUserRole] = useState<string>("visitor");
+  const [records, setRecords] = useState(initialFeedback);
+  const [teamNames, setTeamNames] = useState<string[]>([]);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; name: string } | null>(null);
 
   // Property assignment for admins
   const [allProperties, setAllProperties] = useState<Array<{ id: string; name: string; code: string; location?: string }>>([]);
@@ -1317,12 +1330,24 @@ export function FeedbackTable({
         }
       })
       .catch(() => {});
+    fetch("/api/users")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.users)) {
+          setTeamNames(data.users.map((member: { full_name?: string }) => member.full_name).filter(Boolean));
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setRecords(initialFeedback);
+  }, [initialFeedback]);
 
   const isAdmin = userRole === "admin";
 
   // Filter feedback by search query and commentsFilter
-  const visibleFeedback = initialFeedback.filter((item) => {
+  const visibleFeedback = records.filter((item) => {
     if (activeQuery && activeQuery.trim()) {
       const q = activeQuery.toLowerCase().trim();
       const match =
@@ -1391,50 +1416,52 @@ export function FeedbackTable({
     setSaving(false);
   }
 
-  async function handleDeleteBatch() {
-    if (selectedIds.length === 0) return;
-    const confirmMsg = `Are you sure you want to permanently delete ${selectedIds.length} feedback record${selectedIds.length > 1 ? "s" : ""}? This action cannot be undone.`;
-    if (!window.confirm(confirmMsg)) return;
+  const assigneeOptions = Array.from(new Set(["Duty Manager", ...teamNames, ...records.map((item) => item.assignedTo).filter((name): name is string => Boolean(name))])).sort();
 
-    setDeleting(true);
+  async function updateRow(item: FeedbackViewModel, patch: { status?: FeedbackStatus; assignedTo?: string | null }) {
+    const nextStatus = patch.status ?? item.status;
+    const nextAssignee = patch.assignedTo !== undefined ? patch.assignedTo : item.assignedTo;
+    setSavingRowId(item.id);
+    setRowError(null);
     try {
-      const res = await fetch("/api/feedback", {
-        method: "DELETE",
+      const res = await fetch(`/api/feedback/${item.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds }),
+        body: JSON.stringify({ status: nextStatus, assignedTo: nextAssignee }),
       });
-      if (res.ok) {
-        setSelectedIds([]);
-        router.refresh();
-        window.location.reload();
-      } else {
-        alert("Failed to delete records. Please try again.");
-      }
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Could not update that record.");
+      const updated = json.data as FeedbackViewModel;
+      setRecords((prev) => prev.map((row) => (row.id === item.id ? { ...row, ...updated } : row)));
+      setSelected((current) => (current?.id === item.id ? { ...current, ...updated } : current));
     } catch (err: any) {
-      alert(`Error deleting records: ${err.message}`);
+      setRowError(err.message || "Could not update that record.");
     } finally {
-      setDeleting(false);
+      setSavingRowId(null);
     }
   }
 
-  async function handleDeleteSingle(id: string) {
-    const confirmMsg = "Are you sure you want to delete this feedback record? This action cannot be undone.";
-    if (!window.confirm(confirmMsg)) return;
-
+  async function confirmDelete() {
+    if (!pendingDelete) return;
     setDeleting(true);
+    setRowError(null);
     try {
-      const res = await fetch(`/api/feedback/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setSelected(null);
-        router.refresh();
-        window.location.reload();
-      } else {
-        alert("Failed to delete record. Please try again.");
-      }
+      const res = pendingDelete.ids.length === 1
+        ? await fetch(`/api/feedback/${pendingDelete.ids[0]}`, { method: "DELETE" })
+        : await fetch("/api/feedback", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: pendingDelete.ids }),
+          });
+      if (!res.ok) throw new Error("Failed to delete records. Please try again.");
+      const removed = new Set(pendingDelete.ids);
+      setRecords((prev) => prev.filter((row) => !removed.has(row.id)));
+      setSelectedIds((prev) => prev.filter((id) => !removed.has(id)));
+      setSelected((current) => (current && removed.has(current.id) ? null : current));
+      setPendingDelete(null);
+      router.refresh();
     } catch (err: any) {
-      alert(`Error deleting record: ${err.message}`);
+      setRowError(err.message || "Failed to delete records.");
     } finally {
       setDeleting(false);
     }
@@ -1502,6 +1529,7 @@ export function FeedbackTable({
           <span className="panel-action">{visibleFeedback.length} records</span>
         </div>
       </div>
+      {rowError && <p className="notice notice-error">{rowError}</p>}
 
       {/* Admin Batch Action Bar */}
       {isAdmin && selectedIds.length > 0 && (
@@ -1513,7 +1541,7 @@ export function FeedbackTable({
             <button
               type="button"
               className="button button-danger compact"
-              onClick={handleDeleteBatch}
+              onClick={() => setPendingDelete({ ids: selectedIds, name: `${selectedIds.length} feedback record${selectedIds.length > 1 ? "s" : ""}` })}
               disabled={deleting}
             >
               <Trash2 size={13} />
@@ -1549,6 +1577,7 @@ export function FeedbackTable({
               <th>Experience</th>
               <th>Rating</th>
               <th>Status</th>
+              <th>Assignee</th>
               <th>Received</th>
             </tr>
           </thead>
@@ -1588,16 +1617,7 @@ export function FeedbackTable({
                           <strong>{item.name}</strong>
                           {item.propertyId && (
                             <span
-                              style={{
-                                fontSize: "9px",
-                                fontFamily: "var(--font-dm-mono)",
-                                background: "var(--line)",
-                                color: "var(--ink)",
-                                padding: "1px 5px",
-                                borderRadius: "3px",
-                                fontWeight: 600,
-                                letterSpacing: "0.04em",
-                              }}
+                              className="property-code"
                               title={allProperties.find((p) => p.id === item.propertyId)?.name || "Hotel location"}
                             >
                               {allProperties.find((p) => p.id === item.propertyId)?.code || "HOTEL"}
@@ -1627,15 +1647,47 @@ export function FeedbackTable({
                       {item.rating} <b>/ 5</b>
                     </span>
                   </td>
-                  <td>
-                    <span className={`status ${item.tone}`}>{item.statusLabel}</span>
+                  <td onClick={(event) => event.stopPropagation()}>
+                    {userRole === "visitor" ? (
+                      <span className={`status ${item.tone}`}>{item.statusLabel}</span>
+                    ) : (
+                      <select
+                        className="row-select"
+                        aria-label={`Status for ${item.name}`}
+                        value={item.status}
+                        disabled={savingRowId === item.id}
+                        onChange={(event) => updateRow(item, { status: event.target.value as FeedbackStatus })}
+                      >
+                        {FEEDBACK_STATUSES.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                  <td onClick={(event) => event.stopPropagation()}>
+                    {userRole === "visitor" ? (
+                      <span>{item.assignedTo || "Unassigned"}</span>
+                    ) : (
+                      <select
+                        className="row-select"
+                        aria-label={`Assignee for ${item.name}`}
+                        value={item.assignedTo || ""}
+                        disabled={savingRowId === item.id}
+                        onChange={(event) => updateRow(item, { assignedTo: event.target.value || null })}
+                      >
+                        <option value="">Unassigned</option>
+                        {assigneeOptions.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td>{item.timeAgo}</td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "40px 24px", color: "var(--muted)" }}>
+                <td colSpan={isAdmin ? 7 : 6} style={{ textAlign: "center", padding: "40px 24px", color: "var(--muted)" }}>
                   <p style={{ margin: "0 0 10px", fontSize: "13px", color: "var(--ink)" }}>
                     No feedback matching the selected filter criteria.
                   </p>
@@ -1907,7 +1959,7 @@ export function FeedbackTable({
                     <button
                       type="button"
                       className="button button-danger compact"
-                      onClick={() => handleDeleteSingle(selected.id)}
+                      onClick={() => setPendingDelete({ ids: [selected.id], name: `${selected.name}${selected.roomNumber ? ` · ${selected.roomNumber}` : ""}` })}
                       disabled={deleting}
                     >
                       <Trash2 size={13} />
@@ -1920,6 +1972,15 @@ export function FeedbackTable({
           </motion.div>
         )}
       </AnimatePresence>
+      <ConfirmDrawer
+        open={pendingDelete !== null}
+        title="Delete feedback"
+        recordName={pendingDelete?.name || ""}
+        consequence="This permanently removes the guest record. It cannot be restored."
+        pending={deleting}
+        onCancel={() => { if (!deleting) setPendingDelete(null); }}
+        onConfirm={confirmDelete}
+      />
     </section>
   );
 }

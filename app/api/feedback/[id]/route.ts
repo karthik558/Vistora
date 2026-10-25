@@ -11,12 +11,13 @@ export async function PATCH(
     const body = await request.json();
     const status = body.status as FeedbackStatus;
     const notes = body.notes as string | undefined;
+    const assignedTo = body.assignedTo as string | null | undefined;
 
     if (!status) {
       return NextResponse.json({ success: false, error: "Status is required" }, { status: 400 });
     }
 
-    const updated = await updateFeedbackStatus(id, status, notes);
+    const updated = await updateFeedbackStatus(id, status, notes, assignedTo);
     if (!updated) {
       return NextResponse.json({ success: false, error: "Feedback not found" }, { status: 404 });
     }

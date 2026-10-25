@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { AuditLogItem, AuditCategory } from "../lib/services/auditLogService";
+import { TableLoadingRows } from "./TableLoadingRows";
 
 export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceUser | null }) {
   const [user, setUser] = useState<WorkspaceUser | null>(
@@ -349,10 +350,12 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.length === 0 ? (
+                {loading ? (
+                  <TableLoadingRows columns={7} />
+                ) : filteredLogs.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: "center", padding: "48px 16px", color: "var(--muted)" }}>
-                      {loading ? "Verifying and loading cryptographic ledger…" : "No compliance records found matching your filters."}
+                      No compliance records found matching your filters.
                     </td>
                   </tr>
                 ) : (
