@@ -4,9 +4,11 @@ import { getAuthenticatedUser, requireAdmin, requireAdminOrRight } from "../../.
 import { sanitizeString } from "../../../lib/security/sanitize";
 import { invalidateDashboardCache } from "../../../lib/services/guestExperienceService";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL!;
 const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY!;
 
 function getAdminClient() {
   return createClient(supabaseUrl, supabaseServiceKey, {
