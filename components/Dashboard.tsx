@@ -25,7 +25,6 @@ import {
   History,
   Settings,
   PanelLeftClose,
-  PanelLeftOpen,
   Search,
   Download,
   Eye,
@@ -294,44 +293,32 @@ export function AppShell({
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
         {/* Vistora Sidebar Header with Single Desktop Collapse Toggle */}
         <div className="sidebar-brand-row">
-          {!sidebarCollapsed ? (
-            <>
-              <Link
-                href="/"
-                className="brand brand-full"
-                title="Vistora Home"
-                onClick={() => setMobileNavOpen(false)}
-                style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
-              >
-                <Image
-                  src="/logo1.webp"
-                  alt="Vistora"
-                  width={130}
-                  height={34}
-                  priority
-                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
-                />
-              </Link>
-              <button
-                type="button"
-                className="sidebar-collapse-btn desktop-only"
-                onClick={toggleSidebar}
-                title="Collapse sidebar"
-                aria-label="Collapse sidebar"
-              >
-                <PanelLeftClose size={15} strokeWidth={1.8} />
-              </button>
-            </>
-          ) : (
+          <Link
+            href="/"
+            className="brand brand-full"
+            title="Vistora Home"
+            onClick={() => setMobileNavOpen(false)}
+            style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
+          >
+            <Image
+              src="/logo1.webp"
+              alt="Vistora"
+              width={130}
+              height={34}
+              priority
+              style={{ height: "28px", width: "auto", objectFit: "contain" }}
+            />
+          </Link>
+          {sidebarCollapsed && (
             <div className="sidebar-collapsed-header">
               <button
                 type="button"
                 className="sidebar-favi-toggle desktop-only"
                 onClick={toggleSidebar}
-                title="Click to expand sidebar"
+                title="Expand sidebar"
                 aria-label="Expand sidebar"
               >
-                <span className="sidebar-monogram" aria-hidden="true">V</span>
+                <Image src="/favicon.ico" alt="" width={22} height={22} className="sidebar-favi-icon" />
               </button>
             </div>
           )}
@@ -401,6 +388,16 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
+          <button
+            type="button"
+            className="sidebar-rail-toggle desktop-only"
+            onClick={toggleSidebar}
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+          >
+            <PanelLeftClose size={15} strokeWidth={1.8} />
+            <span>Hide sidebar</span>
+          </button>
           <Link
             href="/feedback"
             className="sidebar-guest-link"
@@ -427,8 +424,8 @@ export function AppShell({
               type="button"
               onClick={handleSignOut}
               className="signout-button"
-              title="Sign out"
-              aria-label="Sign out"
+              title="Log out"
+              aria-label="Log out"
               style={{
                 background: "transparent",
                 border: "1px solid var(--line)",
@@ -445,7 +442,7 @@ export function AppShell({
               }}
             >
               <LogOut size={12} strokeWidth={1.75} />
-              <span>Exit</span>
+              <span>Log out</span>
             </button>
           </div>
         </div>
@@ -1651,35 +1648,30 @@ export function FeedbackTable({
                     {userRole === "visitor" ? (
                       <span className={`status ${item.tone}`}>{item.statusLabel}</span>
                     ) : (
-                      <select
-                        className="row-select"
-                        aria-label={`Status for ${item.name}`}
+                      <CustomSelect
+                        floating
+                        className="row-select-field"
+                        ariaLabel={`Status for ${item.name}`}
                         value={item.status}
                         disabled={savingRowId === item.id}
-                        onChange={(event) => updateRow(item, { status: event.target.value as FeedbackStatus })}
-                      >
-                        {FEEDBACK_STATUSES.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updateRow(item, { status: value as FeedbackStatus })}
+                        options={FEEDBACK_STATUSES}
+                      />
                     )}
                   </td>
                   <td onClick={(event) => event.stopPropagation()}>
                     {userRole === "visitor" ? (
                       <span>{item.assignedTo || "Unassigned"}</span>
                     ) : (
-                      <select
-                        className="row-select"
-                        aria-label={`Assignee for ${item.name}`}
+                      <CustomSelect
+                        floating
+                        className="row-select-field"
+                        ariaLabel={`Assignee for ${item.name}`}
                         value={item.assignedTo || ""}
                         disabled={savingRowId === item.id}
-                        onChange={(event) => updateRow(item, { assignedTo: event.target.value || null })}
-                      >
-                        <option value="">Unassigned</option>
-                        {assigneeOptions.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updateRow(item, { assignedTo: value || null })}
+                        options={[{ value: "", label: "Unassigned" }, ...assigneeOptions.map((name) => ({ value: name, label: name }))]}
+                      />
                     )}
                   </td>
                   <td>{item.timeAgo}</td>

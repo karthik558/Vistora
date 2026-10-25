@@ -548,16 +548,16 @@ export default function GuestInvitationsPage({
                       <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
                         Channel
                       </label>
-                      <select
-                        className="auth-input"
+                      <CustomSelect
                         value={channel}
-                        onChange={(e) => setChannel(e.target.value as any)}
-                      >
-                        <option value="direct_link">Direct Link / Concierge</option>
-                        <option value="email">Email</option>
-                        <option value="sms">SMS</option>
-                        <option value="whatsapp">WhatsApp</option>
-                      </select>
+                        onChange={(value) => setChannel(value as typeof channel)}
+                        options={[
+                          { value: "direct_link", label: "Direct Link / Concierge" },
+                          { value: "email", label: "Email" },
+                          { value: "sms", label: "SMS" },
+                          { value: "whatsapp", label: "WhatsApp" },
+                        ]}
+                      />
                     </div>
                   </div>
 

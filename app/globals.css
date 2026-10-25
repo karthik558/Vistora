@@ -894,9 +894,25 @@ a {
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .guest-link-text,
 .sidebar.collapsed .user-info,
-.sidebar.collapsed .signout-button span {
+.sidebar.collapsed .signout-button span,
+.sidebar.collapsed .sidebar-rail-toggle {
   display: none !important;
 }
+.sidebar-rail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  margin: 0 6px 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sidebar-rail-toggle:hover { background: var(--canvas-alt); color: var(--ink); border-color: var(--line-strong); }
 
 .sidebar.collapsed .nav-item {
   justify-content: center !important;
@@ -3959,7 +3975,8 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
 .loading-card { min-height: 168px; background: var(--canvas-alt); }
 .loading-panel { min-height: 420px; max-width: 860px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
 .loading-panel .table-loading-bar { height: 18px; }
-.row-select { min-height: 32px; width: 100%; max-width: 156px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: 11px var(--font-dm-sans); }
+.row-select-field { max-width: 168px; }
+.row-select-field .custom-select-trigger { min-height: 32px; padding: 4px 8px !important; font-size: 11px !important; }
 .property-code { font-size: 9px; font-family: var(--font-dm-mono); background: var(--line); color: var(--ink); padding: 1px 5px; border-radius: 3px; font-weight: 600; letter-spacing: 0.04em; }
 .guest-card-waiting { text-align: center; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .guest-card-waiting .table-loading-bar { width: 180px; }
@@ -4086,3 +4103,52 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.guest-shell {
+  color-scheme: light;
+  --ink: #121917;
+  --ink-light: #25332e;
+  --ink-dark: #0b100f;
+  --muted: #6f7c75;
+  --muted-light: #98a59e;
+  --line: #e2e8e2;
+  --line-strong: #c8d4c9;
+  --canvas: #f6f8f5;
+  --canvas-alt: #eef2ec;
+  --panel: #ffffff;
+  --surface: #ffffff;
+  --sage: #4e6f5b;
+  --sage-deep: #254230;
+  --sage-hover: #3d5848;
+  --sage-soft: #edf4ed;
+  --red: #b35a4d;
+  --red-soft: #fbeeed;
+  background: #f6f8f5;
+}
+[data-theme="dark"] .guest-shell { background: #f6f8f5; }
+[data-theme="dark"] .guest-shell .guest-card,
+[data-theme="dark"] .guest-shell .success-card { background: #ffffff; color: #121917; }
+[data-theme="dark"] .guest-shell .guest-callout,
+[data-theme="dark"] .guest-shell .guest-question-block,
+[data-theme="dark"] .guest-shell .guest-followup { background: #f6f8f5; color: #121917; }
+[data-theme="dark"] .guest-shell input,
+[data-theme="dark"] .guest-shell textarea,
+[data-theme="dark"] .guest-shell select,
+[data-theme="dark"] .guest-shell .guest-field,
+[data-theme="dark"] .guest-shell .custom-select-trigger,
+[data-theme="dark"] .guest-shell .guest-choice,
+[data-theme="dark"] .guest-shell .rating-button {
+  background: #ffffff !important;
+  color: #121917 !important;
+  border-color: #e2e8e2 !important;
+}
+[data-theme="dark"] .guest-shell .guest-choice.selected { background: #121917 !important; color: #ffffff !important; border-color: #121917 !important; }
+[data-theme="dark"] .guest-shell .rating-button.selected,
+[data-theme="dark"] .guest-shell .rating-button:hover { background: #edf4ed !important; color: #1f3b2a !important; border-color: #4e6f5b !important; }
+[data-theme="dark"] .guest-shell .custom-select-popover { background: #ffffff !important; color: #121917 !important; }
+[data-theme="dark"] .guest-shell img[src*="logo1"] { filter: none !important; }
+[data-theme="dark"] .guest-shell .guest-card h1,
+[data-theme="dark"] .guest-shell .guest-card legend,
+[data-theme="dark"] .guest-shell .field-label,
+[data-theme="dark"] .guest-shell .guest-receipt dd,
+[data-theme="dark"] .guest-shell .guest-question-label { color: #121917 !important; }

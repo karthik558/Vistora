@@ -19,6 +19,8 @@ export interface CustomSelectProps {
   placeholder?: string;
   header?: string;
   disabled?: boolean;
+  floating?: boolean;
+  ariaLabel?: string;
   style?: React.CSSProperties;
   triggerStyle?: React.CSSProperties;
   popoverStyle?: React.CSSProperties;
@@ -33,19 +35,51 @@ export default function CustomSelect({
   placeholder = "Select an option",
   header,
   disabled = false,
+  floating = false,
+  ariaLabel,
   style,
   triggerStyle,
   popoverStyle,
   className = "",
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [floatingStyle, setFloatingStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || !floating) return;
+    function place() {
+      const node = containerRef.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const width = Math.max(rect.width, 196);
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const openUp = window.innerHeight - rect.bottom < 220;
+      setFloatingStyle({
+        position: "fixed",
+        top: openUp ? "auto" : rect.bottom + 6,
+        bottom: openUp ? window.innerHeight - rect.top + 6 : "auto",
+        left,
+        width,
+        right: "auto",
+        zIndex: 1300,
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [isOpen, floating]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setIsOpen(false);
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
@@ -75,6 +109,7 @@ export default function CustomSelect({
         onClick={() => {
           if (!disabled) setIsOpen(!isOpen);
         }}
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         style={{
@@ -125,6 +160,7 @@ export default function CustomSelect({
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            ref={menuRef}
             className="custom-select-popover"
             initial={{ opacity: 0, y: 4, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -143,6 +179,7 @@ export default function CustomSelect({
               maxHeight: "260px",
               overflowY: "auto",
               padding: "6px",
+              ...(floating ? floatingStyle : {}),
               ...popoverStyle,
             }}
           >
