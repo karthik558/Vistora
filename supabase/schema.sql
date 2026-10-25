@@ -642,3 +642,69 @@ DROP POLICY IF EXISTS "Service role full access to audit logs" ON public.audit_l
 CREATE POLICY "Service role full access to audit logs"
     ON public.audit_logs FOR ALL
     USING (true);
+
+-- ------------------------------------------------------------------------------
+-- 11. PROPERTY ACCESS (EXPLICIT USER-PROPERTY MAPPING TABLE)
+-- Dedicated relational junction table mapping hotel staff & admins to properties.
+-- Shows up directly in Supabase Studio Table Editor as "property_access".
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.property_access (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    property_id UUID NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'staff',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, property_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_property_access_user ON public.property_access(user_id);
+CREATE INDEX IF NOT EXISTS idx_property_access_property ON public.property_access(property_id);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.property_access ENABLE ROW LEVEL SECURITY;
+
+-- Authenticated users can view their own property assignments
+DROP POLICY IF EXISTS "Users can view their own property access" ON public.property_access;
+CREATE POLICY "Users can view their own property access"
+    ON public.property_access FOR SELECT
+    TO authenticated
+    USING (user_id = auth.uid());
+
+-- Administrators have full management over property assignments
+DROP POLICY IF EXISTS "Admins full access to property access" ON public.property_access;
+CREATE POLICY "Admins full access to property access"
+    ON public.property_access FOR ALL
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE profiles.id = auth.uid()
+            AND (profiles.role = 'admin' OR 'org_role:super_admin' = ANY(profiles.rights))
+        )
+    );
+
+-- Service role full access
+DROP POLICY IF EXISTS "Service role full access to property access" ON public.property_access;
+CREATE POLICY "Service role full access to property access"
+    ON public.property_access FOR ALL
+    USING (true);
+
+-- Synchronize existing property assignments from profiles table
+INSERT INTO public.property_access (user_id, property_id, role)
+SELECT 
+    p.id as user_id, 
+    unnest(p.property_ids) as property_id,
+    p.role
+FROM public.profiles p
+WHERE p.property_ids IS NOT NULL AND cardinality(p.property_ids) > 0
+ON CONFLICT (user_id, property_id) DO NOTHING;
+
+INSERT INTO public.property_access (user_id, property_id, role)
+SELECT 
+    p.id as user_id, 
+    p.property_id,
+    p.role
+FROM public.profiles p
+WHERE p.property_id IS NOT NULL
+ON CONFLICT (user_id, property_id) DO NOTHING;
+

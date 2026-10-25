@@ -97,11 +97,25 @@ export async function POST(request: NextRequest) {
 
     // Assign to users if provided
     if (Array.isArray(userIds) && userIds.length > 0) {
-      await supabase
-        .from("profiles")
-        .update({ property_id: property.id, updated_at: new Date().toISOString() })
-        .in("id", userIds)
-        .neq("role", "admin");
+      for (const uId of userIds) {
+        try {
+          const { data: p } = await supabase.from("profiles").select("property_ids").eq("id", uId).single();
+          const existing = Array.isArray(p?.property_ids) ? p.property_ids : [];
+          const nextIds = existing.includes(property.id) ? existing : [...existing, property.id];
+          await supabase
+            .from("profiles")
+            .update({
+              property_id: property.id,
+              property_ids: nextIds,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", uId);
+
+          await supabase
+            .from("property_access")
+            .upsert({ user_id: uId, property_id: property.id, role: "staff" }, { onConflict: "user_id,property_id" });
+        } catch {}
+      }
     }
 
     invalidateDashboardCache();

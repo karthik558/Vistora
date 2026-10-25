@@ -318,19 +318,26 @@ export function AppShell({
                 title="Collapse sidebar"
                 aria-label="Collapse sidebar"
               >
-                <PanelLeftClose size={16} strokeWidth={1.8} />
+                <PanelLeftClose size={15} strokeWidth={1.8} />
               </button>
             </>
           ) : (
             <div className="sidebar-collapsed-header">
               <button
                 type="button"
-                className="sidebar-collapse-btn desktop-only"
+                className="sidebar-favi-toggle desktop-only"
                 onClick={toggleSidebar}
-                title="Expand sidebar"
+                title="Click to expand sidebar"
                 aria-label="Expand sidebar"
               >
-                <PanelLeftOpen size={16} strokeWidth={1.8} />
+                <Image
+                  src="/favicon.ico"
+                  alt="Expand sidebar"
+                  width={22}
+                  height={22}
+                  priority
+                  className="sidebar-favi-icon"
+                />
               </button>
             </div>
           )}

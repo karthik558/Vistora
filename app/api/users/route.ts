@@ -45,6 +45,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
+    // Synchronize with dedicated property_access table if populated
+    let propertyAccessMap: Record<string, string[]> = {};
+    try {
+      const { data: accessRows } = await adminClient
+        .from("property_access")
+        .select("user_id, property_id");
+      if (Array.isArray(accessRows)) {
+        for (const row of accessRows) {
+          if (!propertyAccessMap[row.user_id]) propertyAccessMap[row.user_id] = [];
+          if (!propertyAccessMap[row.user_id].includes(row.property_id)) {
+            propertyAccessMap[row.user_id].push(row.property_id);
+          }
+        }
+      }
+    } catch {}
+
     const usersWithRights = (profiles || []).map((p: any) => {
       let rights = Array.isArray(p.rights) && p.rights.length > 0
         ? p.rights
@@ -56,7 +72,10 @@ export async function GET(request: NextRequest) {
         ? null
         : p.avatar_url;
 
-      const propertyIds = Array.isArray(p.property_ids) && p.property_ids.length > 0
+      const accessPropIds = propertyAccessMap[p.id] || [];
+      const propertyIds = accessPropIds.length > 0
+        ? accessPropIds
+        : Array.isArray(p.property_ids) && p.property_ids.length > 0
         ? p.property_ids
         : p.property_id
         ? [p.property_id]
@@ -219,6 +238,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: profileError.message }, { status: 500 });
     }
 
+    // 3. Synchronize with dedicated property_access table if present
+    if (resolvedPropertyIds.length > 0) {
+      try {
+        const accessRows = resolvedPropertyIds.map((pId) => ({
+          user_id: newUserId,
+          property_id: pId,
+          role,
+        }));
+        await adminClient.from("property_access").insert(accessRows);
+      } catch {}
+    }
+
     invalidateAuthCache(cleanEmail);
     invalidateSessionCache(cleanEmail);
 
@@ -293,9 +324,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const effectiveRole = chosenRole || currentProfile?.role;
+    let resolvedPropertyIds: string[] | undefined = undefined;
 
     // Resolve property access: only super_admin has global access across all properties
     if (effectiveRole === "super_admin") {
+      resolvedPropertyIds = [];
       updatePayload.property_id = null;
       updatePayload.property_ids = [];
       updatePayload.rights = [
@@ -307,7 +340,6 @@ export async function PATCH(request: NextRequest) {
         `dept_scope:All Departments`,
       ];
     } else {
-      let resolvedPropertyIds: string[] | undefined = undefined;
       if (Array.isArray(propertyIds)) {
         resolvedPropertyIds = propertyIds.filter((id) => typeof id === "string" && id.trim().length > 0);
       } else if (propertyId !== undefined) {
@@ -344,6 +376,21 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    // Synchronize with dedicated property_access table if present
+    if (resolvedPropertyIds !== undefined) {
+      try {
+        await adminClient.from("property_access").delete().eq("user_id", userId);
+        if (resolvedPropertyIds.length > 0) {
+          const accessRows = resolvedPropertyIds.map((pId) => ({
+            user_id: userId,
+            property_id: pId,
+            role: effectiveRole || "staff",
+          }));
+          await adminClient.from("property_access").insert(accessRows);
+        }
+      } catch {}
     }
 
     // Sync metadata to Supabase Auth
