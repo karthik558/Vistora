@@ -170,45 +170,14 @@ export default function NotificationCenter() {
     <div className="notification-center-wrap" ref={popoverRef} style={{ position: "relative" }}>
       <button
         type="button"
-        className="topbar-icon-btn"
+        className="topbar-icon-btn notification-bell-btn"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="System Notifications"
         title="View Notifications"
-        style={{
-          position: "relative",
-          width: "36px",
-          height: "36px",
-          borderRadius: "8px",
-          border: "1px solid var(--line)",
-          background: "var(--panel)",
-          color: "var(--ink)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          transition: "all var(--transition-fast)",
-        }}
       >
         <Bell size={17} strokeWidth={1.8} />
         {unreadCount > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: "-3px",
-              right: "-3px",
-              width: "18px",
-              height: "18px",
-              background: "var(--red)",
-              color: "#ffffff",
-              borderRadius: "50%",
-              fontSize: "10px",
-              fontFamily: "var(--font-dm-mono)",
-              fontWeight: 700,
-              display: "grid",
-              placeItems: "center",
-              boxShadow: "0 0 6px rgba(179, 90, 77, 0.4)",
-            }}
-          >
+          <span className="notification-badge-count">
             {unreadCount}
           </span>
         )}
@@ -222,45 +191,13 @@ export default function NotificationCenter() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            style={{
-              position: "absolute",
-              right: 0,
-              top: "calc(100% + 8px)",
-              width: "380px",
-              maxWidth: "calc(100vw - 24px)",
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              borderRadius: "6px",
-              boxShadow: "var(--shadow-lg)",
-              zIndex: 1000,
-              overflow: "hidden",
-            }}
           >
             {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "14px 18px",
-                borderBottom: "1px solid var(--line)",
-                background: "var(--canvas-alt)",
-              }}
-            >
+            <div className="notification-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <strong style={{ fontSize: "13px", letterSpacing: "-0.01em" }}>System Notifications</strong>
+                <strong className="notification-header-title">System Notifications</strong>
                 {unreadCount > 0 && (
-                  <span
-                    style={{
-                      background: "var(--sage-soft)",
-                      color: "var(--sage-deep)",
-                      padding: "1px 6px",
-                      borderRadius: "6px",
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      fontFamily: "var(--font-dm-mono)",
-                    }}
-                  >
+                  <span className="notification-header-badge">
                     {unreadCount} new
                   </span>
                 )}
@@ -270,15 +207,7 @@ export default function NotificationCenter() {
                   <button
                     type="button"
                     onClick={markAllRead}
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--muted)",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                    }}
+                    className="notification-mark-all-btn"
                   >
                     Mark all read
                   </button>
@@ -286,15 +215,8 @@ export default function NotificationCenter() {
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  style={{
-                    color: "var(--muted)",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    display: "grid",
-                    placeItems: "center",
-                  }}
-                  aria-label="Close"
+                  className="notification-close-btn"
+                  aria-label="Close notifications"
                 >
                   <X size={15} />
                 </button>
@@ -302,15 +224,11 @@ export default function NotificationCenter() {
             </div>
 
             {/* Notification items */}
-            <div style={{ maxHeight: "360px", overflowY: "auto" }}>
+            <div className="notification-list">
               {loading ? (
-                <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-                  Loading live notifications…
-                </div>
+                <div className="notification-empty">Loading live notifications…</div>
               ) : notifications.length === 0 ? (
-                <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-                  All caught up! No recent notifications.
-                </div>
+                <div className="notification-empty">All caught up! No recent notifications.</div>
               ) : (
                 notifications.map((item) => {
                   const isUnread = !item.read;
@@ -322,39 +240,9 @@ export default function NotificationCenter() {
                         markItemRead(item.id);
                         setIsOpen(false);
                       }}
-                      style={{
-                        display: "flex",
-                        gap: "12px",
-                        padding: "14px 18px",
-                        borderBottom: "1px solid var(--line)",
-                        textDecoration: "none",
-                        color: "inherit",
-                        background: isUnread ? "var(--canvas-alt)" : "transparent",
-                        transition: "background var(--transition-fast)",
-                      }}
+                      className={`notification-item ${isUnread ? "unread" : "read"}`}
                     >
-                      <div
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "8px",
-                          display: "grid",
-                          placeItems: "center",
-                          flexShrink: 0,
-                          background:
-                            item.type === "sla"
-                              ? "var(--red-soft)"
-                              : item.type === "invitation"
-                              ? "var(--warm-soft)"
-                              : "var(--sage-soft)",
-                          color:
-                            item.type === "sla"
-                              ? "var(--red)"
-                              : item.type === "invitation"
-                              ? "var(--warm-deep)"
-                              : "var(--sage)",
-                        }}
-                      >
+                      <div className={`notification-icon-pill ${item.type}`}>
                         {item.type === "sla" ? (
                           <AlertTriangle size={15} />
                         ) : item.type === "invitation" ? (
@@ -365,14 +253,10 @@ export default function NotificationCenter() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
-                          <strong style={{ fontSize: "12px", fontWeight: isUnread ? 700 : 600 }}>{item.title}</strong>
-                          <span style={{ fontSize: "10px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
-                            {item.time}
-                          </span>
+                          <strong className="notification-item-title">{item.title}</strong>
+                          <span className="notification-item-time">{item.time}</span>
                         </div>
-                        <p style={{ margin: 0, fontSize: "11px", color: "var(--muted)", lineHeight: "1.45" }}>
-                          {item.message}
-                        </p>
+                        <p className="notification-item-message">{item.message}</p>
                       </div>
                     </Link>
                   );
@@ -381,24 +265,14 @@ export default function NotificationCenter() {
             </div>
 
             {/* Footer */}
-            <div
-              style={{
-                padding: "10px 18px",
-                background: "var(--canvas)",
-                borderTop: "1px solid var(--line)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                fontSize: "11px",
-              }}
-            >
-              <span style={{ color: "var(--muted)" }}>Hospitality Real-Time Dispatch</span>
+            <div className="notification-footer">
+              <span>Hospitality Real-Time Dispatch</span>
               <Link
                 href="/dashboard/complaints"
                 onClick={() => setIsOpen(false)}
-                style={{ color: "var(--sage-deep)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}
+                className="notification-footer-link"
               >
-                <span>View Complaints & SLA</span>
+                <span>View Complaints &amp; SLA</span>
                 <ExternalLink size={11} />
               </Link>
             </div>
