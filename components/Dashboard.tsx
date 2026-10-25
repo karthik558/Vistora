@@ -219,6 +219,43 @@ export function AppShell({
       .catch(() => { });
   }, [propUser]);
 
+  useEffect(() => {
+    // Authenticated workspace theme sync & keyboard toggle
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("vistora-theme");
+      if (savedTheme === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        const current = document.documentElement.getAttribute("data-theme");
+        const next = current === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        try {
+          localStorage.setItem("vistora-theme", next);
+        } catch { }
+        window.dispatchEvent(new Event("vistora-theme-changed"));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleSignOut = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -226,6 +263,7 @@ export function AppShell({
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("vistora-user");
+        document.documentElement.setAttribute("data-theme", "light");
       } catch { }
     }
     router.replace("/login");

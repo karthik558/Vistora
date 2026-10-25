@@ -1,11 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
-import ThemeToggle from "./ThemeToggle";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -14,6 +13,11 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    // Public login page is strictly light mode
+    document.documentElement.setAttribute("data-theme", "light");
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -58,7 +62,6 @@ export default function LoginForm() {
             <Link href="/" title="Vistora Home" className="auth-logo-link">
               <Image src="/logo1.webp" alt="Vistora" width={130} height={34} priority />
             </Link>
-            <ThemeToggle />
           </div>
 
           <div className="auth-heading-wrap">

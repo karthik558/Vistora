@@ -3651,7 +3651,7 @@ body { background: var(--canvas); }
 .landing-logo img { height: 31px; width: auto; object-fit: contain; }
 .landing-header-actions { display: flex; align-items: center; gap: 10px; }
 .landing-header-actions .topbar-icon-btn { border-radius: 10px !important; }
-.landing-hero { flex: 1; display: grid; grid-template-columns: minmax(0, .95fr) minmax(480px, 1.05fr); align-items: center; gap: clamp(40px, 7vw, 110px); padding: clamp(62px, 10vh, 120px) 0 60px; }
+.landing-hero { flex: 1; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, 480px); align-items: center; justify-content: space-between; gap: clamp(36px, 5vw, 84px); padding: clamp(62px, 10vh, 120px) 0 60px; }
 .landing-hero-copy { max-width: 680px; }
 .landing-shell .landing-hero .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; color: var(--sage-deep); }
 .landing-shell .landing-hero h1 { max-width: 720px; font-size: clamp(48px, 6.1vw, 90px); line-height: .98; margin-bottom: 28px; }
@@ -3659,22 +3659,26 @@ body { background: var(--canvas); }
 .landing-primary { padding-inline: 20px; }
 .landing-assurance { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
 .landing-assurance svg { color: var(--sage); }
-.landing-graph-card { position: relative; padding: 24px; border: 1px solid color-mix(in srgb, var(--line) 82%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--panel) 90%, transparent); box-shadow: var(--shadow-lg); backdrop-filter: blur(18px); transform: perspective(1000px) rotateY(-2deg) rotateX(1deg); transition: transform var(--transition-normal), box-shadow var(--transition-normal); }
-.landing-graph-card:hover { transform: perspective(1000px) rotateY(0) rotateX(0) translateY(-4px); box-shadow: 0 34px 90px rgba(20,42,33,.18); }
+.landing-graph-card { position: relative; max-width: 480px; width: 100%; margin-left: auto; padding: 24px; border: 1px solid color-mix(in srgb, var(--line) 82%, transparent); border-radius: 20px; background: var(--panel); box-shadow: 0 18px 45px -12px rgba(18, 38, 28, 0.12), 0 1px 3px rgba(0, 0, 0, 0.04); transform: none; transition: transform var(--transition-normal), box-shadow var(--transition-normal); }
+.landing-graph-card:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -10px rgba(18, 38, 28, 0.16), 0 2px 6px rgba(0, 0, 0, 0.05); }
 .landing-graph-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 28px; }
 .landing-graph-head div > span, .auth-kicker { display: block; color: var(--muted); font: 500 9px var(--font-dm-mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; }
 .landing-graph-head strong { font-size: 15px; }
 .live-pill { display: inline-flex; align-items: center; gap: 7px; color: var(--sage-deep); font-size: 10px; font-weight: 600; padding: 6px 9px; background: var(--sage-soft); border: 1px solid color-mix(in srgb, var(--sage) 25%, transparent); border-radius: 999px; }
 .live-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
-.landing-graph-plot { height: 220px; position: relative; color: var(--sage); border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.landing-graph-plot { height: 200px; position: relative; color: var(--sage); border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 2px; }
 .landing-graph-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .landing-area { fill: url(#signalFill); }
 .landing-line { fill: none; stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; filter: drop-shadow(0 6px 7px color-mix(in srgb, var(--sage) 25%, transparent)); }
-.landing-graph-plot circle { fill: var(--panel); stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; }
 .graph-grid-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
 .graph-grid-line.line-one { top: 25%; }.graph-grid-line.line-two { top: 50%; }.graph-grid-line.line-three { top: 75%; }
-.landing-graph-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-top: 15px; color: var(--muted); font-size: 10px; }
-.landing-graph-steps span { display: flex; align-items: center; gap: 6px; }.landing-graph-steps svg { color: var(--sage); }
+.graph-marker { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2.5px solid var(--sage); transform: translate(-50%, -50%); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sage) 18%, transparent); z-index: 2; transition: transform 0.2s ease, box-shadow 0.2s ease; cursor: pointer; }
+.graph-marker:hover { transform: translate(-50%, -50%) scale(1.22); box-shadow: 0 0 0 6px color-mix(in srgb, var(--sage) 28%, transparent); }
+.graph-marker.marker-active { background: var(--sage); border-color: #ffffff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--sage) 32%, transparent), 0 4px 10px rgba(20, 50, 36, 0.22); }
+.graph-marker.marker-active:hover { transform: translate(-50%, -50%) scale(1.25); box-shadow: 0 0 0 6px color-mix(in srgb, var(--sage) 42%, transparent), 0 6px 14px rgba(20, 50, 36, 0.28); }
+.landing-graph-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding-top: 15px; color: var(--muted); font-size: 11px; }
+.landing-graph-steps span { display: flex; align-items: center; gap: 5px; font-weight: 500; }
+.landing-graph-steps svg { color: var(--sage); }
 .landing-insight-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
 .landing-insight-row > div { display: flex; align-items: center; gap: 11px; padding: 12px; background: var(--canvas); border: 1px solid var(--line); border-radius: 12px; }
 .landing-insight-row > div > span { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 8px; background: var(--sage-soft); color: var(--sage-deep); font: 500 10px var(--font-dm-mono); }

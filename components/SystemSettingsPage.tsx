@@ -33,14 +33,15 @@ export default function SystemSettingsPage({
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
+    const syncTheme = () => {
+      const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
+      setTheme(current === "dark" ? "dark" : "light");
+    };
+
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("vistora-theme") as "light" | "dark";
-      if (saved === "dark" || saved === "light") {
-        setTheme(saved);
-      } else {
-        const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
-        setTheme(current === "dark" ? "dark" : "light");
-      }
+      syncTheme();
+      window.addEventListener("vistora-theme-changed", syncTheme);
+      return () => window.removeEventListener("vistora-theme-changed", syncTheme);
     }
   }, []);
 
@@ -50,6 +51,7 @@ export default function SystemSettingsPage({
     try {
       localStorage.setItem("vistora-theme", newTheme);
     } catch {}
+    window.dispatchEvent(new Event("vistora-theme-changed"));
   };
 
   // Application Settings State

@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { ArrowRight, CheckCircle2, MessageCircleMore, ChartNoAxesCombined, TimerReset } from "lucide-react";
-import ThemeToggle from "../components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,6 @@ export default async function HomePage() {
           <Image src="/logo1.webp" alt="Vistora" width={150} height={40} priority />
         </Link>
         <div className="landing-header-actions">
-          <ThemeToggle />
           <Link href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">
             {isLoggedIn ? "Dashboard" : "Sign in"}<ArrowRight size={15} />
           </Link>
@@ -51,30 +49,33 @@ export default async function HomePage() {
 
         <div className="landing-graph-card" aria-label="Guest experience workflow graph">
           <div className="landing-graph-head">
-            <div><span>Experience signal</span><strong>From feedback to recovery</strong></div>
+            <div><span>Experience signal</span><strong>From feedback to recommendation</strong></div>
             <span className="live-pill"><i /> Live workflow</span>
           </div>
           <div className="landing-graph-plot">
             <span className="graph-grid-line line-one" />
             <span className="graph-grid-line line-two" />
             <span className="graph-grid-line line-three" />
-            <svg viewBox="0 0 560 220" preserveAspectRatio="none" role="img" aria-label="Rising response workflow curve">
+            <svg viewBox="0 0 500 200" preserveAspectRatio="none" role="img" aria-label="Rising response workflow curve">
               <defs>
                 <linearGradient id="signalFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                  <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="currentColor" stopOpacity="0.01" />
                 </linearGradient>
               </defs>
-              <path className="landing-area" d="M0 184 C70 170 92 178 145 139 C205 94 235 147 292 106 C352 61 388 100 438 58 C482 22 520 49 560 18 L560 220 L0 220 Z" />
-              <path className="landing-line" d="M0 184 C70 170 92 178 145 139 C205 94 235 147 292 106 C352 61 388 100 438 58 C482 22 520 49 560 18" />
-              <circle cx="145" cy="139" r="6" /><circle cx="292" cy="106" r="6" /><circle cx="438" cy="58" r="6" /><circle cx="560" cy="18" r="6" />
+              <path className="landing-area" d="M0 160 C50 155 70 148 100 136 C155 116 195 120 240 104 C290 84 325 72 370 56 C415 38 450 24 480 20 L500 18 L500 200 L0 200 Z" />
+              <path className="landing-line" d="M0 160 C50 155 70 148 100 136 C155 116 195 120 240 104 C290 84 325 72 370 56 C415 38 450 24 480 20 L500 18" />
             </svg>
+            <span className="graph-marker" style={{ left: "20%", top: "68%" }} title="Feedback captured" />
+            <span className="graph-marker" style={{ left: "48%", top: "52%" }} title="Triage & Understand" />
+            <span className="graph-marker" style={{ left: "74%", top: "28%" }} title="Service Recovery" />
+            <span className="graph-marker marker-active" style={{ left: "96%", top: "10%" }} title="Advocate & Recommend" />
           </div>
           <div className="landing-graph-steps">
-            <span><MessageCircleMore size={15} /> Capture</span>
+            <span><MessageCircleMore size={15} /> Feedback</span>
             <span><ChartNoAxesCombined size={15} /> Understand</span>
             <span><TimerReset size={15} /> Recover</span>
-            <span><CheckCircle2 size={15} /> Retain</span>
+            <span><CheckCircle2 size={15} /> Recommend</span>
           </div>
           <div className="landing-insight-row">
             <div><span>01</span><p><strong>Centralized signals</strong><small>Feedback, forms, and invitations</small></p></div>
