@@ -128,6 +128,14 @@ export default function CustomDatePicker({
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setIsOpen(false);
+      };
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -249,6 +257,7 @@ export default function CustomDatePicker({
         className={`custom-datepicker-trigger ${value.preset !== "all" ? "active" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Select date range"
+        aria-expanded={isOpen}
       >
         <CalendarIcon size={14} className="datepicker-icon" />
         <span className="datepicker-label">{getPresetLabel(value)}</span>

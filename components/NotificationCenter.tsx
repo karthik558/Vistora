@@ -134,6 +134,7 @@ export default function NotificationCenter() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            className="notification-popover"
             initial={{ opacity: 0, y: 8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
@@ -146,7 +147,7 @@ export default function NotificationCenter() {
               maxWidth: "calc(100vw - 24px)",
               background: "var(--panel)",
               border: "1px solid var(--line)",
-              borderRadius: "10px",
+              borderRadius: "6px",
               boxShadow: "var(--shadow-lg)",
               zIndex: 1000,
               overflow: "hidden",
@@ -171,7 +172,7 @@ export default function NotificationCenter() {
                       background: "var(--sage-soft)",
                       color: "var(--sage-deep)",
                       padding: "1px 6px",
-                      borderRadius: "10px",
+                      borderRadius: "6px",
                       fontSize: "10px",
                       fontWeight: 600,
                       fontFamily: "var(--font-dm-mono)",

@@ -251,9 +251,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           {/* Mandatory Property Selection */}
           <div style={{ marginBottom: "24px", padding: "16px 18px", background: "#fbfdfb", border: propertyError ? "1px solid #8b261a" : "1px solid var(--line)", borderRadius: "8px", boxShadow: "var(--shadow-xs)" }}>
             <label className="field-label" htmlFor="property-select" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-              <span>Which Vistora property are you reviewing? <strong style={{ color: "#8b261a" }}>*</strong></span>
+              <span>Which Vistora property are you reviewing? <strong style={{ color: "var(--red)" }}>*</strong></span>
               {selectedPropertyId && isUrlPreselected && (
-                <span style={{ fontSize: "11px", color: "#254230", fontWeight: 600 }}>
+                <span style={{ fontSize: "11px", color: "var(--sage-deep)", fontWeight: 600 }}>
                   ✓ {isDemoMode ? "Demo link · Property pre-selected" : "Property pre-selected"}
                 </span>
               )}
@@ -276,7 +276,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             />
 
             {propertyError && (
-              <p style={{ color: "#8b261a", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
+              <p style={{ color: "var(--red)", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
                 {propertyError}
               </p>
             )}
@@ -395,7 +395,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                               onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
                               style={{
                                 padding: "6px 14px",
-                                borderRadius: "20px",
+                                borderRadius: "6px",
                                 border: isSelected ? "1px solid #0b100f" : "1px solid #d4ded4",
                                 background: isSelected ? "#0b100f" : "#ffffff",
                                 color: isSelected ? "#ffffff" : "var(--ink)",
@@ -514,7 +514,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           </label>
 
           {wantsContact && (
-            <div style={{ padding: "14px", background: "#f8faf8", border: "1px solid #e3e8e3", borderRadius: "4px", marginBottom: "20px" }}>
+            <div style={{ padding: "14px", background: "var(--canvas)", border: "1px solid #e3e8e3", borderRadius: "4px", marginBottom: "20px" }}>
               <div style={{ display: "flex", gap: "16px", marginBottom: "10px", fontSize: "11px", color: "var(--ink)" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                   <input

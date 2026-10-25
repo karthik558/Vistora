@@ -352,13 +352,13 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
             </div>
 
             {error && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#fbf1ef", color: "#8b261a", border: "1px solid #ebd3cf", fontSize: "12px" }}>
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--red-soft)", color: "var(--red)", border: "1px solid #ebd3cf", fontSize: "12px" }}>
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--sage-soft)", color: "var(--sage-deep)", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <Check size={14} strokeWidth={2} />
                 {success}
               </div>
@@ -416,7 +416,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                                 borderColor: isActive ? "#bbf7d0" : "#fecaca",
                                 cursor: "pointer",
                                 padding: "2px 8px",
-                                borderRadius: "12px",
+                                borderRadius: "6px",
                                 fontSize: "10px",
                                 fontFamily: "var(--font-dm-mono)",
                                 letterSpacing: "0.04em",
@@ -424,7 +424,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                                 alignItems: "center",
                                 gap: "5px",
                                 background: isActive ? "#f0fdf4" : "#fef2f2",
-                                color: isActive ? "#15803d" : "#b91c1c",
+                                color: isActive ? "#15803d" : "var(--red)",
                                 fontWeight: 600,
                                 transition: "all 0.15s ease",
                               }}
@@ -465,7 +465,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                               border: "1px solid rgba(185, 28, 28, 0.2)",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              color: "#b91c1c",
+                              color: "var(--red)",
                               marginBottom: "10px",
                             }}
                           >
@@ -509,7 +509,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                           type="button"
                           onClick={() => handleDeleteProperty(prop.id, prop.name)}
                           className="button button-outline compact"
-                          style={{ fontSize: "11px", padding: "4px 8px", color: "#8b261a", borderColor: "#eddcd9" }}
+                          style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "#eddcd9" }}
                           title="Delete property"
                         >
                           <Trash2 size={12} strokeWidth={1.75} />
@@ -544,8 +544,11 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="workspace-modal"
+              role="dialog"
+              aria-modal="true"
               style={{
-                background: "#ffffff",
+                background: "var(--panel)",
                 border: "1px solid var(--line)",
                 borderRadius: "8px",
                 width: "100%",
@@ -741,7 +744,11 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="workspace-modal"
+              role="dialog"
+              aria-modal="true"
               style={{
+                // Shared responsive dialog treatment also applies to property editing.
                 background: "var(--panel, #ffffff)",
                 border: "1px solid var(--line)",
                 borderRadius: "8px",

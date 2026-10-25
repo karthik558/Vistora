@@ -25,6 +25,14 @@ export default function PropertyFilter({
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setIsOpen(false);
+      };
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -41,6 +49,7 @@ export default function PropertyFilter({
         className={`property-filter-trigger ${selectedId !== "all" ? "active" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Filter by property"
+        aria-expanded={isOpen}
       >
         <Building2 size={14} className="filter-icon" />
         <span className="filter-label">{currentLabel}</span>

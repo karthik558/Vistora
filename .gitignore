@@ -8,6 +8,8 @@
 
 # Next.js
 /.next/
+/.next-dev/
+/.next-preview/
 /out/
 
 # Production

@@ -470,12 +470,12 @@ function Analytics({
                 <span style={{ fontSize: "11px", color: "var(--muted)" }}>
                   {count} {count === 1 ? "response" : "responses"}
                 </span>
-                <div style={{ width: "100%", height: "4px", background: "#f0f4f0", borderRadius: "2px", overflow: "hidden", marginTop: "4px" }}>
+                <div style={{ width: "100%", height: "4px", background: "var(--canvas-alt)", borderRadius: "2px", overflow: "hidden", marginTop: "4px" }}>
                   <div
                     style={{
                       width: `${pct}%`,
                       height: "100%",
-                      background: count > 0 ? "#254230" : "transparent",
+                      background: count > 0 ? "var(--sage-deep)" : "transparent",
                       borderRadius: "2px",
                       transition: "width 0.25s ease",
                     }}
@@ -1389,7 +1389,7 @@ function Reports({
           alignItems: "center",
           flexWrap: "wrap",
           gap: "12px",
-          background: "#f9faf8",
+          background: "var(--canvas)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
@@ -1675,19 +1675,19 @@ function Reports({
                       <span style={{ fontWeight: 600 }}>{s.total}</span> responses
                     </td>
                     <td>
-                      <span className="status" style={{ background: "#edf4ed", color: "#1c3825" }}>
+                      <span className="status" style={{ background: "var(--sage-soft)", color: "var(--sage-deep)" }}>
                         {s.avgRating} / 5.0
                       </span>
                     </td>
                     <td>
-                      <span style={{ color: s.complaintCount > 0 ? "#8b261a" : "var(--muted)" }}>
+                      <span style={{ color: s.complaintCount > 0 ? "var(--red)" : "var(--muted)" }}>
                         {s.complaintCount}
                       </span>
                     </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div style={{ width: "90px", height: "6px", background: "var(--line)", borderRadius: "3px", overflow: "hidden" }}>
-                          <div style={{ width: `${s.recoveryRate}%`, height: "100%", background: "#254230" }} />
+                          <div style={{ width: `${s.recoveryRate}%`, height: "100%", background: "var(--sage-deep)" }} />
                         </div>
                         <span style={{ fontSize: "11px", fontWeight: 600 }}>{s.recoveryRate}%</span>
                       </div>

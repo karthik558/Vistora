@@ -631,7 +631,7 @@ export default function GuestInvitationsPage({
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   background: "var(--panel)",
-                  borderRadius: "12px",
+                  borderRadius: "6px",
                   padding: "32px",
                   maxWidth: "400px",
                   width: "90%",

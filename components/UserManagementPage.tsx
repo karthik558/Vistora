@@ -591,13 +591,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
             </div>
 
             {error && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#fbf1ef", color: "#8b261a", border: "1px solid #ebd3cf", fontSize: "12px" }}>
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--red-soft)", color: "var(--red)", border: "1px solid #ebd3cf", fontSize: "12px" }}>
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "var(--sage-soft)", color: "var(--sage-deep)", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <Check size={14} strokeWidth={2} />
                 {success}
               </div>
@@ -739,8 +739,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         fontSize: "10px",
                                         fontWeight: 600,
                                         fontFamily: "var(--font-dm-mono)",
-                                        background: isSuperAdmin ? "var(--canvas-alt)" : dept === "All Departments" ? "#edf4ed" : "var(--sage-soft)",
-                                        color: isSuperAdmin ? "var(--ink)" : dept === "All Departments" ? "#254230" : "var(--sage-deep)",
+                                        background: isSuperAdmin ? "var(--canvas-alt)" : dept === "All Departments" ? "var(--sage-soft)" : "var(--sage-soft)",
+                                        color: isSuperAdmin ? "var(--ink)" : dept === "All Departments" ? "var(--sage-deep)" : "var(--sage-deep)",
                                         border: "1px solid var(--line)",
                                       }}
                                     >
@@ -767,8 +767,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       display: "inline-flex",
                                       alignItems: "center",
                                       gap: "5px",
-                                      background: "#edf4ed",
-                                      color: "#254230",
+                                      background: "var(--sage-soft)",
+                                      color: "var(--sage-deep)",
                                       padding: "3px 8px",
                                       borderRadius: "3px",
                                       fontSize: "11px",
@@ -785,8 +785,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "5px",
-                                    background: "#edf4ed",
-                                    color: "#254230",
+                                    background: "var(--sage-soft)",
+                                    color: "var(--sage-deep)",
                                     padding: "3px 8px",
                                     borderRadius: "3px",
                                     fontSize: "11px",
@@ -806,8 +806,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "5px",
-                                    background: "#f0f4f0",
-                                    color: "#1c3825",
+                                    background: "var(--canvas-alt)",
+                                    color: "var(--sage-deep)",
                                     padding: "3px 8px",
                                     borderRadius: "3px",
                                     fontSize: "11px",
@@ -823,8 +823,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "5px",
-                                    background: "#f0f4f0",
-                                    color: "#1c3825",
+                                    background: "var(--canvas-alt)",
+                                    color: "var(--sage-deep)",
                                     padding: "3px 8px",
                                     borderRadius: "3px",
                                     fontSize: "11px",
@@ -840,8 +840,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "5px",
-                                    background: "#fbf1ef",
-                                    color: "#8b261a",
+                                    background: "var(--red-soft)",
+                                    color: "var(--red)",
                                     padding: "3px 8px",
                                     borderRadius: "3px",
                                     fontSize: "11px",
@@ -1075,7 +1075,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               border: "1px solid var(--line)",
                               borderRadius: "6px",
                               padding: "8px 10px",
-                              background: "#fafbfa",
+                              background: "var(--canvas)",
                             }}
                           >
                             {properties.map((p) => {
@@ -1089,7 +1089,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     gap: "10px",
                                     padding: "6px 8px",
                                     borderRadius: "4px",
-                                    background: checked ? "#edf4ed" : "#ffffff",
+                                    background: checked ? "var(--sage-soft)" : "#ffffff",
                                     border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
                                     fontSize: "12px",
                                     cursor: "pointer",
@@ -1106,14 +1106,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         setAddPropertyIds(addPropertyIds.filter((id) => id !== p.id));
                                       }
                                     }}
-                                    style={{ accentColor: "#254230", margin: 0 }}
+                                    style={{ accentColor: "var(--sage-deep)", margin: 0 }}
                                   />
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                                     <div>
                                       <span style={{ fontWeight: 600, color: "var(--ink)", marginRight: "6px" }}>{p.name}</span>
                                       <span style={{ fontSize: "10px", color: "var(--muted)" }}>{p.location || ""}</span>
                                     </div>
-                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "#eef2ee", padding: "2px 5px", borderRadius: "3px", color: "#254230", fontWeight: 600 }}>
+                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "var(--sage-soft)", padding: "2px 5px", borderRadius: "3px", color: "var(--sage-deep)", fontWeight: 600 }}>
                                       {p.code}
                                     </span>
                                   </div>
@@ -1122,7 +1122,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             })}
                           </div>
                           {addPropertyIds.length === 0 && (
-                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#8b261a" }}>
+                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "var(--red)" }}>
                               * Please select at least one property to grant operational access.
                             </p>
                           )}
@@ -1146,7 +1146,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         <div
                           style={{
                             padding: "14px 16px",
-                            background: "#edf4ed",
+                            background: "var(--sage-soft)",
                             border: "1px solid #d4e2d6",
                             borderRadius: "6px",
                             display: "flex",
@@ -1157,12 +1157,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
-                            <strong style={{ fontSize: "12px", color: "#254230" }}>
+                            <Shield size={14} strokeWidth={2} style={{ color: "var(--sage-deep)" }} />
+                            <strong style={{ fontSize: "12px", color: "var(--sage-deep)" }}>
                               Super Administrator Access
                             </strong>
                           </div>
-                          <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
+                          <p style={{ margin: 0, fontSize: "11px", color: "var(--sage-deep)", lineHeight: "1.5" }}>
                             Full operational capabilities and portfolio-wide authority automatically applied. No manual configuration required.
                           </p>
                         </div>
@@ -1183,7 +1183,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 gap: "8px",
                               }}
                             >
-                              <Shield size={14} style={{ color: "#6366f1", flexShrink: 0 }} />
+                              <Shield size={14} style={{ color: "var(--blue)", flexShrink: 0 }} />
                               <span>
                                 {addRole === "analyst"
                                   ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
@@ -1224,7 +1224,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               border: "1px solid var(--line)",
                               borderRadius: "6px",
                               padding: "10px 12px",
-                              background: "#fafbfa",
+                              background: "var(--canvas)",
                             }}
                           >
                             {SYSTEM_RIGHTS.map((right) => {
@@ -1421,7 +1421,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               border: "1px solid var(--line)",
                               borderRadius: "6px",
                               padding: "8px 10px",
-                              background: "#fafbfa",
+                              background: "var(--canvas)",
                             }}
                           >
                             {properties.map((p) => {
@@ -1435,7 +1435,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     gap: "10px",
                                     padding: "6px 8px",
                                     borderRadius: "4px",
-                                    background: checked ? "#edf4ed" : "#ffffff",
+                                    background: checked ? "var(--sage-soft)" : "#ffffff",
                                     border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
                                     fontSize: "12px",
                                     cursor: "pointer",
@@ -1452,14 +1452,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         setEditPropertyIds(editPropertyIds.filter((id) => id !== p.id));
                                       }
                                     }}
-                                    style={{ accentColor: "#254230", margin: 0 }}
+                                    style={{ accentColor: "var(--sage-deep)", margin: 0 }}
                                   />
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                                     <div>
                                       <span style={{ fontWeight: 600, color: "var(--ink)", marginRight: "6px" }}>{p.name}</span>
                                       <span style={{ fontSize: "10px", color: "var(--muted)" }}>{p.location || ""}</span>
                                     </div>
-                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "#eef2ee", padding: "2px 5px", borderRadius: "3px", color: "#254230", fontWeight: 600 }}>
+                                    <span style={{ fontSize: "10px", fontFamily: "var(--font-dm-mono)", background: "var(--sage-soft)", padding: "2px 5px", borderRadius: "3px", color: "var(--sage-deep)", fontWeight: 600 }}>
                                       {p.code}
                                     </span>
                                   </div>
@@ -1468,7 +1468,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             })}
                           </div>
                           {editPropertyIds.length === 0 && (
-                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#8b261a" }}>
+                            <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "var(--red)" }}>
                               * Please select at least one property to grant operational access.
                             </p>
                           )}
@@ -1479,7 +1479,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         <div
                           style={{
                             padding: "14px 16px",
-                            background: "#edf4ed",
+                            background: "var(--sage-soft)",
                             border: "1px solid #d4e2d6",
                             borderRadius: "6px",
                             display: "flex",
@@ -1490,12 +1490,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
-                            <strong style={{ fontSize: "12px", color: "#254230" }}>
+                            <Shield size={14} strokeWidth={2} style={{ color: "var(--sage-deep)" }} />
+                            <strong style={{ fontSize: "12px", color: "var(--sage-deep)" }}>
                               Super Administrator Access
                             </strong>
                           </div>
-                          <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
+                          <p style={{ margin: 0, fontSize: "11px", color: "var(--sage-deep)", lineHeight: "1.5" }}>
                             Full operational capabilities and portfolio-wide authority across all properties automatically applied.
                           </p>
                         </div>
@@ -1516,7 +1516,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 gap: "8px",
                               }}
                             >
-                              <Shield size={14} style={{ color: "#6366f1", flexShrink: 0 }} />
+                              <Shield size={14} style={{ color: "var(--blue)", flexShrink: 0 }} />
                               <span>
                                 {editRole === "analyst"
                                   ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
@@ -1557,7 +1557,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               border: "1px solid var(--line)",
                               borderRadius: "6px",
                               padding: "10px 12px",
-                              background: "#fafbfa",
+                              background: "var(--canvas)",
                             }}
                           >
                             {SYSTEM_RIGHTS.map((right) => {
@@ -1644,8 +1644,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="workspace-modal"
+                    role="dialog"
+                    aria-modal="true"
                     style={{
-                      background: "#ffffff",
+                      background: "var(--panel)",
                       border: "1px solid var(--line)",
                       borderRadius: "8px",
                       width: "100%",

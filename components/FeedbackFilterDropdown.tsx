@@ -24,6 +24,14 @@ export default function FeedbackFilterDropdown({
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setIsOpen(false);
+      };
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -45,6 +53,7 @@ export default function FeedbackFilterDropdown({
         className={`custom-dropdown-trigger ${value !== "all" ? "active" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Filter feedback comments"
+        aria-expanded={isOpen}
       >
         <Filter size={13} className="dropdown-icon" />
         <span className="dropdown-label">{current.label}</span>

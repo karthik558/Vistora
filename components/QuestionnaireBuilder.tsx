@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Smile,
   ListCheck,
-  Sparkles,
   Layers,
   ChevronDown,
   HelpCircle,
@@ -700,7 +699,7 @@ export default function QuestionnaireBuilder() {
                                   style={{
                                     fontSize: "10px",
                                     padding: "2px 8px",
-                                    borderRadius: "10px",
+                                    borderRadius: "6px",
                                     background: "var(--canvas-alt)",
                                     color: "var(--ink)",
                                     border: "1px solid var(--line-strong)",
@@ -941,7 +940,7 @@ export default function QuestionnaireBuilder() {
                       style={{
                         background: "var(--sage)",
                         color: "#fff",
-                        borderRadius: "10px",
+                        borderRadius: "6px",
                         fontSize: "9px",
                         padding: "1px 6px",
                       }}
@@ -1306,7 +1305,7 @@ export default function QuestionnaireBuilder() {
                           style={{
                             fontSize: "10px",
                             padding: "2px 6px",
-                            borderRadius: "10px",
+                            borderRadius: "6px",
                             background: "var(--sage-soft)",
                             color: "var(--sage)",
                             fontWeight: 600,

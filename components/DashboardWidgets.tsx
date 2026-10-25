@@ -23,188 +23,50 @@ import {
 } from "lucide-react";
 import { FeedbackViewModel } from "../types/experience";
 
-// 1. FEEDBACK TREND & VOLUME COMPONENT
+// 1. VERIFIED FEEDBACK VOLUME
 export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
   const [rangeDays, setRangeDays] = useState<7 | 14>(7);
-
-  const daysData = useMemo(() => {
-    const days: Array<{
-      dateStr: string;
-      dayLabel: string;
-      count: number;
-      avgRating: number;
-      isToday: boolean;
-    }> = [];
-
-    const now = new Date();
-    for (let i = rangeDays - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const isoDate = d.toISOString().slice(0, 10);
-      const dayLabel = d.toLocaleDateString([], { weekday: "short" });
-
-      const dayItems = feedback.filter((f) => f.createdAt && f.createdAt.slice(0, 10) === isoDate);
-      const count = dayItems.length;
-      const sum = dayItems.reduce((acc, cur) => acc + cur.rating, 0);
-      const avg = count > 0 ? Number((sum / count).toFixed(1)) : 0;
-
-      days.push({
-        dateStr: isoDate,
-        dayLabel,
-        count,
-        avgRating: avg,
-        isToday: i === 0,
-      });
-    }
-
-    // If no data exists for current days (e.g., initial seed test), synthesize realistic hospitality distribution
-    const totalCount = days.reduce((a, b) => a + b.count, 0);
-    if (totalCount === 0 && feedback.length > 0) {
-      const distributedCount = Math.ceil(feedback.length / rangeDays);
-      return days.map((d, idx) => ({
-        ...d,
-        count: Math.max(1, Math.round(distributedCount * (0.7 + (idx % 3) * 0.3))),
-        avgRating: 4.6 + (idx % 3) * 0.2,
-      }));
-    }
-
-    return days;
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const days = useMemo(() => {
+    const today = new Date();
+    const localDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    return Array.from({ length: rangeDays }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - rangeDays + index + 1);
+      const key = localDate(date);
+      const records = feedback.filter(item => localDate(new Date(item.createdAt)) === key);
+      return { key, label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: records.length };
+    });
   }, [feedback, rangeDays]);
-
-  const maxCount = Math.max(...daysData.map((d) => d.count), 5);
-  const totalPeriodCount = daysData.reduce((acc, d) => acc + d.count, 0);
+  const max = Math.max(4, ...days.map(day => day.count));
+  const points = days.map((day, index) => ({ x: 40 + index * 620 / (days.length - 1), y: 214 - day.count / max * 176 }));
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+  const active = selectedDay === null ? null : days[selectedDay];
 
   return (
-    <div className="panel" style={{ overflow: "hidden", marginBottom: "22px" }}>
+    <section className="panel feedback-trend-panel">
       <div className="panel-heading">
-        <div>
-          <h2 style={{ fontSize: "16px", margin: 0 }}>Feedback trend &amp; volume</h2>
-          <p style={{ margin: "4px 0 0" }}>Daily submission volume with CSAT rating curve</p>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: "6px", overflow: "hidden" }}>
-            <button
-              type="button"
-              onClick={() => setRangeDays(7)}
-              style={{
-                padding: "4px 10px",
-                fontSize: "11px",
-                fontWeight: 600,
-                background: rangeDays === 7 ? "var(--ink)" : "transparent",
-                color: rangeDays === 7 ? "var(--panel)" : "var(--muted)",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              7 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setRangeDays(14)}
-              style={{
-                padding: "4px 10px",
-                fontSize: "11px",
-                fontWeight: 600,
-                background: rangeDays === 14 ? "var(--ink)" : "transparent",
-                color: rangeDays === 14 ? "var(--panel)" : "var(--muted)",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              14 Days
-            </button>
-          </div>
-          <span className="panel-action">{totalPeriodCount} total reviews</span>
+        <div><h2>Feedback trend &amp; volume</h2><p>{days.reduce((sum, day) => sum + day.count, 0)} responses over the last {rangeDays} days</p></div>
+        <div className="chart-range-control" aria-label="Chart period">
+          {[7, 14].map(value => <button key={value} type="button" aria-pressed={rangeDays === value} onClick={() => { setRangeDays(value as 7 | 14); setSelectedDay(null); }}>{value} days</button>)}
         </div>
       </div>
-
-      <div style={{ padding: "20px 24px" }}>
-        {/* Trend Graphic Bars - Clean solid luxury styling matching light & dark modes */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${daysData.length}, 1fr)`,
-            gap: "12px",
-            alignItems: "flex-end",
-            height: "170px",
-            paddingBottom: "8px",
-            borderBottom: "1px solid var(--line)",
-          }}
-        >
-          {daysData.map((day, idx) => {
-            const heightPct = Math.max(12, Math.round((day.count / maxCount) * 100));
-            return (
-              <div
-                key={day.dateStr + idx}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  height: "100%",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <div style={{ fontSize: "10px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)", marginBottom: "6px" }}>
-                  {day.count}
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    maxWidth: "36px",
-                    height: `${heightPct}%`,
-                    background: day.isToday ? "var(--warm)" : "var(--sage)",
-                    borderRadius: "4px 4px 0 0",
-                    transition: "height 0.3s ease, opacity 0.2s ease",
-                    position: "relative",
-                  }}
-                  title={`${day.dateStr}: ${day.count} responses (${day.avgRating > 0 ? `${day.avgRating}★` : "No ratings"})`}
-                />
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: day.isToday ? "var(--ink)" : "var(--muted)",
-                    fontWeight: day.isToday ? 700 : 500,
-                    marginTop: "8px",
-                  }}
-                >
-                  {day.dayLabel}
-                </span>
-              </div>
-            );
+      <div className="volume-chart">
+        <svg viewBox="0 0 700 254" role="img" aria-label={`Daily feedback volume. ${days.map(day => `${day.label}: ${day.count}`).join(", ")}`}>
+          {[0, 1, 2, 3, 4].map(index => {
+            const y = 214 - index * 44;
+            return <g key={index}><line x1="40" x2="660" y1={y} y2={y} className="volume-grid" /><text x="27" y={y + 4} textAnchor="end" className="volume-axis">{Math.round(max * index / 4)}</text></g>;
           })}
-        </div>
-
-        {/* Legend & Performance Highlights */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "14px",
-            flexWrap: "wrap",
-            gap: "10px",
-            fontSize: "11px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--muted)" }}>
-              <i style={{ width: "10px", height: "10px", background: "var(--sage)", borderRadius: "2px" }} />
-              <span>Standard Operations</span>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--muted)" }}>
-              <i style={{ width: "10px", height: "10px", background: "var(--warm)", borderRadius: "2px" }} />
-              <span>Current Operating Day</span>
-            </span>
-          </div>
-
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink)", fontWeight: 600 }}>
-            <TrendingUp size={13} style={{ color: "var(--sage)" }} />
-            <span>+14.2% response volume vs preceding cycle</span>
-          </div>
-        </div>
+          <path d={path} className="volume-line" />
+          {points.map((point, index) => <g key={days[index].key}>
+            <circle cx={point.x} cy={point.y} r="4" className="volume-point" />
+            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].label}: ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
+            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="245" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
+          </g>)}
+        </svg>
+        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? `${active.label} · ${active.count} responses` : "Daily guest responses · select a point to inspect"}</div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -215,36 +77,31 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
       id: "qr_room",
       name: "In-Room Keycard QR",
       detail: "Bedside nightstand & door keycard sleeve",
-      percentage: 46,
-      color: "var(--sage)",
+      icon: QrCode,
     },
     {
       id: "qr_dining",
       name: "Restaurant & Bar Table QR",
       detail: "All-day dining & rooftop lounge acrylics",
-      percentage: 26,
-      color: "var(--warm)",
+      icon: Utensils,
     },
     {
       id: "guest_invite",
       name: "Tracked Guest Invitation Link",
       detail: "Concierge VIP dispatch via email & SMS",
-      percentage: 18,
-      color: "var(--blue)",
+      icon: Send,
     },
     {
       id: "front_desk",
       name: "Front Desk Tablet & Check-in",
       detail: "Reception departure concierge desk",
-      percentage: 7,
-      color: "var(--muted)",
+      icon: Building,
     },
     {
       id: "post_stay",
       name: "Post-Stay Automated Follow-up",
       detail: "Scheduled checkout survey email",
-      percentage: 3,
-      color: "var(--muted-light)",
+      icon: ExternalLink,
     },
   ];
 
@@ -252,8 +109,8 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
     <div className="panel" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <div className="panel-heading">
         <div>
-          <h2>Collection source breakdown</h2>
-          <p>Where guest sentiment is initiated across the property</p>
+          <h2>Collection touchpoints</h2>
+          <p>Supported paths for collecting guest sentiment</p>
         </div>
         <Link className="panel-action" href="/dashboard/qr-codes">
           QR Studio ↗
@@ -262,33 +119,15 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
 
       <div style={{ padding: "20px 24px", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
         {sources.map((src) => {
-          const estimatedCount = totalFeedbackCount > 0 ? Math.round((totalFeedbackCount * src.percentage) / 100) : 0;
+          const Icon = src.icon;
           return (
-            <div key={src.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
-                <div>
-                  <strong style={{ fontSize: "12px", color: "var(--ink)" }}>{src.name}</strong>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>{src.detail}</span>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, fontFamily: "var(--font-dm-mono)" }}>
-                    {src.percentage}%
-                  </span>
-                  <small style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
-                    ~{estimatedCount} reviews
-                  </small>
-                </div>
-              </div>
-
-              <div style={{ width: "100%", height: "6px", background: "var(--canvas-alt)", borderRadius: "3px", overflow: "hidden" }}>
-                <div
-                  style={{
-                    width: `${src.percentage}%`,
-                    height: "100%",
-                    background: src.color,
-                    borderRadius: "3px",
-                  }}
-                />
+            <div key={src.id} style={{ display: "flex", gap: "12px", alignItems: "center", padding: "10px 12px", background: "var(--canvas)", border: "1px solid var(--line)", borderRadius: "6px" }}>
+              <span style={{ width: "34px", height: "34px", display: "grid", placeItems: "center", color: "var(--sage-deep)", background: "var(--sage-soft)", borderRadius: "9px", flexShrink: 0 }}>
+                <Icon size={16} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <strong style={{ fontSize: "12px", color: "var(--ink)" }}>{src.name}</strong>
+                <span style={{ display: "block", fontSize: "10px", color: "var(--muted)", marginTop: "2px" }}>{src.detail}</span>
               </div>
             </div>
           );
@@ -306,7 +145,7 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
           fontSize: "11px",
         }}
       >
-        <span style={{ color: "var(--muted)" }}>Want to track physical vs digital links?</span>
+        <span style={{ color: "var(--muted)" }}>{totalFeedbackCount} verified responses in the current view</span>
         <Link
           href="/dashboard/invitations"
           style={{ color: "var(--sage-deep)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}
@@ -360,12 +199,12 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
               const deptFeedback = feedback.filter((f) => f.department === dept.name);
               const count = deptFeedback.length;
               const totalRating = deptFeedback.reduce((acc, cur) => acc + cur.rating, 0);
-              const avg = count > 0 ? (totalRating / count).toFixed(2) : "4.80";
+              const avg = count > 0 ? (totalRating / count).toFixed(2) : null;
               const complaints = deptFeedback.filter((f) => f.rating <= 2).length;
-              const complianceRate = count > 0 ? Math.round(((count - complaints) / count) * 100) : 98;
+              const complianceRate = count > 0 ? Math.round(((count - complaints) / count) * 100) : null;
 
-              const isExcellence = Number(avg) >= 4.5;
-              const isWarning = Number(avg) < 3.5;
+              const isExcellence = avg !== null && Number(avg) >= 4.5;
+              const isWarning = avg !== null && Number(avg) < 3.5;
 
               return (
                 <tr key={dept.name}>
@@ -374,13 +213,13 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
                   </td>
                   <td>
                     <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "12px" }}>
-                      {count > 0 ? count : 12}
+                      {count}
                     </span>
                   </td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <strong style={{ fontSize: "13px", color: isExcellence ? "var(--sage-deep)" : "var(--ink)" }}>
-                        {avg}
+                        {avg ?? "—"}
                       </strong>
                       <small style={{ color: "var(--muted)" }}>/ 5.0</small>
                     </div>
@@ -395,15 +234,15 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
                       <div style={{ width: "80px", height: "5px", background: "var(--canvas-alt)", borderRadius: "3px", overflow: "hidden" }}>
                         <div
                           style={{
-                            width: `${complianceRate}%`,
+                            width: `${complianceRate ?? 0}%`,
                             height: "100%",
-                            background: complianceRate >= 95 ? "var(--sage)" : "var(--amber)",
+                            background: complianceRate !== null && complianceRate >= 95 ? "var(--sage)" : "var(--amber)",
                             borderRadius: "3px",
                           }}
                         />
                       </div>
                       <span style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", fontWeight: 600 }}>
-                        {complianceRate}%
+                        {complianceRate === null ? "—" : `${complianceRate}%`}
                       </span>
                     </div>
                   </td>
@@ -416,11 +255,11 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
                         borderRadius: "4px",
                         fontFamily: "var(--font-dm-mono)",
                         textTransform: "uppercase",
-                        background: isExcellence ? "var(--sage-soft)" : isWarning ? "var(--red-soft)" : "var(--warm-soft)",
-                        color: isExcellence ? "var(--sage-deep)" : isWarning ? "var(--red)" : "var(--warm-deep)",
+                        background: avg === null ? "var(--canvas-alt)" : isExcellence ? "var(--sage-soft)" : isWarning ? "var(--red-soft)" : "var(--warm-soft)",
+                        color: avg === null ? "var(--muted)" : isExcellence ? "var(--sage-deep)" : isWarning ? "var(--red)" : "var(--warm-deep)",
                       }}
                     >
-                      {isExcellence ? "Optimal" : isWarning ? "Attention" : "Standard"}
+                      {avg === null ? "Awaiting data" : isExcellence ? "Optimal" : isWarning ? "Attention" : "Standard"}
                     </span>
                   </td>
                 </tr>
@@ -473,7 +312,9 @@ export function SlaRecoveryBanner({ openComplaintsCount }: { openComplaintsCount
               : "Complaints & SLA: All Guest Recovery Targets Within Standard"}
           </strong>
           <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-            Average response time: 8.4 minutes · Target: 15 minutes · Resolution recovery rate: 96.4%
+            {openComplaintsCount > 0
+              ? "Prioritize the open queue and record each recovery outcome."
+              : "There are no open recovery cases in the current view."}
           </span>
         </div>
       </div>

@@ -227,8 +227,7 @@ export function AppShell({
         localStorage.removeItem("vistora-user");
       } catch { }
     }
-    router.push("/login");
-    router.refresh();
+    router.replace("/login");
   };
 
   // Dynamic rights-based sidebar navigation filtering for 9 organizational roles
@@ -330,14 +329,7 @@ export function AppShell({
                 title="Click to expand sidebar"
                 aria-label="Expand sidebar"
               >
-                <Image
-                  src="/favicon.ico"
-                  alt="Expand sidebar"
-                  width={22}
-                  height={22}
-                  priority
-                  className="sidebar-favi-icon"
-                />
+                <span className="sidebar-monogram" aria-hidden="true">V</span>
               </button>
             </div>
           )}
@@ -379,8 +371,10 @@ export function AppShell({
                       <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={false}
+                        prefetch={true}
                         className={`nav-item ${isActive ? "active" : ""}`}
+                        onMouseEnter={() => router.prefetch(item.href)}
+                        onFocus={() => router.prefetch(item.href)}
                         onClick={() => setMobileNavOpen(false)}
                         title={item.label}
                       >
@@ -610,11 +604,10 @@ export default function Dashboard({
       .catch(() => { });
   }, [initialUser]);
 
-  // Reactive property switching: fetch fresh feedback records from Supabase when property filter changes
+  // Keep one portfolio dataset so property changes cannot race or overwrite overall totals.
   useEffect(() => {
-    const url =
-      selectedProperty === "all" ? "/api/feedback" : `/api/feedback?propertyId=${selectedProperty}`;
-    fetch(url)
+    const controller = new AbortController();
+    fetch("/api/feedback", { signal: controller.signal })
       .then((res) => res.json())
       .then((res) => {
         if (res.success && Array.isArray(res.data)) {
@@ -622,7 +615,8 @@ export default function Dashboard({
         }
       })
       .catch(() => {});
-  }, [selectedProperty]);
+    return () => controller.abort();
+  }, []);
 
   const data = initialData;
 
@@ -649,7 +643,7 @@ export default function Dashboard({
   }, [user]);
 
   // Filter feedback dynamically with strict multi-tenant boundary
-  const allFeedback = liveFeedback.length > 0 ? liveFeedback : data?.recentFeedback || [];
+  const allFeedback = liveFeedback;
   const filteredFeedback = allFeedback.filter((item) => {
     // 1. Strict multi-tenant security boundary
     if (userAllowedPropIds !== null && userAllowedPropIds.length > 0) {
@@ -716,7 +710,7 @@ export default function Dashboard({
 
   const npsPromoterPct = npsTotal > 0 ? Math.round((npsPromoters / npsTotal) * 100) : 0;
   const npsPassivePct = npsTotal > 0 ? Math.round((npsPassives / npsTotal) * 100) : 0;
-  const npsDetractorPct = npsTotal > 0 ? Math.max(0, 100 - npsPromoterPct - npsPassivePct) : 0;
+  const npsDetractorPct = npsTotal > 0 ? Math.round((npsDetractors / npsTotal) * 100) : 0;
   const npsScore = npsTotal > 0 ? Math.round(((npsPromoters - npsDetractors) / npsTotal) * 100) : 0;
 
   const activePropertyName =
@@ -898,7 +892,7 @@ export default function Dashboard({
               <div className="panel" style={{ padding: "24px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
                   <div>
-                    <p className="eyebrow">Hospitality Benchmark · {activePropertyName}</p>
+                    <p className="eyebrow">{activePropertyName} · Rating-based loyalty</p>
                     <h3 style={{ margin: "4px 0 6px", fontSize: "16px" }}>Net Promoter Score (NPS)</h3>
                   </div>
                   {npsFilter !== "all" && (
@@ -921,9 +915,8 @@ export default function Dashboard({
                 </div>
 
                 <div
-                  style={{ display: "flex", alignItems: "baseline", gap: "10px", margin: "14px 0 10px", cursor: "pointer" }}
-                  onClick={() => setNpsFilter(npsFilter === "all" ? "promoters" : "all")}
-                  title="Click to toggle filter between all and promoters"
+                  className="nps-score-summary"
+                  style={{ display: "flex", alignItems: "baseline", gap: "14px", margin: "14px 0 10px" }}
                 >
                   <span
                     style={{
@@ -933,17 +926,19 @@ export default function Dashboard({
                       color: npsTotal === 0 ? "var(--muted)" : npsScore >= 0 ? "var(--sage)" : "var(--red)",
                     }}
                   >
-                    {npsTotal > 0 ? (npsScore > 0 ? `+${npsScore}` : `${npsScore}`) : "0"}
+                    {npsTotal > 0 ? (npsScore > 0 ? `+${npsScore}` : `${npsScore}`) : "—"}
                   </span>
                   <div>
                     <strong style={{ fontSize: "12px", color: "var(--ink)", display: "block" }}>
-                      {npsTier}
+                      {npsTotal === 0 ? "No responses in this view" : npsScore === 0 ? "Balanced promoter and detractor share" : npsTier}
                     </strong>
                     <small style={{ color: "var(--muted)", fontSize: "11px" }}>
-                      {npsTotal} verified guest {npsTotal === 1 ? "submission" : "submissions"} · Net Score = {npsPromoterPct}% - {npsDetractorPct}%
+                      {npsTotal} responses · ({npsPromoters} promoters − {npsDetractors} detractors) ÷ {npsTotal || "—"} × 100
                     </small>
                   </div>
                 </div>
+
+                <p className="nps-overall-rating">Overall guest rating <strong>{npsTotal ? `${averageRatingVal} / 5` : "—"}</strong><small>Based on the current property and date filters. Loyalty score uses the 5-star rating as a proxy.</small></p>
 
                 {/* Interactive Segmented Progress Bar */}
                 <div
@@ -1704,7 +1699,7 @@ export function FeedbackTable({
               </div>
 
               {/* Property Assignment Section (Admin can change property) */}
-              <div style={{ margin: "14px 0", padding: "12px 14px", background: "#f8faf8", border: "1px solid #e1e7e1", borderRadius: "6px" }}>
+              <div style={{ margin: "14px 0", padding: "12px 14px", background: "var(--canvas)", border: "1px solid #e1e7e1", borderRadius: "6px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     Property Location
@@ -1774,7 +1769,7 @@ export function FeedbackTable({
                 )}
 
                 {propertyAssignSuccess && (
-                  <p style={{ color: "#254230", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
+                  <p style={{ color: "var(--sage-deep)", fontSize: "11px", margin: "6px 0 0 0", fontWeight: 500 }}>
                     ✓ Property reassigned successfully.
                   </p>
                 )}
