@@ -2596,7 +2596,7 @@ tr:last-child td {
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .dashboard-grid, .lower-grid {
+  .dashboard-grid, .lower-grid, .feedback-trend-row {
     grid-template-columns: 1fr;
   }
 }
@@ -3904,7 +3904,13 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
 .landing-shell { background: var(--canvas); }
 .live-pill { border-radius: 4px; }
 .live-pill i { animation: none; box-shadow: none; }
-.feedback-trend-panel { margin-bottom: 22px; }
+.feedback-trend-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.feedback-trend-panel { margin-bottom: 0; }
 .chart-range-control { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; padding: 3px; gap: 3px; }
 .chart-range-control button { min-height: 30px; padding: 0 12px; font-size: 11px; color: var(--muted); border-radius: 3px; }
 .chart-range-control button[aria-pressed="true"] { background: var(--canvas-alt); color: var(--ink); }

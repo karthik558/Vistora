@@ -43,6 +43,7 @@ import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
 import {
   FeedbackTrendChart,
+  SatisfactionTrendChart,
   CollectionSourceBreakdown,
   DepartmentPerformanceMatrix,
   SlaRecoveryBanner,
@@ -840,7 +841,10 @@ export default function Dashboard({
               />
             </section>
 
-            <FeedbackTrendChart feedback={filteredFeedback} />
+            <section className="feedback-trend-row">
+              <FeedbackTrendChart feedback={filteredFeedback} />
+              <SatisfactionTrendChart feedback={filteredFeedback} />
+            </section>
 
             <section className="dashboard-grid" style={{ marginBottom: "22px" }}>
               <div className="panel">

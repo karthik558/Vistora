@@ -94,6 +94,103 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
   );
 }
 
+function smoothLine(points: { x: number; y: number }[]) {
+  const slopes = points.slice(1).map((point, index) => (point.y - points[index].y) / (point.x - points[index].x));
+  const tangents = points.map((_, index) => {
+    if (index === 0 || index === points.length - 1) return 0;
+    const before = slopes[index - 1];
+    const after = slopes[index];
+    return before * after <= 0 ? 0 : 2 * before * after / (before + after);
+  });
+  return points.reduce((result, point, index) => {
+    if (index === 0) return `M${point.x},${point.y}`;
+    const previous = points[index - 1];
+    const controlWidth = (point.x - previous.x) / 3;
+    return `${result} C${previous.x + controlWidth},${previous.y + controlWidth * tangents[index - 1]} ${point.x - controlWidth},${point.y - controlWidth * tangents[index]} ${point.x},${point.y}`;
+  }, "");
+}
+
+// Average guest rating for the same window as the volume chart.
+export function SatisfactionTrendChart({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
+  const [rangeDays, setRangeDays] = useState<7 | 14>(7);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(700);
+  useEffect(() => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(280, entry.contentRect.width)));
+    observer.observe(plot);
+    return () => observer.disconnect();
+  }, []);
+  const days = useMemo(() => {
+    const today = new Date();
+    const localDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    return Array.from({ length: rangeDays }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - rangeDays + index + 1);
+      const key = localDate(date);
+      const records = feedback.filter(item => localDate(new Date(item.createdAt)) === key);
+      const average = records.length ? records.reduce((sum, item) => sum + item.rating, 0) / records.length : null;
+      return { key, label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: records.length, average };
+    });
+  }, [feedback, rangeDays]);
+  const ratedTotal = days.reduce((sum, day) => sum + day.count, 0);
+  const windowAverage = ratedTotal ? days.reduce((sum, day) => sum + (day.average ?? 0) * day.count, 0) / ratedTotal : null;
+  const points = days.map((day, index) => ({
+    x: 32 + index * (chartWidth - 56) / (days.length - 1),
+    y: day.average === null ? null : 158 - (day.average / 5) * 132,
+    ...day,
+  }));
+  const paths: string[] = [];
+  let run: { x: number; y: number }[] = [];
+  const flush = () => {
+    if (run.length > 1) paths.push(smoothLine(run));
+    run = [];
+  };
+  points.forEach(point => {
+    if (point.y === null) flush();
+    else run.push({ x: point.x, y: point.y });
+  });
+  flush();
+  const active = selectedDay === null ? null : days[selectedDay];
+  const scale = [0, 1, 2, 3, 4, 5];
+
+  return (
+    <section className="panel feedback-trend-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Satisfaction trend</h2>
+          <p>{windowAverage === null ? `No rated responses over the last ${rangeDays} days` : `${windowAverage.toFixed(1)} average over the last ${rangeDays} days`}</p>
+        </div>
+        <div className="chart-range-control" aria-label="Satisfaction chart period">
+          {[7, 14].map(value => <button key={value} type="button" aria-pressed={rangeDays === value} onClick={() => { setRangeDays(value as 7 | 14); setSelectedDay(null); }}>{value} days</button>)}
+        </div>
+      </div>
+      <div className="volume-chart">
+        <div ref={plotRef} className="volume-plot">
+        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily average rating. ${days.map(day => `${day.label}: ${day.average === null ? "no responses" : day.average.toFixed(1)}`).join(", ")}`}>
+          {scale.map(value => {
+            const y = 158 - (value / 5) * 132;
+            return <g key={value}><line x1="32" x2={chartWidth - 24} y1={y} y2={y} className="volume-grid" /><text x="21" y={y + 4} textAnchor="end" className="volume-axis">{value}</text></g>;
+          })}
+          {paths.map((path, index) => <path key={index} d={path} className="volume-line" />)}
+          {points.map((point, index) => point.y !== null && <g key={days[index].key}>
+            <circle cx={point.x} cy={point.y} r={selectedDay === index ? 4 : 2.5} className="volume-point" />
+            <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].label}: ${days[index].average?.toFixed(1)} average from ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
+            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
+          </g>)}
+          {points.map((point, index) => point.y === null && (rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && (
+            <text key={`${days[index].key}-label`} x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>
+          ))}
+        </svg>
+        </div>
+        <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? (active.average === null ? `${active.label} · no responses` : `${active.label} · ${active.average.toFixed(1)} average · ${active.count} responses`) : "Daily average rating · select a point to inspect"}</div>
+      </div>
+    </section>
+  );
+}
+
 // 2. COLLECTION SOURCE BREAKDOWN COMPONENT
 export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbackCount: number }) {
   const sources = [
