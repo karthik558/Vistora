@@ -14,12 +14,12 @@ export default function ThemeToggle() {
       setTheme(current);
     } else {
       const saved = localStorage.getItem("vistora-theme") as "light" | "dark";
-      if (saved) {
+      if (saved === "dark" || saved === "light") {
         setTheme(saved);
         document.documentElement.setAttribute("data-theme", saved);
-      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        setTheme("dark");
-        document.documentElement.setAttribute("data-theme", "dark");
+      } else {
+        setTheme("light");
+        document.documentElement.setAttribute("data-theme", "light");
       }
     }
   }, []);

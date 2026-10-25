@@ -4380,14 +4380,14 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-shadow: 0 0 8px rgba(27, 79, 53, 0.45) !important;
+  box-shadow: none !important;
   border: 1.5px solid #ffffff !important;
 }
 
 [data-theme="dark"] .notification-badge-count {
   background: #4ade80 !important;
   color: #062413 !important;
-  box-shadow: 0 0 10px rgba(74, 222, 128, 0.75) !important;
+  box-shadow: none !important;
   border: 1.5px solid #0c120f !important;
 }
 

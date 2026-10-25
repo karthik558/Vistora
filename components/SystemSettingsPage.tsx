@@ -12,9 +12,7 @@ import {
   Mail,
   Sliders,
   CheckCircle2,
-  Building2,
 } from "lucide-react";
-import Link from "next/link";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { PropertyRow } from "../types/experience";
 import { ApplicationSettings } from "../lib/services/settingsService";
@@ -32,6 +30,27 @@ export default function SystemSettingsPage({
   const [savedSuccess, setSavedSuccess] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("vistora-theme") as "light" | "dark";
+      if (saved === "dark" || saved === "light") {
+        setTheme(saved);
+      } else {
+        const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
+        setTheme(current === "dark" ? "dark" : "light");
+      }
+    }
+  }, []);
+
+  const handleThemeChange = (newTheme: "light" | "dark") => {
+    setTheme(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    try {
+      localStorage.setItem("vistora-theme", newTheme);
+    } catch {}
+  };
 
   // Application Settings State
   const [appSettings, setAppSettings] = useState<ApplicationSettings>({
@@ -109,26 +128,15 @@ export default function SystemSettingsPage({
   }
 
   return (
-    <AppShell active="System settings" user={user}>
+    <AppShell active="Settings" user={user}>
       <div className="content-wrap">
         <div className="page-heading">
           <div>
             <p className="eyebrow">Enterprise Configuration</p>
-            <h1>System settings</h1>
+            <h1>Settings</h1>
             <p className="subheading">
-              Manage global platform parameters, brand identity, SLA recovery targets, and retention policies.
+              Manage workspace theme appearance, platform parameters, SLA recovery targets, and retention policies.
             </p>
-          </div>
-          <div className="page-heading-actions">
-            <Link
-              href="/dashboard/properties"
-              className="button button-outline compact"
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-              title="Manage individual hotel property configurations"
-            >
-              <Building2 size={13} />
-              <span>Go to Properties section ↗</span>
-            </Link>
           </div>
         </div>
 
@@ -184,16 +192,73 @@ export default function SystemSettingsPage({
                 System settings control global organization naming, project titles, and platform-wide SLA parameters. Only verified Administrators can modify these parameters.
               </p>
             </div>
-          ) : loading ? (
-            <div className="panel loading-panel" aria-busy="true">
-              <span className="table-loading-bar" />
-              <span className="table-loading-bar short" />
-              <span className="table-loading-bar" />
-              <span className="sr-only">Loading system settings</span>
-            </div>
           ) : (
-            <form onSubmit={handleSaveAppSettings}>
-              <div className="panel" style={{ padding: "28px", maxWidth: "860px" }}>
+            <div className="panel" style={{ padding: "28px", maxWidth: "860px" }}>
+                {/* Theme Switcher */}
+                <div style={{ marginBottom: "26px", borderBottom: "1px solid var(--line)", paddingBottom: "20px" }}>
+                  <label style={{ display: "block", marginBottom: "8px", fontSize: "12px", fontWeight: 600, color: "var(--ink)" }}>
+                    Theme
+                  </label>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      background: "var(--canvas-alt)",
+                      padding: "3px",
+                      borderRadius: "7px",
+                      border: "1px solid var(--line)",
+                      gap: "3px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleThemeChange("light")}
+                      style={{
+                        padding: "7px 18px",
+                        borderRadius: "5px",
+                        border: "none",
+                        background: theme === "light" ? "var(--panel)" : "transparent",
+                        color: theme === "light" ? "var(--ink)" : "var(--muted)",
+                        fontWeight: theme === "light" ? 650 : 500,
+                        fontSize: "12.5px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        boxShadow: theme === "light" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                      }}
+                    >
+                      Light mode
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleThemeChange("dark")}
+                      style={{
+                        padding: "7px 18px",
+                        borderRadius: "5px",
+                        border: "none",
+                        background: theme === "dark" ? "var(--panel)" : "transparent",
+                        color: theme === "dark" ? "var(--ink)" : "var(--muted)",
+                        fontWeight: theme === "dark" ? 650 : 500,
+                        fontSize: "12.5px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        boxShadow: theme === "dark" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                      }}
+                    >
+                      Dark mode
+                    </button>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="loading-panel" aria-busy="true" style={{ padding: "32px 0", borderTop: "1px solid var(--line)" }}>
+                    <span className="table-loading-bar" />
+                    <span className="table-loading-bar short" />
+                    <span className="table-loading-bar" />
+                    <span className="sr-only">Loading settings parameters</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveAppSettings}>
+
                 {/* Organization Identity */}
                 <div style={{ marginBottom: "24px", borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
@@ -410,11 +475,12 @@ export default function SystemSettingsPage({
                     style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px" }}
                   >
                     <Save size={15} />
-                    <span>{saving ? "Saving Changes…" : "Save System Settings"}</span>
+                    <span>{saving ? "Saving Changes…" : "Save Settings"}</span>
                   </button>
                 </div>
+                  </form>
+                )}
               </div>
-            </form>
           )}
         </div>
       </div>

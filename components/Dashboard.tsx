@@ -40,7 +40,6 @@ import PropertyFilter from "./PropertyFilter";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
-import ThemeToggle from "./ThemeToggle";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
@@ -82,7 +81,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Audit log", href: "/dashboard/audit-log", group: "Operations & audit", icon: History, requiredRight: "view_audit_log" },
   { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
-  { label: "System settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
+  { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet, requiredRight: "export_reports" },
 ];
 
@@ -253,8 +252,8 @@ export function AppShell({
       return ["Dashboard", "Reports"].includes(item.label);
     }
 
-    // System settings is strictly for super admin or explicit manage_settings capability
-    if (item.label === "System settings" && !isSuperAdmin && !userRights.has("manage_settings")) {
+    // Settings is strictly for super admin or explicit manage_settings capability
+    if ((item.label === "Settings" || item.label === "System settings") && !isSuperAdmin && !userRights.has("manage_settings")) {
       return false;
     }
 
@@ -549,7 +548,6 @@ export function AppShell({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <ThemeToggle />
               <NotificationCenter />
             </div>
           </div>
