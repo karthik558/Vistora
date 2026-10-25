@@ -266,7 +266,6 @@ export function AppShell({
     return true;
   });
 
-  const groups = [...new Set(visibleNav.map((item) => item.group))];
   const displayName =
     currentUser?.fullName ||
     (currentUser?.email ? currentUser.email.split("@")[0] : "Operations User");
@@ -320,8 +319,24 @@ export function AppShell({
               type="button"
               className="sidebar-favi-toggle desktop-only"
               onClick={toggleSidebar}
-              title="Hide sidebar"
-              aria-label="Hide sidebar"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                boxShadow: "none",
+                padding: 0,
+                borderRadius: "6px",
+                cursor: "pointer",
+                color: "#c3decb",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                transition: "all 0.18s ease",
+              }}
             >
               <PanelLeftClose size={18} strokeWidth={1.75} />
             </button>
@@ -334,6 +349,22 @@ export function AppShell({
                 onClick={toggleSidebar}
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  boxShadow: "none",
+                  padding: 0,
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  color: "#c3decb",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "32px",
+                  height: "32px",
+                  transition: "all 0.18s ease",
+                }}
               >
                 <PanelLeftOpen size={18} strokeWidth={1.75} />
               </button>
@@ -345,74 +376,71 @@ export function AppShell({
               className="sidebar-close-btn"
               onClick={() => setMobileNavOpen(false)}
               aria-label="Close navigation"
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                boxShadow: "none",
+                padding: 0,
+                borderRadius: "6px",
+                cursor: "pointer",
+                color: "#c3decb",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                transition: "all 0.18s ease",
+              }}
             >
               <X size={18} strokeWidth={2} />
             </button>
           )}
         </div>
 
-        {/* Workspace Navigation with Monochrome Lucide Icons */}
+        {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          {groups.length === 0 ? (
-            <div style={{ padding: "28px 16px", color: "var(--muted)", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
+          {visibleNav.length === 0 ? (
+            <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
             </div>
           ) : (
-            groups.map((group) => (
-              <div className="nav-group" key={group}>
-                <p
-                  className="nav-group-title"
-                  style={{
-                    color: "#9ec9b0",
-                    fontSize: "10.5px",
-                    fontWeight: 700,
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    margin: "16px 8px 6px",
-                  }}
+            visibleNav.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
+                active === item.label ||
+                (active && item.label.toLowerCase() === active.toLowerCase()) ||
+                ((item.label === "Complaints & SLA" || item.label === "Complaints") &&
+                  (active?.toLowerCase().includes("complaint") || active?.toLowerCase().includes("sla") || pathname?.includes("/complaints"))) ||
+                (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  prefetch={true}
+                  className={`nav-item ${isActive ? "active" : ""}`}
+                  onMouseEnter={() => router.prefetch(item.href)}
+                  onFocus={() => router.prefetch(item.href)}
+                  onClick={() => setMobileNavOpen(false)}
+                  title={item.label}
                 >
-                  {group}
-                </p>
-                {visibleNav
-                  .filter((item) => item.group === group)
-                  .map((item) => {
-                    const Icon = item.icon;
-                    const isActive =
-                      pathname === item.href ||
-                      (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
-                      active === item.label ||
-                      (active && item.label.toLowerCase() === active.toLowerCase()) ||
-                      ((item.label === "Complaints & SLA" || item.label === "Complaints") &&
-                        (active?.toLowerCase().includes("complaint") || active?.toLowerCase().includes("sla") || pathname?.includes("/complaints"))) ||
-                      (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        prefetch={true}
-                        className={`nav-item ${isActive ? "active" : ""}`}
-                        onMouseEnter={() => router.prefetch(item.href)}
-                        onFocus={() => router.prefetch(item.href)}
-                        onClick={() => setMobileNavOpen(false)}
-                        title={item.label}
-                      >
-                        <Icon
-                          size={16}
-                          strokeWidth={1.75}
-                          style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }}
-                          aria-hidden="true"
-                        />
-                        <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
-                        {(item.label === "Complaints & SLA" || item.label === "Complaints") && complaints > 0 && (
-                          <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
-                            {complaints}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-              </div>
-            ))
+                  <Icon
+                    size={16}
+                    strokeWidth={1.75}
+                    style={{ flexShrink: 0, opacity: isActive ? 1 : 0.85 }}
+                    aria-hidden="true"
+                  />
+                  <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
+                  {(item.label === "Complaints & SLA" || item.label === "Complaints") && complaints > 0 && (
+                    <span className="nav-count" style={{ background: "rgba(255, 255, 255, 0.16)", color: "#ffffff", border: "1px solid rgba(255, 255, 255, 0.25)" }}>
+                      {complaints}
+                    </span>
+                  )}
+                </Link>
+              );
+            })
           )}
         </nav>
 
