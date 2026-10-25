@@ -8,7 +8,7 @@ const supabaseServiceKey =
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authCheck = await requireAdminOrRight(request, "manage_users");

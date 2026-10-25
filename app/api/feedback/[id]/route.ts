@@ -4,10 +4,10 @@ import { FeedbackStatus } from "../../../../types/database";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const body = await request.json();
     const status = body.status as FeedbackStatus;
     const notes = body.notes as string | undefined;
@@ -29,10 +29,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     if (!id) {
       return NextResponse.json({ success: false, error: "Feedback ID is required" }, { status: 400 });
     }

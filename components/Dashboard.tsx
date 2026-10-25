@@ -367,7 +367,7 @@ export function AppShell({
                       <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={true}
+                        prefetch={false}
                         className={`nav-item ${isActive ? "active" : ""}`}
                         onClick={() => setMobileNavOpen(false)}
                         title={item.label}

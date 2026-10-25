@@ -400,7 +400,7 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-const DASHBOARD_CACHE_TTL_MS = 25_000; // 25 seconds fast in-memory cache for instant navigation
+const DASHBOARD_CACHE_TTL_MS = 60_000; // 60 seconds fast in-memory cache for instant navigation
 const dashboardCache = new Map<string, CacheEntry<DashboardData>>();
 
 export function invalidateDashboardCache(): void {

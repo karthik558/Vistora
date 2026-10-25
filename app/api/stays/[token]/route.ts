@@ -3,10 +3,10 @@ import { fetchStayByToken } from "../../../../lib/services/guestExperienceServic
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const token = params.token;
+    const { token } = await params;
     const stay = await fetchStayByToken(token);
     if (!stay) {
       return NextResponse.json({ success: false, error: "Stay not found" }, { status: 404 });

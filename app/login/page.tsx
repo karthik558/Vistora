@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
-  const cookieStore = cookies();
+export default async function LoginPage() {
+  const cookieStore = await cookies();
   const userCookie = cookieStore.get("vistora-user")?.value;
   if (userCookie) {
     try {

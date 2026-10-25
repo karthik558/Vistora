@@ -1,9 +1,10 @@
 import FeedbackForm from "../../../components/FeedbackForm";
 
-export default function PublicFeedbackPage({
+export default async function PublicFeedbackPage({
   params,
 }: {
-  params: { publicToken: string };
+  params: Promise<{ publicToken: string }>;
 }) {
-  return <FeedbackForm publicToken={params.publicToken} />;
+  const { publicToken } = await params;
+  return <FeedbackForm publicToken={publicToken} />;
 }

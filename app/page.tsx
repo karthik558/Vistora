@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const cookieStore = cookies();
+export default async function HomePage() {
+  const cookieStore = await cookies();
   const userCookie = cookieStore.get("vistora-user")?.value;
   let isLoggedIn = false;
 
