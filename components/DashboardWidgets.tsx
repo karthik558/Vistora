@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -27,6 +27,15 @@ import { FeedbackViewModel } from "../types/experience";
 export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
   const [rangeDays, setRangeDays] = useState<7 | 14>(7);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(700);
+  useEffect(() => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(280, entry.contentRect.width)));
+    observer.observe(plot);
+    return () => observer.disconnect();
+  }, []);
   const days = useMemo(() => {
     const today = new Date();
     const localDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -39,8 +48,21 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
     });
   }, [feedback, rangeDays]);
   const max = Math.max(4, ...days.map(day => day.count));
-  const points = days.map((day, index) => ({ x: 40 + index * 620 / (days.length - 1), y: 214 - day.count / max * 176 }));
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+  const points = days.map((day, index) => ({ x: 32 + index * (chartWidth - 56) / (days.length - 1), y: 158 - day.count / max * 132 }));
+  const slopes = points.slice(1).map((point, index) => (point.y - points[index].y) / (point.x - points[index].x));
+  // Round turns without inventing negative volumes or overshooting observed peaks.
+  const tangents = points.map((_, index) => {
+    if (index === 0 || index === points.length - 1) return 0;
+    const before = slopes[index - 1];
+    const after = slopes[index];
+    return before * after <= 0 ? 0 : 2 * before * after / (before + after);
+  });
+  const path = points.reduce((result, point, index) => {
+    if (index === 0) return `M${point.x},${point.y}`;
+    const previous = points[index - 1];
+    const controlWidth = (point.x - previous.x) / 3;
+    return `${result} C${previous.x + controlWidth},${previous.y + controlWidth * tangents[index - 1]} ${point.x - controlWidth},${point.y - controlWidth * tangents[index]} ${point.x},${point.y}`;
+  }, "");
   const active = selectedDay === null ? null : days[selectedDay];
 
   return (
@@ -52,18 +74,20 @@ export function FeedbackTrendChart({ feedback = [] }: { feedback: FeedbackViewMo
         </div>
       </div>
       <div className="volume-chart">
-        <svg viewBox="0 0 700 254" role="img" aria-label={`Daily feedback volume. ${days.map(day => `${day.label}: ${day.count}`).join(", ")}`}>
+        <div ref={plotRef} className="volume-plot">
+        <svg viewBox={`0 0 ${chartWidth} 194`} role="img" aria-label={`Daily feedback volume. ${days.map(day => `${day.label}: ${day.count}`).join(", ")}`}>
           {[0, 1, 2, 3, 4].map(index => {
-            const y = 214 - index * 44;
-            return <g key={index}><line x1="40" x2="660" y1={y} y2={y} className="volume-grid" /><text x="27" y={y + 4} textAnchor="end" className="volume-axis">{Math.round(max * index / 4)}</text></g>;
+            const y = 158 - index * 33;
+            return <g key={index}><line x1="32" x2={chartWidth - 24} y1={y} y2={y} className="volume-grid" /><text x="21" y={y + 4} textAnchor="end" className="volume-axis">{Math.round(max * index / 4)}</text></g>;
           })}
           <path d={path} className="volume-line" />
           {points.map((point, index) => <g key={days[index].key}>
-            <circle cx={point.x} cy={point.y} r="4" className="volume-point" />
+            <circle cx={point.x} cy={point.y} r={selectedDay === index ? 4 : 2.5} className="volume-point" />
             <circle cx={point.x} cy={point.y} r="14" fill="transparent" tabIndex={0} role="button" aria-label={`${days[index].label}: ${days[index].count} responses`} onMouseEnter={() => setSelectedDay(index)} onFocus={() => setSelectedDay(index)} onClick={() => setSelectedDay(index)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDay(index); } }} />
-            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="245" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
+            {(rangeDays === 7 || index % 2 === 0 || index === rangeDays - 1) && <text x={point.x} y="184" textAnchor="middle" className="volume-axis">{days[index].label}</text>}
           </g>)}
         </svg>
+        </div>
         <div className="volume-chart-caption" aria-live="polite"><span className="volume-legend" />{active ? `${active.label} · ${active.count} responses` : "Daily guest responses · select a point to inspect"}</div>
       </div>
     </section>
