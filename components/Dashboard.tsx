@@ -517,6 +517,8 @@ export default function Dashboard({
 }) {
   const [user, setUser] = useState<WorkspaceUser | null>(initialUser || null);
   const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const [npsFilter, setNpsFilter] = useState<"all" | "promoters" | "passives" | "detractors">("all");
+  const [liveFeedback, setLiveFeedback] = useState<FeedbackViewModel[]>(() => initialData?.recentFeedback || []);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
     preset: "all",
     startDate: null,
@@ -540,6 +542,20 @@ export default function Dashboard({
       .catch(() => { });
   }, [initialUser]);
 
+  // Reactive property switching: fetch fresh feedback records from Supabase when property filter changes
+  useEffect(() => {
+    const url =
+      selectedProperty === "all" ? "/api/feedback" : `/api/feedback?propertyId=${selectedProperty}`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          setLiveFeedback(res.data);
+        }
+      })
+      .catch(() => {});
+  }, [selectedProperty]);
+
   const data = initialData;
 
   const isUserAdmin = !user || user.role === "admin";
@@ -552,10 +568,10 @@ export default function Dashboard({
     : [];
 
   // Filter feedback dynamically with strict multi-tenant boundary
-  const allFeedback = data?.recentFeedback || [];
+  const allFeedback = liveFeedback.length > 0 ? liveFeedback : data?.recentFeedback || [];
   const filteredFeedback = allFeedback.filter((item) => {
     // 1. Strict multi-tenant security boundary
-    if (userAllowedPropIds !== null) {
+    if (userAllowedPropIds !== null && userAllowedPropIds.length > 0) {
       if (!item.propertyId || !userAllowedPropIds.includes(item.propertyId)) {
         return false;
       }
@@ -570,6 +586,14 @@ export default function Dashboard({
     if (!isDateInRange(item.createdAt, dateFilter)) {
       return false;
     }
+    return true;
+  });
+
+  // Feedback records to display in the bottom table (filtered by NPS category if selected)
+  const tableFeedback = filteredFeedback.filter((item) => {
+    if (npsFilter === "promoters") return item.rating === 5;
+    if (npsFilter === "passives") return item.rating === 4;
+    if (npsFilter === "detractors") return item.rating <= 3;
     return true;
   });
 
@@ -761,39 +785,238 @@ export default function Dashboard({
               </div>
 
               <div className="panel" style={{ padding: "24px" }}>
-                <p className="eyebrow">Hospitality Benchmark · {activePropertyName}</p>
-                <h3 style={{ margin: "6px 0 10px", fontSize: "16px" }}>Net Promoter Score (NPS)</h3>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", margin: "14px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+                  <div>
+                    <p className="eyebrow">Hospitality Benchmark · {activePropertyName}</p>
+                    <h3 style={{ margin: "4px 0 6px", fontSize: "16px" }}>Net Promoter Score (NPS)</h3>
+                  </div>
+                  {npsFilter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setNpsFilter("all")}
+                      style={{
+                        fontSize: "11px",
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        background: "var(--line)",
+                        color: "var(--ink)",
+                        border: "1px solid var(--line-strong)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reset filter (Show all) ✕
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  style={{ display: "flex", alignItems: "baseline", gap: "10px", margin: "14px 0 10px", cursor: "pointer" }}
+                  onClick={() => setNpsFilter(npsFilter === "all" ? "promoters" : "all")}
+                  title="Click to toggle filter between all and promoters"
+                >
                   <span
                     style={{
-                      fontSize: "36px",
+                      fontSize: "38px",
                       fontWeight: 700,
                       fontFamily: "var(--font-dm-mono)",
-                      color: npsTotal === 0 ? "var(--muted)" : npsScore >= 0 ? "var(--sage-deep)" : "var(--red)",
+                      color: npsTotal === 0 ? "var(--muted)" : npsScore >= 0 ? "var(--sage)" : "var(--red)",
                     }}
                   >
                     {npsTotal > 0 ? (npsScore > 0 ? `+${npsScore}` : `${npsScore}`) : "0"}
                   </span>
-                  <small style={{ color: "var(--muted)", fontSize: "12px" }}>
-                    {npsTier} ({npsTotal} {npsTotal === 1 ? "review" : "reviews"})
-                  </small>
+                  <div>
+                    <strong style={{ fontSize: "12px", color: "var(--ink)", display: "block" }}>
+                      {npsTier}
+                    </strong>
+                    <small style={{ color: "var(--muted)", fontSize: "11px" }}>
+                      {npsTotal} verified guest {npsTotal === 1 ? "submission" : "submissions"} · Net Score = {npsPromoterPct}% - {npsDetractorPct}%
+                    </small>
+                  </div>
                 </div>
-                <div style={{ width: "100%", height: "8px", background: "var(--canvas-alt)", borderRadius: "4px", overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: `${npsPromoterPct}%`, background: "var(--sage)", height: "100%" }} title={`Promoters (5★): ${npsPromoterPct}% (${npsPromoters})`} />
-                  <div style={{ width: `${npsPassivePct}%`, background: "var(--warm)", height: "100%" }} title={`Passives (4★): ${npsPassivePct}% (${npsPassives})`} />
-                  <div style={{ width: `${npsDetractorPct}%`, background: "var(--red)", height: "100%" }} title={`Detractors (1-3★): ${npsDetractorPct}% (${npsDetractors})`} />
+
+                {/* Interactive Segmented Progress Bar */}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "10px",
+                    background: "var(--canvas-alt)",
+                    borderRadius: "5px",
+                    overflow: "hidden",
+                    display: "flex",
+                    cursor: "pointer",
+                    margin: "12px 0 14px",
+                  }}
+                  title="Click a segment to filter reviews below"
+                >
+                  <div
+                    style={{
+                      width: `${npsPromoterPct}%`,
+                      background: "var(--sage)",
+                      height: "100%",
+                      opacity: npsFilter === "all" || npsFilter === "promoters" ? 1 : 0.3,
+                      transition: "opacity 0.2s ease",
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNpsFilter(npsFilter === "promoters" ? "all" : "promoters");
+                    }}
+                    title={`Promoters (5★): ${npsPromoters} reviews (${npsPromoterPct}%)`}
+                  />
+                  <div
+                    style={{
+                      width: `${npsPassivePct}%`,
+                      background: "var(--warm)",
+                      height: "100%",
+                      opacity: npsFilter === "all" || npsFilter === "passives" ? 1 : 0.3,
+                      transition: "opacity 0.2s ease",
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNpsFilter(npsFilter === "passives" ? "all" : "passives");
+                    }}
+                    title={`Passives (4★): ${npsPassives} reviews (${npsPassivePct}%)`}
+                  />
+                  <div
+                    style={{
+                      width: `${npsDetractorPct}%`,
+                      background: "var(--red)",
+                      height: "100%",
+                      opacity: npsFilter === "all" || npsFilter === "detractors" ? 1 : 0.3,
+                      transition: "opacity 0.2s ease",
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNpsFilter(npsFilter === "detractors" ? "all" : "detractors");
+                    }}
+                    title={`Detractors (1-3★): ${npsDetractors} reviews (${npsDetractorPct}%)`}
+                  />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--muted)", marginTop: "8px", fontFamily: "var(--font-dm-mono)" }}>
-                  <span>{npsPromoterPct}% Promoters ({npsPromoters})</span>
-                  <span>{npsPassivePct}% Passives ({npsPassives})</span>
-                  <span>{npsDetractorPct}% Detractors ({npsDetractors})</span>
+
+                {/* Interactive Clickable Category Buttons */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setNpsFilter(npsFilter === "promoters" ? "all" : "promoters")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      border: npsFilter === "promoters" ? "2px solid var(--sage)" : "1px solid var(--line)",
+                      background: npsFilter === "promoters" ? "var(--sage-soft)" : "var(--canvas-alt)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Promoters (5★)
+                    </span>
+                    <strong style={{ fontSize: "13px", color: "var(--sage)", fontFamily: "var(--font-dm-mono)" }}>
+                      {npsPromoters} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsPromoterPct}%)</small>
+                    </strong>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNpsFilter(npsFilter === "passives" ? "all" : "passives")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      border: npsFilter === "passives" ? "2px solid var(--warm)" : "1px solid var(--line)",
+                      background: npsFilter === "passives" ? "var(--warm-soft)" : "var(--canvas-alt)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Passives (4★)
+                    </span>
+                    <strong style={{ fontSize: "13px", color: "var(--warm)", fontFamily: "var(--font-dm-mono)" }}>
+                      {npsPassives} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsPassivePct}%)</small>
+                    </strong>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNpsFilter(npsFilter === "detractors" ? "all" : "detractors")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      border: npsFilter === "detractors" ? "2px solid var(--red)" : "1px solid var(--line)",
+                      background: npsFilter === "detractors" ? "var(--red-soft)" : "var(--canvas-alt)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Detractors (1-3★)
+                    </span>
+                    <strong style={{ fontSize: "13px", color: "var(--red)", fontFamily: "var(--font-dm-mono)" }}>
+                      {npsDetractors} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsDetractorPct}%)</small>
+                    </strong>
+                  </button>
                 </div>
               </div>
             </section>
 
+            {npsFilter !== "all" && (
+              <div
+                style={{
+                  padding: "10px 16px",
+                  marginBottom: "12px",
+                  borderRadius: "6px",
+                  background:
+                    npsFilter === "promoters"
+                      ? "var(--sage-soft)"
+                      : npsFilter === "passives"
+                      ? "var(--warm-soft)"
+                      : "var(--red-soft)",
+                  border: `1px solid ${
+                    npsFilter === "promoters"
+                      ? "var(--sage)"
+                      : npsFilter === "passives"
+                      ? "var(--warm)"
+                      : "var(--red)"
+                  }`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "12px",
+                }}
+              >
+                <span>
+                  Filtering by Net Promoter Score:{" "}
+                  <strong style={{ textTransform: "capitalize" }}>{npsFilter}</strong> (
+                  {tableFeedback.length} {tableFeedback.length === 1 ? "review" : "reviews"})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNpsFilter("all")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    textDecoration: "underline",
+                    color: "inherit",
+                  }}
+                >
+                  Show all feedback ✕
+                </button>
+              </div>
+            )}
+
             <FeedbackTable
-              feedback={filteredFeedback.slice(0, 8)}
-              title="Recent feedback"
+              feedback={tableFeedback}
+              title={
+                npsFilter !== "all"
+                  ? `Recent feedback (${npsFilter.charAt(0).toUpperCase() + npsFilter.slice(1)})`
+                  : selectedProperty !== "all"
+                  ? `Recent feedback · ${activePropertyName}`
+                  : "Recent feedback · All properties"
+              }
+              onResetProperty={() => setSelectedProperty("all")}
             />
           </>
         ) : (
@@ -849,9 +1072,11 @@ export function RatingBars({ bars }: { bars: RatingBarItem[] }) {
 export function FeedbackTable({
   feedback: initialFeedback,
   title = "Feedback",
+  onResetProperty,
 }: {
   feedback: FeedbackViewModel[];
   title?: string;
+  onResetProperty?: () => void;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<FeedbackViewModel | null>(null);
@@ -1152,8 +1377,20 @@ export function FeedbackTable({
               ))
             ) : (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
-                  No feedback matching the selected filter criteria.
+                <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "40px 24px", color: "var(--muted)" }}>
+                  <p style={{ margin: "0 0 10px", fontSize: "13px", color: "var(--ink)" }}>
+                    No feedback matching the selected filter criteria.
+                  </p>
+                  {onResetProperty && (
+                    <button
+                      type="button"
+                      className="button button-outline compact"
+                      onClick={onResetProperty}
+                      style={{ fontSize: "11px" }}
+                    >
+                      View All Properties
+                    </button>
+                  )}
                 </td>
               </tr>
             )}

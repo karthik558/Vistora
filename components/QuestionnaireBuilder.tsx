@@ -10,12 +10,18 @@ import {
   ToggleLeft,
   ToggleRight,
   Globe,
-  Languages,
   QrCode,
   Gauge,
   MessageSquare,
   Sliders,
   CheckCircle2,
+  Smile,
+  ListCheck,
+  Sparkles,
+  Layers,
+  ChevronDown,
+  HelpCircle,
+  FileSpreadsheet,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
@@ -24,7 +30,19 @@ export interface QuestionData {
   id: string;
   property_id?: string | null;
   question_text: string;
-  question_type: "choice" | "rating" | "yes_no" | "text" | "nps" | "csat" | "long_text" | string;
+  question_type:
+    | "choice"
+    | "multi_choice"
+    | "rating"
+    | "yes_no"
+    | "text"
+    | "nps"
+    | "csat"
+    | "emoji"
+    | "touchpoint"
+    | "dropdown"
+    | "long_text"
+    | string;
   options?: string[];
   translations?: Record<string, { questionText?: string; options?: string[] }>;
   is_required: boolean;
@@ -45,13 +63,167 @@ export const FORM_LANGUAGES = [
 ];
 
 export const COMPONENT_TYPES = [
-  { value: "choice", label: "Multiple Choice Pills", detail: "Interactive guest selection pills" },
+  { value: "choice", label: "Multiple Choice Pills", detail: "Single-select guest selection pills" },
+  { value: "multi_choice", label: "Multi-Select Checkboxes / Pills", detail: "Allow guests to pick multiple options" },
   { value: "rating", label: "1–5 Star Luxury Rating", detail: "Weighted numerical star rating score" },
   { value: "nps", label: "NPS Scale (0–10)", detail: "Industry-standard Net Promoter Score metric" },
   { value: "csat", label: "CSAT Score (1–10)", detail: "Comprehensive satisfaction spectrum metric" },
+  { value: "emoji", label: "5-Point Sentiment (Emoji)", detail: "Visual guest emotion spectrum (Terrible to Superb)" },
   { value: "yes_no", label: "Yes / No Binary Toggle", detail: "Quick two-state confirmation" },
+  { value: "dropdown", label: "Dropdown Option Menu", detail: "Compact single-select dropdown menu" },
+  { value: "touchpoint", label: "Service Touchpoint Checklist", detail: "Select visited touchpoints (Valet, Dining, Spa)" },
   { value: "text", label: "Single-line Comment", detail: "Short written feedback box" },
   { value: "long_text", label: "Detailed Story & Testimonial", detail: "Multi-line freeform storytelling textarea" },
+];
+
+// Curated Hospitalty Questionnaire Templates for 1-Click Provisioning
+export const QUESTIONNAIRE_TEMPLATES = [
+  {
+    id: "post_stay",
+    title: "Comprehensive Post-Stay Review",
+    description: "Holistic departure questionnaire measuring NPS, room comfort, hospitality attentiveness, and guest stories.",
+    badge: "Recommended",
+    questions: [
+      {
+        questionText: "How likely are you to recommend our resort to friends or colleagues?",
+        questionType: "nps",
+        options: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+        isRequired: true,
+      },
+      {
+        questionText: "How satisfied were you with your overall room cleanliness, comfort, and ambiance?",
+        questionType: "rating",
+        options: [],
+        isRequired: true,
+      },
+      {
+        questionText: "How was your arrival and check-in experience?",
+        questionType: "choice",
+        options: ["Seamless & prompt", "Standard / acceptable", "Delayed or congested"],
+        isRequired: true,
+      },
+      {
+        questionText: "Which hotel amenities and services did you experience during your stay?",
+        questionType: "touchpoint",
+        options: ["Front Desk", "In-Room Dining", "Spa & Wellness", "Infinity Pool", "Concierge Desk", "Valet"],
+        isRequired: false,
+      },
+      {
+        questionText: "Did our team promptly assist you with all requests throughout your visit?",
+        questionType: "yes_no",
+        options: ["Yes", "No"],
+        isRequired: false,
+      },
+      {
+        questionText: "Please share any memorable moments, suggestions, or staff members who made a difference:",
+        questionType: "long_text",
+        options: [],
+        isRequired: false,
+      },
+    ],
+  },
+  {
+    id: "fnb_dining",
+    title: "Food & Beverage Dining Experience",
+    description: "Designed for tableside QR codes in dining rooms, lounges, and terrace restaurants.",
+    badge: "F&B Operations",
+    questions: [
+      {
+        questionText: "How would you rate the culinary quality and presentation of your meal?",
+        questionType: "rating",
+        options: [],
+        isRequired: true,
+      },
+      {
+        questionText: "How satisfied were you with table service speed and staff attentiveness?",
+        questionType: "emoji",
+        options: ["Terrible", "Poor", "Average", "Good", "Superb"],
+        isRequired: true,
+      },
+      {
+        questionText: "Which dining venue or service did you enjoy today?",
+        questionType: "dropdown",
+        options: ["Riverside Terrace", "Skyline Lounge", "Botanical Garden Bistro", "In-Room Dining", "Poolside Bar"],
+        isRequired: false,
+      },
+      {
+        questionText: "Would you recommend our culinary venues to friends?",
+        questionType: "yes_no",
+        options: ["Yes", "No"],
+        isRequired: false,
+      },
+      {
+        questionText: "Any dietary feedback or compliments for the culinary team:",
+        questionType: "text",
+        options: [],
+        isRequired: false,
+      },
+    ],
+  },
+  {
+    id: "spa_wellness",
+    title: "Spa & Wellness Recovery Survey",
+    description: "Post-treatment feedback measuring therapist skill, atmosphere, and rebooking intent.",
+    badge: "Spa & Wellness",
+    questions: [
+      {
+        questionText: "How satisfied were you with your treatment technique and therapist care?",
+        questionType: "rating",
+        options: [],
+        isRequired: true,
+      },
+      {
+        questionText: "How would you rate the serene atmosphere, aroma, and treatment room comfort?",
+        questionType: "csat",
+        options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+        isRequired: true,
+      },
+      {
+        questionText: "Would you book another treatment with our wellness team in the future?",
+        questionType: "yes_no",
+        options: ["Yes", "No"],
+        isRequired: false,
+      },
+      {
+        questionText: "Additional suggestions or notes for our spa director:",
+        questionType: "text",
+        options: [],
+        isRequired: false,
+      },
+    ],
+  },
+  {
+    id: "arrival_valet",
+    title: "Arrival & Check-In Experience",
+    description: "Measures first impression metrics, luggage handling promptness, and room readiness.",
+    badge: "First Impression",
+    questions: [
+      {
+        questionText: "How prompt was your valet greeting and luggage assistance upon arrival?",
+        questionType: "choice",
+        options: ["Immediate & courteous", "Adequate", "Waited over 10 minutes"],
+        isRequired: true,
+      },
+      {
+        questionText: "Was your room ready upon your arrival?",
+        questionType: "yes_no",
+        options: ["Yes, immediately", "Brief wait required", "No, delayed"],
+        isRequired: true,
+      },
+      {
+        questionText: "Front desk staff warmth and check-in clarity:",
+        questionType: "rating",
+        options: [],
+        isRequired: true,
+      },
+      {
+        questionText: "Any comments regarding your arrival journey:",
+        questionType: "text",
+        options: [],
+        isRequired: false,
+      },
+    ],
+  },
 ];
 
 export default function QuestionnaireBuilder() {
@@ -60,17 +232,16 @@ export default function QuestionnaireBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Active language preview
-  const [previewLang, setPreviewLang] = useState<string>("en");
-
   // Modal / Add Question states
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [modalTab, setModalTab] = useState<"basics" | "translations">("basics");
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] = useState<string>("choice");
   const [optionsStr, setOptionsStr] = useState("Seamless & prompt, Standard / acceptable, Delayed");
   const [isRequired, setIsRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
 
   // Translations draft state
   const [activeTranslationLang, setActiveTranslationLang] = useState<string>("th");
@@ -152,18 +323,31 @@ export default function QuestionnaireBuilder() {
 
     try {
       let options: string[] = [];
-      if (questionType === "choice" || questionType === "yes_no") {
+      if (
+        questionType === "choice" ||
+        questionType === "multi_choice" ||
+        questionType === "dropdown" ||
+        questionType === "touchpoint"
+      ) {
         options = optionsStr
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
         if (options.length === 0) {
-          options = questionType === "yes_no" ? ["Yes", "No"] : ["Option 1", "Option 2"];
+          options = ["Option 1", "Option 2", "Option 3"];
         }
+      } else if (questionType === "yes_no") {
+        options = optionsStr.trim()
+          ? optionsStr.split(",").map((s) => s.trim()).filter(Boolean)
+          : ["Yes", "No"];
       } else if (questionType === "nps") {
         options = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
       } else if (questionType === "csat") {
         options = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+      } else if (questionType === "emoji") {
+        options = ["Terrible", "Poor", "Average", "Good", "Superb"];
+      } else if (questionType === "rating") {
+        options = ["1", "2", "3", "4", "5"];
       }
 
       const res = await fetch("/api/questions", {
@@ -183,7 +367,7 @@ export default function QuestionnaireBuilder() {
         throw new Error(data.error || "Failed to add question.");
       }
 
-      setSuccess(`Question "${questionText.trim()}" added with ${Object.keys(finalTranslations).length} language translation(s).`);
+      setSuccess(`Question "${questionText.trim()}" added successfully.`);
       setShowAddModal(false);
       setQuestionText("");
       setOptionsStr("Seamless & prompt, Standard / acceptable, Delayed");
@@ -197,6 +381,40 @@ export default function QuestionnaireBuilder() {
       setError(err.message || "Failed to add question.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleApplyTemplate(template: (typeof QUESTIONNAIRE_TEMPLATES)[0]) {
+    setApplyingTemplate(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      let addedCount = 0;
+      for (const q of template.questions) {
+        const res = await fetch("/api/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionText: q.questionText,
+            questionType: q.questionType,
+            options: q.options,
+            isRequired: q.isRequired,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          addedCount++;
+        }
+      }
+
+      setSuccess(`Template "${template.title}" applied! ${addedCount} questions added to your live questionnaire.`);
+      setShowTemplatesModal(false);
+      await loadQuestions();
+    } catch (err: any) {
+      setError(err.message || "Failed to apply questionnaire template.");
+    } finally {
+      setApplyingTemplate(false);
     }
   }
 
@@ -253,18 +471,18 @@ export default function QuestionnaireBuilder() {
           alignItems: "center",
           justifyContent: "space-between",
           gap: "16px",
-          background: "linear-gradient(135deg, rgba(37,66,48,0.06) 0%, rgba(11,16,15,0.02) 100%)",
-          border: "1px solid rgba(37,66,48,0.2)",
+          background: "linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(15,23,42,0.02) 100%)",
+          border: "1px solid var(--line-strong)",
           borderRadius: "8px",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div
             style={{
-              width: "36px",
-              height: "36px",
+              width: "38px",
+              height: "38px",
               borderRadius: "8px",
-              background: "#254230",
+              background: "var(--sage-deep)",
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -276,23 +494,25 @@ export default function QuestionnaireBuilder() {
           </div>
           <div>
             <strong style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>
-              Live Synchronization with QR Studio & Public Touchpoints
+              Live Synchronization with Public Guest Forms & QR Studio
             </strong>
             <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--muted)", lineHeight: "1.4" }}>
-              All custom form components (NPS 0–10, 5-Star, Choice pills, Stories) and translations configured here automatically adapt to the guest&rsquo;s device language when scanning in-room or dining QR codes.
+              All questionnaire items (NPS, 5-Star, Choice pills, Emojis, Stories) configured here immediately appear when guests scan their in-room or dining QR codes.
             </p>
           </div>
         </div>
-        <a
-          href="/dashboard/operations"
-          className="button button-outline compact"
-          style={{ fontSize: "11px", whiteSpace: "nowrap" }}
-        >
-          Open QR Studio →
-        </a>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <a
+            href="/dashboard/operations"
+            className="button button-outline compact"
+            style={{ fontSize: "11px", whiteSpace: "nowrap" }}
+          >
+            Open QR Studio →
+          </a>
+        </div>
       </div>
 
-      {/* TOP CONTROLS: PREVIEW LANGUAGE SWITCHER & ADD BUTTON */}
+      {/* TOP ACTION BAR: ADD COMPONENT & QUESTIONNAIRE TEMPLATES */}
       <div
         style={{
           display: "flex",
@@ -303,65 +523,74 @@ export default function QuestionnaireBuilder() {
           gap: "12px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "11px", color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-            <Languages size={13} />
-            Preview Language:
+        <div>
+          <span style={{ fontSize: "12px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
+            Active questions: <strong>{questions.filter((q) => q.is_active).length}</strong> of {questions.length}
           </span>
-          <div style={{ display: "inline-flex", background: "var(--line)", padding: "2px", borderRadius: "6px", gap: "2px" }}>
-            {FORM_LANGUAGES.map((lang) => {
-              const isSelected = previewLang === lang.code;
-              return (
-                <button
-                  key={lang.code}
-                  type="button"
-                  onClick={() => setPreviewLang(lang.code)}
-                  style={{
-                    border: "none",
-                    background: isSelected ? "var(--surface)" : "transparent",
-                    color: isSelected ? "var(--ink)" : "var(--muted)",
-                    padding: "3px 8px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    cursor: "pointer",
-                    fontWeight: isSelected ? 600 : 400,
-                    boxShadow: isSelected ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "10px", fontWeight: isSelected ? 700 : 500 }}>
-                    {lang.tag}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        <button
-          type="button"
-          className="button button-dark compact"
-          onClick={() => {
-            setError(null);
-            setSuccess(null);
-            setShowAddModal(true);
-          }}
-        >
-          <Plus size={14} strokeWidth={2} style={{ marginRight: "6px" }} />
-          Add custom component
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="button button-outline compact"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setShowTemplatesModal(true);
+            }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <FileSpreadsheet size={13} strokeWidth={1.8} />
+            Questionnaire Templates
+          </button>
+
+          <button
+            type="button"
+            className="button button-dark compact"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setShowAddModal(true);
+            }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <Plus size={14} strokeWidth={2} />
+            Add custom component
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#fbf1ef", color: "#8b261a", border: "1px solid #ebd3cf", fontSize: "12px" }}>
+        <div
+          className="panel"
+          style={{
+            padding: "12px 18px",
+            marginBottom: "16px",
+            background: "var(--red-soft)",
+            color: "var(--red)",
+            border: "1px solid var(--red)",
+            fontSize: "12px",
+          }}
+        >
           {error}
         </div>
       )}
 
       {success && (
-        <div className="panel" style={{ padding: "12px 18px", marginBottom: "16px", background: "#edf4ed", color: "#254230", border: "1px solid #d4e2d6", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          className="panel"
+          style={{
+            padding: "12px 18px",
+            marginBottom: "16px",
+            background: "var(--sage-soft)",
+            color: "var(--sage)",
+            border: "1px solid var(--sage)",
+            fontSize: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
           <Check size={14} strokeWidth={2} />
           {success}
         </div>
@@ -374,7 +603,7 @@ export default function QuestionnaireBuilder() {
             <thead>
               <tr>
                 <th style={{ width: "40px" }}>#</th>
-                <th>Prompt ({previewLang.toUpperCase()})</th>
+                <th>Question Prompt</th>
                 <th>Component Format</th>
                 <th>Options & Scale</th>
                 <th>Translations</th>
@@ -392,8 +621,15 @@ export default function QuestionnaireBuilder() {
                 </tr>
               ) : questions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
-                    No questionnaire questions created yet. Click &ldquo;Add custom component&rdquo; above.
+                  <td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
+                    <p style={{ margin: "0 0 10px" }}>No questionnaire questions created yet.</p>
+                    <button
+                      type="button"
+                      className="button button-dark compact"
+                      onClick={() => setShowTemplatesModal(true)}
+                    >
+                      Apply a questionnaire template
+                    </button>
                   </td>
                 </tr>
               ) : (
@@ -403,11 +639,6 @@ export default function QuestionnaireBuilder() {
                     detail: "Custom component",
                   };
 
-                  // Language translation resolution
-                  const translation = previewLang !== "en" ? q.translations?.[previewLang] : null;
-                  const displayPrompt = translation?.questionText || q.question_text;
-                  const displayOptions = translation?.options && translation.options.length > 0 ? translation.options : q.options;
-
                   const translationCount = q.translations ? Object.keys(q.translations).length : 0;
 
                   return (
@@ -416,12 +647,7 @@ export default function QuestionnaireBuilder() {
                         {idx + 1}
                       </td>
                       <td>
-                        <strong style={{ fontSize: "13px", color: "var(--ink)" }}>{displayPrompt}</strong>
-                        {previewLang !== "en" && !translation?.questionText && (
-                          <span style={{ display: "block", fontSize: "10px", color: "var(--muted)", marginTop: "2px" }}>
-                            (Falling back to English)
-                          </span>
-                        )}
+                        <strong style={{ fontSize: "13px", color: "var(--ink)" }}>{q.question_text}</strong>
                       </td>
                       <td>
                         <span
@@ -431,16 +657,20 @@ export default function QuestionnaireBuilder() {
                             padding: "3px 8px",
                             background:
                               q.question_type === "nps" || q.question_type === "csat"
-                                ? "#eef2ff"
+                                ? "rgba(56, 189, 248, 0.16)"
                                 : q.question_type === "rating"
-                                ? "#fef3c7"
+                                ? "rgba(245, 158, 11, 0.16)"
+                                : q.question_type === "emoji"
+                                ? "rgba(16, 185, 129, 0.16)"
                                 : "var(--line)",
                             color:
                               q.question_type === "nps" || q.question_type === "csat"
-                                ? "#4338ca"
+                                ? "var(--blue)"
                                 : q.question_type === "rating"
-                                ? "#92400e"
-                                : "var(--ink-light)",
+                                ? "var(--warm)"
+                                : q.question_type === "emoji"
+                                ? "var(--sage)"
+                                : "var(--ink)",
                             borderRadius: "4px",
                             fontWeight: 500,
                             display: "inline-flex",
@@ -450,49 +680,67 @@ export default function QuestionnaireBuilder() {
                         >
                           {q.question_type === "rating" && <Star size={10} />}
                           {q.question_type === "nps" && <Gauge size={10} />}
+                          {q.question_type === "emoji" && <Smile size={10} />}
+                          {q.question_type === "touchpoint" && <ListCheck size={10} />}
                           {q.question_type === "long_text" && <MessageSquare size={10} />}
                           {typeMeta.label}
                         </span>
                       </td>
                       <td>
-                        {q.question_type === "choice" || q.question_type === "yes_no" ? (
+                        {q.question_type === "choice" ||
+                        q.question_type === "multi_choice" ||
+                        q.question_type === "yes_no" ||
+                        q.question_type === "dropdown" ||
+                        q.question_type === "touchpoint" ? (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                            {displayOptions && displayOptions.length > 0 ? (
-                              displayOptions.map((opt) => (
+                            {q.options && q.options.length > 0 ? (
+                              q.options.map((opt) => (
                                 <span
                                   key={opt}
                                   style={{
                                     fontSize: "10px",
                                     padding: "2px 8px",
                                     borderRadius: "10px",
-                                    background: "#f0f4f0",
-                                    color: "#254230",
-                                    border: "1px solid #d8e5d8",
+                                    background: "var(--canvas-alt)",
+                                    color: "var(--ink)",
+                                    border: "1px solid var(--line-strong)",
                                   }}
                                 >
                                   {opt}
                                 </span>
                               ))
                             ) : (
-                              <span style={{ color: "var(--muted)", fontSize: "11px" }}>Standard options</span>
+                              <span style={{ color: "var(--muted)", fontSize: "11px" }}>Standard choices</span>
                             )}
                           </div>
                         ) : q.question_type === "rating" ? (
-                          <span style={{ color: "var(--muted)", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                            <Star size={11} fill="#f59e0b" stroke="#f59e0b" /> 1 to 5 Stars
+                          <span
+                            style={{
+                              color: "var(--warm)",
+                              fontSize: "11px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <Star size={11} fill="currentColor" stroke="currentColor" /> 1 to 5 Stars
                           </span>
                         ) : q.question_type === "nps" ? (
-                          <span style={{ color: "#4338ca", fontSize: "11px", fontWeight: 500 }}>
-                            0 to 10 Scale (Detractor / Passive / Promoter)
+                          <span style={{ color: "var(--blue)", fontSize: "11px", fontWeight: 500 }}>
+                            0 to 10 Scale (Detractors 0-6 / Passives 7-8 / Promoters 9-10)
                           </span>
                         ) : q.question_type === "csat" ? (
-                          <span style={{ color: "#4338ca", fontSize: "11px", fontWeight: 500 }}>
+                          <span style={{ color: "var(--blue)", fontSize: "11px", fontWeight: 500 }}>
                             1 to 10 Satisfaction Spectrum
                           </span>
+                        ) : q.question_type === "emoji" ? (
+                          <span style={{ color: "var(--sage)", fontSize: "11px", fontWeight: 500 }}>
+                            5-Point Emotion (Terrible to Superb)
+                          </span>
                         ) : q.question_type === "long_text" ? (
-                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>Multi-line textarea</span>
+                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>Multi-line guest textarea</span>
                         ) : (
-                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>Single-line text</span>
+                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>Single-line text comment</span>
                         )}
                       </td>
                       <td>
@@ -502,8 +750,9 @@ export default function QuestionnaireBuilder() {
                               fontSize: "9px",
                               padding: "2px 5px",
                               borderRadius: "3px",
-                              background: "#e2e8f0",
-                              color: "#334155",
+                              background: "var(--canvas-alt)",
+                              color: "var(--ink)",
+                              border: "1px solid var(--line-strong)",
                               fontWeight: 600,
                             }}
                             title="English (Default)"
@@ -521,8 +770,8 @@ export default function QuestionnaireBuilder() {
                                     fontFamily: "var(--font-dm-mono)",
                                     padding: "2px 5px",
                                     borderRadius: "3px",
-                                    background: "#dcfce7",
-                                    color: "#166534",
+                                    background: "var(--sage-soft)",
+                                    color: "var(--sage)",
                                     fontWeight: 600,
                                   }}
                                   title={`${meta?.name || lang} Translation Active`}
@@ -537,7 +786,13 @@ export default function QuestionnaireBuilder() {
                         </div>
                       </td>
                       <td>
-                        <span style={{ fontSize: "11px", color: q.is_required ? "#8b261a" : "var(--muted)", fontWeight: q.is_required ? 600 : 400 }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: q.is_required ? "var(--red)" : "var(--muted)",
+                            fontWeight: q.is_required ? 600 : 400,
+                          }}
+                        >
                           {q.is_required ? "Yes (Mandatory)" : "Optional"}
                         </span>
                       </td>
@@ -553,13 +808,13 @@ export default function QuestionnaireBuilder() {
                             alignItems: "center",
                             gap: "5px",
                             fontSize: "11px",
-                            color: q.is_active ? "#254230" : "var(--muted)",
+                            color: q.is_active ? "var(--sage)" : "var(--muted)",
                           }}
                           title={q.is_active ? "Click to deactivate" : "Click to activate"}
                         >
                           {q.is_active ? (
                             <>
-                              <ToggleRight size={18} strokeWidth={2} style={{ color: "#254230" }} />
+                              <ToggleRight size={18} strokeWidth={2} style={{ color: "var(--sage)" }} />
                               Active
                             </>
                           ) : (
@@ -575,7 +830,13 @@ export default function QuestionnaireBuilder() {
                           type="button"
                           onClick={() => handleDeleteQuestion(q.id, q.question_text)}
                           className="button compact"
-                          style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            background: "transparent",
+                            color: "var(--muted)",
+                            border: "1px solid var(--line)",
+                          }}
                           title="Delete question"
                         >
                           <Trash2 size={12} strokeWidth={1.75} />
@@ -590,46 +851,38 @@ export default function QuestionnaireBuilder() {
         </div>
       </div>
 
-      {/* MODAL: ADD CUSTOM COMPONENT & TRANSLATIONS */}
+      {/* MODAL 1: ADD CUSTOM COMPONENT */}
       <AnimatePresence>
         {showAddModal && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(11, 16, 15, 0.55)",
-              backdropFilter: "blur(5px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-              padding: "16px",
-            }}
-          >
+          <div className="modal-backdrop-luxury">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              className="modal-dialog-luxury"
               style={{
-                background: "var(--surface)",
-                border: "1px solid var(--line)",
-                borderRadius: "10px",
-                width: "100%",
-                maxWidth: "540px",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                padding: "24px",
-                boxShadow: "0 24px 48px rgba(0,0,0,0.18)",
+                background: "var(--panel)",
+                border: "1px solid var(--line-strong)",
+                boxShadow: "0 24px 60px rgba(0, 0, 0, 0.5)",
+                color: "var(--ink)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "16px",
+                }}
+              >
                 <div>
-                  <p className="eyebrow">Form Builder & Studio</p>
-                  <h2 style={{ fontSize: "18px", margin: 0 }}>Add custom component</h2>
+                  <p className="eyebrow" style={{ color: "var(--sage)" }}>Form Builder & Touchpoint Studio</p>
+                  <h2 style={{ fontSize: "18px", margin: "2px 0 0", color: "var(--ink)" }}>Add custom component</h2>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowAddModal(false)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "4px" }}
                 >
                   <X size={18} />
                 </button>
@@ -654,8 +907,8 @@ export default function QuestionnaireBuilder() {
                     cursor: "pointer",
                     fontSize: "12px",
                     fontWeight: modalTab === "basics" ? 600 : 400,
-                    color: modalTab === "basics" ? "#254230" : "var(--muted)",
-                    borderBottom: modalTab === "basics" ? "2px solid #254230" : "2px solid transparent",
+                    color: modalTab === "basics" ? "var(--sage)" : "var(--muted)",
+                    borderBottom: modalTab === "basics" ? "2px solid var(--sage)" : "2px solid transparent",
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
@@ -674,8 +927,8 @@ export default function QuestionnaireBuilder() {
                     cursor: "pointer",
                     fontSize: "12px",
                     fontWeight: modalTab === "translations" ? 600 : 400,
-                    color: modalTab === "translations" ? "#254230" : "var(--muted)",
-                    borderBottom: modalTab === "translations" ? "2px solid #254230" : "2px solid transparent",
+                    color: modalTab === "translations" ? "var(--sage)" : "var(--muted)",
+                    borderBottom: modalTab === "translations" ? "2px solid var(--sage)" : "2px solid transparent",
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
@@ -686,7 +939,7 @@ export default function QuestionnaireBuilder() {
                   {Object.keys(translationsMap).length > 0 && (
                     <span
                       style={{
-                        background: "#254230",
+                        background: "var(--sage)",
                         color: "#fff",
                         borderRadius: "10px",
                         fontSize: "9px",
@@ -703,8 +956,8 @@ export default function QuestionnaireBuilder() {
                 {modalTab === "basics" ? (
                   <>
                     <div style={{ marginBottom: "14px" }}>
-                      <label className="field-label" htmlFor="q-text">
-                        Primary Question Text (English) *
+                      <label className="field-label" htmlFor="q-text" style={{ color: "var(--ink)", display: "block", marginBottom: "6px" }}>
+                        Primary Question Text *
                       </label>
                       <input
                         id="q-text"
@@ -715,19 +968,19 @@ export default function QuestionnaireBuilder() {
                         onChange={(e) => setQuestionText(e.target.value)}
                         style={{
                           width: "100%",
-                          padding: "9px 12px",
-                          border: "1px solid var(--line)",
-                          borderRadius: "4px",
-                          fontSize: "12px",
+                          padding: "10px 12px",
+                          border: "1px solid var(--line-strong)",
+                          borderRadius: "6px",
+                          fontSize: "13px",
                           outline: "none",
-                          background: "var(--surface)",
+                          background: "var(--canvas-alt)",
                           color: "var(--ink)",
                         }}
                       />
                     </div>
 
                     <div style={{ marginBottom: "14px" }}>
-                      <label className="field-label" htmlFor="q-type" style={{ display: "block", marginBottom: "6px" }}>
+                      <label className="field-label" htmlFor="q-type" style={{ display: "block", marginBottom: "6px", color: "var(--ink)" }}>
                         Component Type & Response Format
                       </label>
                       <CustomSelect
@@ -738,8 +991,12 @@ export default function QuestionnaireBuilder() {
                           setQuestionType(t);
                           if (t === "yes_no") {
                             setOptionsStr("Yes, No");
-                          } else if (t === "choice") {
+                          } else if (t === "choice" || t === "dropdown") {
                             setOptionsStr("Seamless & prompt, Standard / acceptable, Delayed");
+                          } else if (t === "multi_choice") {
+                            setOptionsStr("Infinity Pool, Signature Dining, Spa, Fitness Center");
+                          } else if (t === "touchpoint") {
+                            setOptionsStr("Valet, Front Desk, Housekeeping, Dining, Spa, Concierge");
                           }
                         }}
                         header="Select Component Format"
@@ -747,30 +1004,34 @@ export default function QuestionnaireBuilder() {
                       />
                     </div>
 
-                    {(questionType === "choice" || questionType === "yes_no") && (
+                    {(questionType === "choice" ||
+                      questionType === "multi_choice" ||
+                      questionType === "yes_no" ||
+                      questionType === "dropdown" ||
+                      questionType === "touchpoint") && (
                       <div style={{ marginBottom: "14px" }}>
-                        <label className="field-label" htmlFor="q-options">
+                        <label className="field-label" htmlFor="q-options" style={{ color: "var(--ink)", display: "block", marginBottom: "6px" }}>
                           Answer Options (comma-separated)
                         </label>
                         <input
                           id="q-options"
                           type="text"
-                          placeholder="e.g. Excellent, Adequate, Needs Attention"
+                          placeholder="e.g. Option 1, Option 2, Option 3"
                           value={optionsStr}
                           onChange={(e) => setOptionsStr(e.target.value)}
                           style={{
                             width: "100%",
-                            padding: "9px 12px",
-                            border: "1px solid var(--line)",
-                            borderRadius: "4px",
+                            padding: "10px 12px",
+                            border: "1px solid var(--line-strong)",
+                            borderRadius: "6px",
                             fontSize: "12px",
                             outline: "none",
-                            background: "var(--surface)",
+                            background: "var(--canvas-alt)",
                             color: "var(--ink)",
                           }}
                         />
                         <p style={{ fontSize: "11px", color: "var(--muted)", margin: "4px 0 0 0" }}>
-                          Separate multiple choices with commas. Guests can tap one of these pills.
+                          Separate multiple choices with commas. Guests tap or select these options on mobile.
                         </p>
                       </div>
                     )}
@@ -778,37 +1039,69 @@ export default function QuestionnaireBuilder() {
                     {questionType === "nps" && (
                       <div
                         style={{
-                          padding: "10px 14px",
-                          background: "#eef2ff",
-                          border: "1px solid #c7d2fe",
+                          padding: "12px 14px",
+                          background: "var(--blue-soft)",
+                          border: "1px solid var(--blue)",
                           borderRadius: "6px",
                           marginBottom: "14px",
                           fontSize: "11px",
-                          color: "#3730a3",
+                          color: "var(--ink)",
                         }}
                       >
-                        <strong>NPS Scale 0–10:</strong> Automatically generates 11 interactive rating buttons from 0 (Not likely at all) to 10 (Extremely likely), tagged with Net Promoter Score weighting.
+                        <strong style={{ color: "var(--blue)" }}>NPS Scale 0–10:</strong> Automatically renders 11 interactive rating buttons from 0 (Not likely at all) to 10 (Extremely likely), tagged with Net Promoter Score weighting.
                       </div>
                     )}
 
                     {questionType === "csat" && (
                       <div
                         style={{
-                          padding: "10px 14px",
-                          background: "#eef2ff",
-                          border: "1px solid #c7d2fe",
+                          padding: "12px 14px",
+                          background: "var(--blue-soft)",
+                          border: "1px solid var(--blue)",
                           borderRadius: "6px",
                           marginBottom: "14px",
                           fontSize: "11px",
-                          color: "#3730a3",
+                          color: "var(--ink)",
                         }}
                       >
-                        <strong>CSAT Scale 1–10:</strong> Automatically renders a 10-point satisfaction spectrum metric for in-depth departmental reviews.
+                        <strong style={{ color: "var(--blue)" }}>CSAT Scale 1–10:</strong> Automatically renders a 10-point satisfaction spectrum metric for in-depth departmental reviews.
+                      </div>
+                    )}
+
+                    {questionType === "emoji" && (
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          background: "var(--sage-soft)",
+                          border: "1px solid var(--sage)",
+                          borderRadius: "6px",
+                          marginBottom: "14px",
+                          fontSize: "11px",
+                          color: "var(--ink)",
+                        }}
+                      >
+                        <strong style={{ color: "var(--sage)" }}>5-Point Sentiment:</strong> Displays an intuitive visual spectrum: 😠 Terrible · 🙁 Poor · 😐 Average · 🙂 Good · 🤩 Superb.
+                      </div>
+                    )}
+
+                    {questionType === "rating" && (
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          background: "var(--warm-soft)",
+                          border: "1px solid var(--warm)",
+                          borderRadius: "6px",
+                          marginBottom: "14px",
+                          fontSize: "11px",
+                          color: "var(--ink)",
+                        }}
+                      >
+                        <strong style={{ color: "var(--warm)" }}>1–5 Star Rating:</strong> Luxury weighted star rating component with interactive hover states and average calculation.
                       </div>
                     )}
 
                     <div style={{ marginBottom: "20px" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: "var(--ink)" }}>
                         <input
                           type="checkbox"
                           checked={isRequired}
@@ -836,8 +1129,8 @@ export default function QuestionnaireBuilder() {
                             onClick={() => handleSwitchTranslationLang(lang.code)}
                             style={{
                               border: "1px solid",
-                              borderColor: isCurrent ? "#254230" : "var(--line)",
-                              background: isCurrent ? "#254230" : "var(--surface)",
+                              borderColor: isCurrent ? "var(--sage)" : "var(--line-strong)",
+                              background: isCurrent ? "var(--sage)" : "var(--canvas-alt)",
                               color: isCurrent ? "#fff" : "var(--ink)",
                               padding: "4px 9px",
                               borderRadius: "4px",
@@ -850,14 +1143,14 @@ export default function QuestionnaireBuilder() {
                           >
                             <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "9px", fontWeight: 700 }}>{lang.tag}</span>
                             <span>{lang.name}</span>
-                            {hasContent && <CheckCircle2 size={10} style={{ color: isCurrent ? "#86efac" : "#166534" }} />}
+                            {hasContent && <CheckCircle2 size={10} style={{ color: isCurrent ? "#fff" : "var(--sage)" }} />}
                           </button>
                         );
                       })}
                     </div>
 
                     <div style={{ marginBottom: "14px" }}>
-                      <label className="field-label">
+                      <label className="field-label" style={{ color: "var(--ink)", display: "block", marginBottom: "6px" }}>
                         Translated Prompt ({FORM_LANGUAGES.find((l) => l.code === activeTranslationLang)?.name})
                       </label>
                       <input
@@ -868,20 +1161,24 @@ export default function QuestionnaireBuilder() {
                         onBlur={handleSaveCurrentTranslationDraft}
                         style={{
                           width: "100%",
-                          padding: "9px 12px",
-                          border: "1px solid var(--line)",
-                          borderRadius: "4px",
+                          padding: "10px 12px",
+                          border: "1px solid var(--line-strong)",
+                          borderRadius: "6px",
                           fontSize: "12px",
                           outline: "none",
-                          background: "var(--surface)",
+                          background: "var(--canvas-alt)",
                           color: "var(--ink)",
                         }}
                       />
                     </div>
 
-                    {(questionType === "choice" || questionType === "yes_no") && (
+                    {(questionType === "choice" ||
+                      questionType === "multi_choice" ||
+                      questionType === "yes_no" ||
+                      questionType === "dropdown" ||
+                      questionType === "touchpoint") && (
                       <div style={{ marginBottom: "14px" }}>
-                        <label className="field-label">
+                        <label className="field-label" style={{ color: "var(--ink)", display: "block", marginBottom: "6px" }}>
                           Translated Options (comma-separated)
                         </label>
                         <input
@@ -892,12 +1189,12 @@ export default function QuestionnaireBuilder() {
                           onBlur={handleSaveCurrentTranslationDraft}
                           style={{
                             width: "100%",
-                            padding: "9px 12px",
-                            border: "1px solid var(--line)",
-                            borderRadius: "4px",
+                            padding: "10px 12px",
+                            border: "1px solid var(--line-strong)",
+                            borderRadius: "6px",
                             fontSize: "12px",
                             outline: "none",
-                            background: "var(--surface)",
+                            background: "var(--canvas-alt)",
                             color: "var(--ink)",
                           }}
                         />
@@ -911,12 +1208,20 @@ export default function QuestionnaireBuilder() {
                       style={{ fontSize: "11px", marginBottom: "16px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                     >
                       <Check size={12} />
-                      Save translation for {FORM_LANGUAGES.find((l) => l.code === activeTranslationLang)?.name}
+                      Save translation draft
                     </button>
                   </>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "8px",
+                    borderTop: "1px solid var(--line)",
+                    paddingTop: "16px",
+                  }}
+                >
                   <button
                     type="button"
                     className="button button-outline"
@@ -930,6 +1235,131 @@ export default function QuestionnaireBuilder() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 2: QUESTIONNAIRE TEMPLATES */}
+      <AnimatePresence>
+        {showTemplatesModal && (
+          <div className="modal-backdrop-luxury">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              className="modal-dialog-luxury"
+              style={{
+                maxWidth: "680px",
+                background: "var(--panel)",
+                border: "1px solid var(--line-strong)",
+                boxShadow: "0 24px 60px rgba(0, 0, 0, 0.5)",
+                color: "var(--ink)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "16px",
+                }}
+              >
+                <div>
+                  <p className="eyebrow" style={{ color: "var(--sage)" }}>Hospitality Templates</p>
+                  <h2 style={{ fontSize: "18px", margin: "2px 0 0", color: "var(--ink)" }}>
+                    Apply Questionnaire Template
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplatesModal(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "4px" }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 16px 0", lineHeight: "1.5" }}>
+                Select a pre-designed luxury survey structure to instantly populate your questionnaire with industry-standard NPS, CSAT, touchpoints, and ratings:
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+                {QUESTIONNAIRE_TEMPLATES.map((tmpl) => (
+                  <div
+                    key={tmpl.id}
+                    style={{
+                      padding: "16px",
+                      borderRadius: "8px",
+                      background: "var(--canvas-alt)",
+                      border: "1px solid var(--line-strong)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: "16px",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                        <strong style={{ fontSize: "14px", color: "var(--ink)" }}>{tmpl.title}</strong>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "10px",
+                            background: "var(--sage-soft)",
+                            color: "var(--sage)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {tmpl.badge}
+                        </span>
+                      </div>
+                      <p style={{ margin: "0 0 8px", fontSize: "12px", color: "var(--muted)", lineHeight: "1.4" }}>
+                        {tmpl.description}
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {tmpl.questions.map((q, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              fontSize: "10px",
+                              fontFamily: "var(--font-dm-mono)",
+                              background: "var(--panel)",
+                              color: "var(--ink)",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              border: "1px solid var(--line)",
+                            }}
+                          >
+                            {q.questionType.toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="button button-dark compact"
+                      disabled={applyingTemplate}
+                      onClick={() => handleApplyTemplate(tmpl)}
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      {applyingTemplate ? "Adding…" : "Apply Template →"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--line)", paddingTop: "14px" }}>
+                <button
+                  type="button"
+                  className="button button-outline"
+                  onClick={() => setShowTemplatesModal(false)}
+                >
+                  Close
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
