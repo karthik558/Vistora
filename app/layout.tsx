@@ -43,6 +43,19 @@ export default function RootLayout({
     <html lang="en" className={`${dmSans.variable} ${dmMono.variable} ${playfair.variable}`}>
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function() {
+              try {
+                var theme = localStorage.getItem("vistora-theme");
+                if (!theme) {
+                  theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                }
+                document.documentElement.setAttribute("data-theme", theme);
+              } catch(e) {}
+            })();`,
+          }}
+        />
       </head>
       <body className={dmSans.className}>{children}</body>
     </html>

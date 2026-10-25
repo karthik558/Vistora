@@ -9,7 +9,8 @@ export interface VerifiedUser {
   id: string;
   email: string;
   fullName: string;
-  role: "admin" | "staff" | "visitor";
+  role: string;
+  orgRole?: string;
   propertyId: string | null;
   propertyIds: string[];
   rights: string[];
@@ -169,7 +170,7 @@ export async function requireAdmin(request: NextRequest): Promise<
     };
   }
 
-  if (user.role !== "admin") {
+  if (user.role !== "admin" && user.role !== "super_admin" && user.orgRole !== "admin" && user.orgRole !== "super_admin") {
     return {
       errorResponse: NextResponse.json(
         { success: false, error: "Access denied. Administrator privileges required." },

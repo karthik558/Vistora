@@ -17,7 +17,18 @@ export type DepartmentType =
   | "Spa & Wellness"
   | "Valet & Transfers";
 
-export type UserRole = "admin" | "staff" | "visitor";
+export type OrgRole =
+  | "super_admin"
+  | "admin"
+  | "general_manager"
+  | "department_head"
+  | "executive"
+  | "front_office_staff"
+  | "feedback"
+  | "analyst"
+  | "report";
+
+export type UserRole = "admin" | "staff" | "visitor" | OrgRole;
 
 export interface Database {
   public: {

@@ -17,13 +17,125 @@ export const SYSTEM_RIGHTS: UserRight[] = [
   { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
   { id: "reassign_property", name: "Reassign Feedback Property", description: "Change hotel property assignment on feedback records" },
   { id: "manage_properties", name: "Manage Hotel Properties", description: "Create new hotel locations and assign staff access" },
-  { id: "manage_questionnaire", name: "Manage Questionnaire", description: "Design custom feedback questions and survey options" },
+  { id: "manage_questionnaire", name: "Manage Questionnaire & QR Studio", description: "Design custom feedback questions, touchpoints, and invitations" },
   { id: "export_reports", name: "Export Operational Reports", description: "Download date-wise CSV, Excel and PDF executive audits" },
+  { id: "view_audit_log", name: "View Audit Log", description: "Inspect chronological workspace operational audit trails" },
+  { id: "manage_settings", name: "System Settings", description: "Configure organization and enterprise platform defaults" },
   { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members and assign permissions" },
 ];
 
+export interface OrganizationalRoleDef {
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  mappedRole: "admin" | "staff" | "visitor";
+  defaultRights: string[];
+}
+
+export const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
+  {
+    id: "super_admin",
+    name: "Super Admin",
+    tagline: "Organization Executive & Full Platform Authority",
+    description: "Complete unrestricted access across all properties, system settings, audit logs, and security controls.",
+    mappedRole: "admin",
+    defaultRights: SYSTEM_RIGHTS.map((r) => r.id),
+  },
+  {
+    id: "admin",
+    name: "Admin",
+    tagline: "General Hotel & Operations Administrator",
+    description: "Full management of team members, properties, questionnaires, feedback, and complaint recovery queues.",
+    mappedRole: "admin",
+    defaultRights: [
+      "view_feedback",
+      "manage_complaints",
+      "reassign_property",
+      "manage_properties",
+      "manage_questionnaire",
+      "export_reports",
+      "view_audit_log",
+      "manage_users",
+    ],
+  },
+  {
+    id: "general_manager",
+    name: "General Manager",
+    tagline: "Head of Organization & Operational Oversight",
+    description: "Executive oversight across all properties, SLA compliance, cross-department audits, and guest directory.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback", "manage_complaints", "export_reports", "view_audit_log"],
+  },
+  {
+    id: "department_head",
+    name: "Department Head",
+    tagline: "Divisional Leader (F&B, Housekeeping, Front Desk)",
+    description: "Monitors department-specific feedback, SLA recovery timers, duty staff assignments, and team escalations.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback", "manage_complaints", "export_reports"],
+  },
+  {
+    id: "executive",
+    name: "Executive",
+    tagline: "Corporate Executive & Stakeholder",
+    description: "Portfolio-wide business intelligence, feedback trend tracking, satisfaction metrics, and executive reports.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback", "export_reports"],
+  },
+  {
+    id: "front_office_staff",
+    name: "Front Office Staff",
+    tagline: "Front Desk & Guest Concierge Touchpoints",
+    description: "Generates guest invitation links, issues QR codes, looks up directory profiles, and monitors real-time feedback.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback", "manage_questionnaire"],
+  },
+  {
+    id: "feedback",
+    name: "Feedback Specialist",
+    tagline: "Guest Experience & SLA Recovery Agent",
+    description: "Direct customer service recovery, following up with guest complaints, and closing out feedback items within SLA.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback", "manage_complaints"],
+  },
+  {
+    id: "analyst",
+    name: "Data Analyst",
+    tagline: "Read-Only Intelligence & Trend Analyst",
+    description: "Strictly limited to Analytics, trend charts, rating distributions, and department performance metrics.",
+    mappedRole: "staff",
+    defaultRights: ["view_feedback"],
+  },
+  {
+    id: "report",
+    name: "Report Specialist",
+    tagline: "Data Auditing & Export Specialist",
+    description: "Strictly limited to generating and downloading executive reports, CSV audits, and guest scorecards.",
+    mappedRole: "staff",
+    defaultRights: ["export_reports"],
+  },
+];
+
 export const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
-  admin: SYSTEM_RIGHTS.map((r) => r.id),
+  super_admin: SYSTEM_RIGHTS.map((r) => r.id),
+  admin: [
+    "view_feedback",
+    "manage_complaints",
+    "reassign_property",
+    "manage_properties",
+    "manage_questionnaire",
+    "export_reports",
+    "view_audit_log",
+    "manage_users",
+  ],
+  general_manager: ["view_feedback", "manage_complaints", "export_reports", "view_audit_log"],
+  department_head: ["view_feedback", "manage_complaints", "export_reports"],
+  executive: ["view_feedback", "export_reports"],
+  front_office_staff: ["view_feedback", "manage_questionnaire"],
+  feedback: ["view_feedback", "manage_complaints"],
+  analyst: ["view_feedback"],
+  report: ["export_reports"],
   staff: ["view_feedback", "manage_complaints", "manage_questionnaire", "export_reports"],
   visitor: ["view_feedback"],
 };
@@ -32,12 +144,20 @@ interface WorkspaceUserItem {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "staff" | "visitor";
+  role: string;
+  orgRole?: string;
   property_id?: string | null;
   property_ids?: string[];
   properties?: { id: string; name: string; code: string } | null;
   rights?: string[];
   created_at?: string;
+}
+
+export function getUserOrgRole(user: WorkspaceUserItem): string {
+  if (user.orgRole) return user.orgRole;
+  const match = (user.rights || []).find((r) => r.startsWith("org_role:"));
+  if (match) return match.replace("org_role:", "");
+  return user.role === "admin" ? "admin" : "front_office_staff";
 }
 
 interface PropertyOption {
@@ -76,10 +196,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState<"admin" | "staff" | "visitor">("staff");
+  const [addRole, setAddRole] = useState<string>("front_office_staff");
   const [addPropertyId, setAddPropertyId] = useState("");
   const [addPropertyIds, setAddPropertyIds] = useState<string[]>([]);
-  const [addRights, setAddRights] = useState<string[]>(ROLE_DEFAULT_RIGHTS.staff);
+  const [addRights, setAddRights] = useState<string[]>(ROLE_DEFAULT_RIGHTS.front_office_staff || []);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states for Change Password
@@ -97,7 +217,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
 
   // Form states for Edit Access
   const [editName, setEditName] = useState("");
-  const [editRole, setEditRole] = useState<"admin" | "staff" | "visitor">("staff");
+  const [editRole, setEditRole] = useState<string>("front_office_staff");
   const [editPropertyId, setEditPropertyId] = useState("");
   const [editPropertyIds, setEditPropertyIds] = useState<string[]>([]);
   const [editRights, setEditRights] = useState<string[]>([]);
@@ -156,9 +276,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSubmitting(true);
 
     try {
-      const propIdsToSend = addRole === "admin"
+      const isFullAdmin = addRole === "admin" || addRole === "super_admin";
+      const propIdsToSend = isFullAdmin
         ? properties.map((p) => p.id)
         : addPropertyIds;
+
+      const rightsToSend = isFullAdmin
+        ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${addRole}`]
+        : [...addRights.filter((r) => !r.startsWith("org_role:")), `org_role:${addRole}`];
 
       const res = await fetch("/api/users", {
         method: "POST",
@@ -170,7 +295,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
           role: addRole,
           propertyId: propIdsToSend[0] || null,
           propertyIds: propIdsToSend,
-          rights: addRole === "admin" ? SYSTEM_RIGHTS.map((r) => r.id) : addRights,
+          rights: rightsToSend,
         }),
       });
 
@@ -184,10 +309,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       setAddName("");
       setAddEmail("");
       setAddPassword("");
-      setAddRole("staff");
+      setAddRole("front_office_staff");
       setAddPropertyId("");
       setAddPropertyIds([]);
-      setAddRights(ROLE_DEFAULT_RIGHTS.staff);
+      setAddRights(ROLE_DEFAULT_RIGHTS.front_office_staff || []);
       await loadData();
     } catch (err: any) {
       setError(err.message || "Failed to create user.");
@@ -281,12 +406,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     setSuccess(null);
     setSavingAccess(true);
 
-    // Admins always have all rights at all times
-    const rightsToSend = editRole === "admin"
-      ? SYSTEM_RIGHTS.map((r) => r.id)
-      : editRights;
+    // Admins and Super Admins always have all rights at all times
+    const isFullAdmin = editRole === "admin" || editRole === "super_admin";
+    const rightsToSend = isFullAdmin
+      ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${editRole}`]
+      : [...editRights.filter((r) => !r.startsWith("org_role:")), `org_role:${editRole}`];
 
-    const propIdsToSend = editRole === "admin"
+    const propIdsToSend = isFullAdmin
       ? properties.map((p) => p.id)
       : editPropertyIds;
 
@@ -466,62 +592,88 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               </span>
                             </td>
                             <td>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
-                                <span
-                                  className="status"
-                                  style={{
-                                    background: user.role === "admin" ? "#254230" : "var(--line)",
-                                    color: user.role === "admin" ? "#fff" : "var(--ink)",
-                                    fontFamily: "var(--font-dm-mono)",
-                                    fontSize: "9px",
-                                    letterSpacing: "0.08em",
-                                    textTransform: "uppercase",
-                                    padding: "2px 7px",
-                                  }}
-                                >
-                                  {user.role}
-                                </span>
-                                <span
-                                  title={(user.rights || []).join(", ") || "Standard access"}
-                                  style={{
-                                    fontSize: "10px",
-                                    color: "var(--muted)",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "3px",
-                                  }}
-                                >
-                                  <Shield size={10} strokeWidth={1.75} />
-                                  {user.role === "admin"
-                                    ? "Full administrator access"
-                                    : Array.isArray(user.rights)
-                                    ? user.rights.length > 0
-                                      ? `${user.rights.length} rights active`
-                                      : "No rights assigned"
-                                    : "Role default"}
-                                </span>
-                              </div>
+                              {(() => {
+                                const orgRole = getUserOrgRole(user);
+                                const roleMeta = ORGANIZATIONAL_ROLES.find((r) => r.id === orgRole) || {
+                                  name: orgRole.replace(/_/g, " "),
+                                  tagline: "Team Member",
+                                };
+                                const isFullAdmin = orgRole === "super_admin" || orgRole === "admin" || user.role === "admin";
+                                return (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                                    <span
+                                      className="status"
+                                      style={{
+                                        background:
+                                          orgRole === "super_admin"
+                                            ? "linear-gradient(135deg, #1b3824 0%, #2e593b 100%)"
+                                            : orgRole === "admin"
+                                            ? "#254230"
+                                            : orgRole === "general_manager" || orgRole === "executive"
+                                            ? "#1e293b"
+                                            : orgRole === "analyst" || orgRole === "report"
+                                            ? "#4338ca"
+                                            : orgRole === "feedback"
+                                            ? "#0f766e"
+                                            : "var(--line)",
+                                        color: isFullAdmin || orgRole !== "front_office_staff" ? "#fff" : "var(--ink)",
+                                        fontFamily: "var(--font-dm-mono)",
+                                        fontSize: "9px",
+                                        letterSpacing: "0.06em",
+                                        textTransform: "uppercase",
+                                        padding: "3px 8px",
+                                        borderRadius: "3px",
+                                        boxShadow: orgRole === "super_admin" ? "0 1px 3px rgba(0,0,0,0.15)" : undefined,
+                                      }}
+                                    >
+                                      {roleMeta.name}
+                                    </span>
+                                    <span
+                                      title={(user.rights || []).join(", ") || roleMeta.tagline}
+                                      style={{
+                                        fontSize: "10px",
+                                        color: "var(--muted)",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "3px",
+                                      }}
+                                    >
+                                      <Shield size={10} strokeWidth={1.75} />
+                                      {isFullAdmin
+                                        ? "Full administrator access"
+                                        : Array.isArray(user.rights)
+                                        ? user.rights.filter((r) => !r.startsWith("org_role:")).length > 0
+                                          ? `${user.rights.filter((r) => !r.startsWith("org_role:")).length} rights active`
+                                          : roleMeta.tagline
+                                        : roleMeta.tagline}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td>
-                              {user.role === "admin" ? (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    background: "#edf4ed",
-                                    color: "#254230",
-                                    padding: "3px 8px",
-                                    borderRadius: "3px",
-                                    fontSize: "11px",
-                                    fontWeight: 500,
-                                    border: "1px solid #d4e2d6",
-                                  }}
-                                >
-                                  <Building2 size={11} strokeWidth={1.75} />
-                                  All Properties (Global)
-                                </span>
-                              ) : user.property_ids && user.property_ids.length > 1 ? (
+                              {(() => {
+                                const orgRole = getUserOrgRole(user);
+                                const isFullAdmin = orgRole === "super_admin" || orgRole === "admin" || user.role === "admin";
+                                return isFullAdmin ? (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      background: "#edf4ed",
+                                      color: "#254230",
+                                      padding: "3px 8px",
+                                      borderRadius: "3px",
+                                      fontSize: "11px",
+                                      fontWeight: 500,
+                                      border: "1px solid #d4e2d6",
+                                    }}
+                                  >
+                                    <Building2 size={11} strokeWidth={1.75} />
+                                    All Properties (Global)
+                                  </span>
+                                ) : user.property_ids && user.property_ids.length > 1 ? (
                                 <span
                                   style={{
                                     display: "inline-flex",
@@ -593,8 +745,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   <Building2 size={11} strokeWidth={1.75} />
                                   Unassigned
                                 </span>
-                              )}
-                            </td>
+                              );
+                            })()}
+                          </td>
                             <td>
                               <span style={{ color: "var(--muted)", fontSize: "11px" }}>
                                 {user.created_at ? new Date(user.created_at).toLocaleDateString() : "Active"}
@@ -607,9 +760,10 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   className="button button-outline compact"
                                   style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                                   onClick={() => {
+                                    const org = getUserOrgRole(user);
                                     setEditAccessUser(user);
                                     setEditName(user.full_name || "");
-                                    setEditRole(user.role);
+                                    setEditRole(org);
                                     setEditPropertyId(user.property_id || "");
                                     const initialPropIds = user.property_ids && user.property_ids.length > 0
                                       ? user.property_ids
@@ -618,11 +772,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       : [];
                                     setEditPropertyIds(initialPropIds);
                                     setEditRights(
-                                      user.role === "admin"
+                                      org === "admin" || org === "super_admin" || user.role === "admin"
                                         ? SYSTEM_RIGHTS.map((r) => r.id)
-                                        : Array.isArray(user.rights)
-                                        ? user.rights
-                                        : ROLE_DEFAULT_RIGHTS[user.role] || []
+                                        : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:")).length > 0
+                                        ? user.rights.filter((r) => !r.startsWith("org_role:"))
+                                        : ROLE_DEFAULT_RIGHTS[org] || []
                                     );
                                     setError(null);
                                     setSuccess(null);
@@ -722,14 +876,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
 
                       <div style={{ marginBottom: "16px" }}>
                         <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                          Role Assignment
+                          Organizational Role & Rights
                         </label>
                         <CustomSelect
                           value={addRole}
                           onChange={(val) => {
-                            const newRole = val as any;
+                            const newRole = val as string;
                             setAddRole(newRole);
-                            if (newRole === "admin") {
+                            if (newRole === "admin" || newRole === "super_admin") {
                               setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setAddPropertyIds(properties.map((p) => p.id));
                             } else {
@@ -739,16 +893,16 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               }
                             }
                           }}
-                          header="Select Role"
-                          options={[
-                            { value: "visitor", label: "Visitor", detail: "Standard User - View-only" },
-                            { value: "staff", label: "Staff", detail: "Operations Lead" },
-                            { value: "admin", label: "Admin", detail: "Workspace Admin" },
-                          ]}
+                          header="Select Organizational Role"
+                          options={ORGANIZATIONAL_ROLES.map((r) => ({
+                            value: r.id,
+                            label: r.name,
+                            detail: r.tagline,
+                          }))}
                         />
                       </div>
 
-                      {addRole !== "admin" && (
+                      {addRole !== "admin" && addRole !== "super_admin" && (
                         <div style={{ marginBottom: "18px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <label className="field-label" style={{ margin: 0 }}>
@@ -851,7 +1005,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </label>
 
-                      {addRole === "admin" ? (
+                      {addRole === "admin" || addRole === "super_admin" ? (
                         <div
                           style={{
                             padding: "14px 16px",
@@ -867,14 +1021,39 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
-                            <strong style={{ fontSize: "12px", color: "#254230" }}>Administrator Full Access</strong>
+                            <strong style={{ fontSize: "12px", color: "#254230" }}>
+                              {addRole === "super_admin" ? "Super Administrator Access" : "Administrator Full Access"}
+                            </strong>
                           </div>
                           <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
-                            Administrators hold all 7 operational permissions automatically across all properties. No manual selection required.
+                            Full operational capabilities and portfolio-wide authority automatically applied. No manual configuration required.
                           </p>
                         </div>
                       ) : (
                         <div style={{ marginTop: "10px", marginBottom: "20px" }}>
+                          {(addRole === "analyst" || addRole === "report") && (
+                            <div
+                              style={{
+                                padding: "10px 12px",
+                                background: "rgba(99, 102, 241, 0.08)",
+                                border: "1px solid rgba(99, 102, 241, 0.25)",
+                                borderRadius: "6px",
+                                marginBottom: "12px",
+                                fontSize: "11px",
+                                color: "var(--ink)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <Shield size={14} style={{ color: "#6366f1", flexShrink: 0 }} />
+                              <span>
+                                {addRole === "analyst"
+                                  ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
+                                  : "Report Specialist: Streamlined access to executive report generation, CSV audits, and guest scorecards."}
+                              </span>
+                            </div>
+                          )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <span className="field-label" style={{ margin: 0 }}>
                               Assigned Rights & Capabilities ({addRights.length} active)
@@ -1019,28 +1198,30 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
 
                       <div style={{ marginBottom: "20px" }}>
                         <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                          Assigned Role
+                          Organizational Role & Rights
                         </label>
                         <CustomSelect
                           value={editRole}
                           onChange={(val) => {
-                            const newRole = val as any;
+                            const newRole = val as string;
                             setEditRole(newRole);
-                            if (newRole === "admin") {
+                            if (newRole === "admin" || newRole === "super_admin") {
                               setEditRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setEditPropertyId("");
+                            } else {
+                              setEditRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
                             }
                           }}
                           header="Assign Role"
-                          options={[
-                            { value: "visitor", label: "Visitor", detail: "Standard guest access (View-only across records)" },
-                            { value: "staff", label: "Staff", detail: "Operations lead (Complaint recovery & compliance)" },
-                            { value: "admin", label: "Admin", detail: "Workspace administrator (Full configuration & rights)" },
-                          ]}
+                          options={ORGANIZATIONAL_ROLES.map((r) => ({
+                            value: r.id,
+                            label: r.name,
+                            detail: r.tagline,
+                          }))}
                         />
                       </div>
 
-                      {editRole !== "admin" && (
+                      {editRole !== "admin" && editRole !== "super_admin" && (
                         <div style={{ marginBottom: "20px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <label className="field-label" style={{ margin: 0 }}>
@@ -1130,7 +1311,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
-                      {editRole === "admin" ? (
+                      {editRole === "admin" || editRole === "super_admin" ? (
                         <div
                           style={{
                             padding: "14px 16px",
@@ -1146,14 +1327,39 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <Shield size={14} strokeWidth={2} style={{ color: "#254230" }} />
-                            <strong style={{ fontSize: "12px", color: "#254230" }}>Administrator Full Access</strong>
+                            <strong style={{ fontSize: "12px", color: "#254230" }}>
+                              {editRole === "super_admin" ? "Super Administrator Access" : "Administrator Full Access"}
+                            </strong>
                           </div>
                           <p style={{ margin: 0, fontSize: "11px", color: "#2d5237", lineHeight: "1.5" }}>
-                            Administrators hold all 7 operational permissions automatically across all properties. No manual selection required.
+                            Full operational capabilities and portfolio-wide authority automatically applied. No manual configuration required.
                           </p>
                         </div>
                       ) : (
                         <div style={{ marginBottom: "24px" }}>
+                          {(editRole === "analyst" || editRole === "report") && (
+                            <div
+                              style={{
+                                padding: "10px 12px",
+                                background: "rgba(99, 102, 241, 0.08)",
+                                border: "1px solid rgba(99, 102, 241, 0.25)",
+                                borderRadius: "6px",
+                                marginBottom: "12px",
+                                fontSize: "11px",
+                                color: "var(--ink)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <Shield size={14} style={{ color: "#6366f1", flexShrink: 0 }} />
+                              <span>
+                                {editRole === "analyst"
+                                  ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
+                                  : "Report Specialist: Streamlined access to executive report generation, CSV audits, and guest scorecards."}
+                              </span>
+                            </div>
+                          )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <span className="field-label" style={{ margin: 0 }}>
                               Assigned Rights & Capabilities ({editRights.length} active)

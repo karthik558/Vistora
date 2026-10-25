@@ -8,6 +8,8 @@ import {
 import { FeedbackStatus } from "../../../types/database";
 import { getAuthenticatedUser, requireAdmin } from "../../../lib/auth/serverAuth";
 import { sanitizeString, sanitizeEmail, isValidUuid } from "../../../lib/security/sanitize";
+import { markInvitationCompleted } from "../../../lib/services/invitationsService";
+import { logAuditEvent } from "../../../lib/services/auditLogService";
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,6 +84,27 @@ export async function POST(request: NextRequest) {
     };
 
     const created = await createFeedback(sanitizedPayload);
+
+    // If submitted via a tracked invitation token, mark invitation as completed
+    if (body.publicToken) {
+      try {
+        markInvitationCompleted(body.publicToken, created.rating, created.id);
+      } catch {}
+    }
+
+    // Log operational audit trail
+    try {
+      logAuditEvent({
+        actorName: created.name || "Guest",
+        actorEmail: created.guestEmail || "guest@vistora.app",
+        actorRole: "guest",
+        action: created.rating <= 2 ? "Urgent Complaint Logged" : "Guest Feedback Submitted",
+        resource: `${created.name} (${created.roomNumber}) · ${created.department}`,
+        details: `${created.rating}★ rating received. Status: ${created.statusLabel}.`,
+        status: created.rating <= 2 ? "alert" : "success",
+      });
+    } catch {}
+
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

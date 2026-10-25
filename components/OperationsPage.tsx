@@ -102,7 +102,7 @@ export default function OperationsPage({
 
   const title =
     section === "complaints"
-      ? "Complaints & service recovery"
+      ? "Complaints & SLA recovery"
       : section === "feedback"
       ? "All guest feedback"
       : section === "analytics"
@@ -118,7 +118,7 @@ export default function OperationsPage({
       : "Reports";
 
   const descriptions: Record<string, string> = {
-    complaints: "Prioritize low ratings, contact requests, and open recovery work.",
+    complaints: "SLA response tracking, emergency escalations, and hospitality guest service recovery.",
     feedback: "Review every guest submission captured across the workspace.",
     analytics: "Understand satisfaction and response patterns across properties.",
     directory: "A searchable guest view derived from recorded stays and feedback.",
@@ -130,7 +130,7 @@ export default function OperationsPage({
 
   const navLabel =
     section === "complaints"
-      ? "Complaints"
+      ? "Complaints & SLA"
       : section === "feedback"
       ? "All feedback"
       : section === "analytics"
@@ -219,6 +219,49 @@ export default function OperationsPage({
             <Reports data={data} selectedProperty={selectedProperty} dateFilter={dateFilter} />
           ) : (
             <>
+              {section === "complaints" && (
+                <div
+                  style={{
+                    padding: "16px 20px",
+                    background: "var(--red-soft)",
+                    border: "1px solid var(--red)",
+                    borderRadius: "8px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <AlertTriangle size={18} style={{ color: "var(--red)" }} />
+                    <div>
+                      <strong style={{ fontSize: "13px", color: "var(--red)" }}>
+                        Hospitality SLA Emergency Protocol Active · 15-Minute Response Target
+                      </strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--muted)" }}>
+                        Critical reviews (1★ &amp; 2★) are prioritized. Target resolution SLA: 120 minutes.
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "16px", fontSize: "11px", fontFamily: "var(--font-dm-mono)" }}>
+                    <div>
+                      <span style={{ color: "var(--muted)" }}>Target SLA: </span>
+                      <strong>15m</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)" }}>Compliance: </span>
+                      <strong style={{ color: "var(--sage-deep)" }}>94.6%</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--muted)" }}>Queue: </span>
+                      <strong style={{ color: "var(--red)" }}>{feedback.length} open</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="table-toolbar page-toolbar">
                 <input
                   className="auth-input"
@@ -519,30 +562,41 @@ function exportToExcelCsv(filename: string, headers: string[], rows: (string | n
 }
 
 function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
-  const [label, setLabel] = useState("Guest Room Key Card");
+  const [qrType, setQrType] = useState<"room" | "dining" | "spa" | "reception" | "general">("room");
+  const [identifier, setIdentifier] = useState("Room 302");
+  const [label, setLabel] = useState("In-Room Concierge Card");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>(properties[0]?.id || "");
   const [isDemoLink, setIsDemoLink] = useState(true);
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const selectedProp = properties.find((p) => p.id === selectedPropertyId);
 
+  // Construct URL with property and room parameters so when walked over, feedback form preselects them
   const url = useMemo(() => {
     const origin = typeof window === "undefined" ? "https://vistora.app" : window.location.origin;
     const params = new URLSearchParams();
     if (selectedPropertyId) {
-      params.set("property", selectedPropertyId);
+      const propParam = selectedProp?.code || selectedPropertyId;
+      params.set("property", propParam);
+    }
+    if (identifier.trim()) {
+      params.set("room", identifier.trim());
+    }
+    if (qrType) {
+      params.set("source", `qr_${qrType}`);
     }
     if (isDemoLink) {
       params.set("demo", "true");
     }
     const query = params.toString();
     return `${origin}/feedback${query ? `?${query}` : ""}`;
-  }, [selectedPropertyId, isDemoLink]);
+  }, [selectedPropertyId, selectedProp, identifier, qrType, isDemoLink]);
 
   useEffect(() => {
     QRCode.toDataURL(url, {
-      width: 320,
+      width: 400,
       margin: 2,
       color: {
         dark: "#0b100f",
@@ -553,131 +607,406 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
       .catch((err) => console.error("QR Code generation error:", err));
   }, [url]);
 
-  function downloadQr() {
+  function downloadPng() {
     if (!qrDataUrl) return;
     const link = document.createElement("a");
     link.href = qrDataUrl;
     const propCode = selectedProp?.code?.toLowerCase() || "vistora";
-    link.download = `vistora-qr-${propCode}-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`;
+    const cleanId = identifier.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    link.download = `vistora-qr-${propCode}-${qrType}-${cleanId}.png`;
     link.click();
   }
 
-  return (
-    <div className="qr-layout">
-      <div className="panel qr-card">
-        <p className="eyebrow">Direct guest touchpoint & demo links</p>
-        <h2>Guest feedback & demo link generator</h2>
-        <p>
-          Send an instant link or place a QR code. When sending a link from your side, the selected property will be automatically pre-selected for the guest.
-        </p>
+  async function downloadSvg() {
+    try {
+      const svgString = await QRCode.toString(url, { type: "svg", margin: 2 });
+      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const link = document.createElement("a");
+      link.href = svgUrl;
+      const propCode = selectedProp?.code?.toLowerCase() || "vistora";
+      const cleanId = identifier.toLowerCase().replace(/[^a-z0-9]/g, "-");
+      link.download = `vistora-qr-${propCode}-${qrType}-${cleanId}.svg`;
+      link.click();
+      URL.revokeObjectURL(svgUrl);
+    } catch (err) {
+      console.error("SVG generation error:", err);
+    }
+  }
 
-        <div style={{ marginTop: "20px", marginBottom: "22px" }}>
-          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
-            Target Property (Pre-selects for Guest)
-          </label>
-          <CustomSelect
-            value={selectedPropertyId}
-            onChange={(val) => setSelectedPropertyId(val)}
-            placeholder="-- No pre-selection (guest chooses) --"
-            header="Target Property Selection"
-            options={[
-              { value: "", label: "No pre-selection (guest chooses location)", detail: "Guest selects property upon opening form" },
-              ...properties.map((p) => ({
+  return (
+    <>
+      {/* Form Builder Integration Banner */}
+      <div
+        style={{
+          padding: "14px 20px",
+          background: "var(--canvas-alt)",
+          border: "1px solid var(--line)",
+          borderRadius: "8px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "10px",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <FileText size={16} style={{ color: "var(--sage)" }} />
+          <span style={{ fontSize: "12px", color: "var(--ink)" }}>
+            Looking to configure custom questions, translations, or design styles for your QR touchpoints?
+          </span>
+        </div>
+        <Link
+          href="/dashboard/forms"
+          className="button button-outline"
+          style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <span>Open Form Builder</span>
+          <ExternalLink size={12} />
+        </Link>
+      </div>
+
+      <div className="qr-layout">
+        <div className="panel qr-card">
+          <p className="eyebrow">Enterprise Touchpoint &amp; QR Studio</p>
+          <h2>Physical QR &amp; guest touchpoint studio</h2>
+          <p>
+            Generate high-resolution QR codes mapped to specific rooms, dining tables, and hotel facilities. When the guest scans or opens the link, the property and touchpoint are pre-selected by default.
+          </p>
+
+          {/* QR Touchpoint / Context Selector */}
+          <div style={{ marginTop: "20px", marginBottom: "18px" }}>
+            <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
+              Touchpoint Type / Context
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+              {[
+                { id: "room", label: "In-Room Keycard", defaultId: "Room 302", defaultLabel: "Guest Room Nightstand" },
+                { id: "dining", label: "Dining Table", defaultId: "Table 14", defaultLabel: "Restaurant Acrylic Stand" },
+                { id: "spa", label: "Spa & Wellness", defaultId: "Lotus Suite", defaultLabel: "Spa Treatment Stand" },
+                { id: "reception", label: "Front Desk Kiosk", defaultId: "Check-in Tablet", defaultLabel: "Reception Display" },
+                { id: "general", label: "General Property", defaultId: "Main Lobby", defaultLabel: "Keycard Sleeve" },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setQrType(item.id as any);
+                    setIdentifier(item.defaultId);
+                    setLabel(item.defaultLabel);
+                  }}
+                  style={{
+                    padding: "10px 8px",
+                    borderRadius: "6px",
+                    border: qrType === item.id ? "2px solid var(--ink)" : "1px solid var(--line)",
+                    background: qrType === item.id ? "var(--canvas-alt)" : "var(--panel)",
+                    color: "var(--ink)",
+                    fontSize: "11px",
+                    fontWeight: qrType === item.id ? 700 : 500,
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Room / Table Identifier Input */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "18px" }}>
+            <div>
+              <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                {qrType === "room"
+                  ? "Room / Suite Number *"
+                  : qrType === "dining"
+                  ? "Table Number / Outlet *"
+                  : qrType === "spa"
+                  ? "Treatment Suite *"
+                  : "Location Identifier *"}
+              </label>
+              <input
+                className="auth-input"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="e.g. Room 402 or Table 12"
+              />
+            </div>
+            <div>
+              <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                Placement Campaign Label
+              </label>
+              <input className="auth-input" value={label} onChange={(e) => setLabel(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Target Property */}
+          <div style={{ marginBottom: "20px" }}>
+            <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+              Target Hotel Property (Pre-fills in Guest Form)
+            </label>
+            <CustomSelect
+              value={selectedPropertyId}
+              onChange={(val) => setSelectedPropertyId(val)}
+              placeholder="Select property"
+              options={properties.map((p) => ({
                 value: p.id,
                 label: `${p.name} (${p.code})`,
                 detail: `${p.location} · ${p.total_rooms || 0} rooms`,
-              })),
-            ]}
-          />
-        </div>
-
-        <div style={{ marginBottom: "22px" }}>
-          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
-            Placement / Campaign Label
-          </label>
-          <input className="auth-input" value={label} onChange={(event) => setLabel(event.target.value)} />
-        </div>
-
-        <div style={{ marginBottom: "22px", padding: "14px 16px", background: "#f8faf8", border: "1px solid var(--line)", borderRadius: "6px" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", cursor: "pointer", fontWeight: 500 }}>
-            <input
-              type="checkbox"
-              checked={isDemoLink}
-              onChange={(e) => setIsDemoLink(e.target.checked)}
-              style={{ accentColor: "#0b100f" }}
+              }))}
             />
-            <span>Send as demo link (pre-loads verified hotel stay)</span>
-          </label>
-          <p style={{ margin: "6px 0 0 24px", color: "var(--muted)", fontSize: "11px", lineHeight: "1.5" }}>
-            The guest opens the link with {selectedProp ? selectedProp.name : "the selected property"} automatically locked in.
+          </div>
+
+          {/* Generated URL Box */}
+          <div style={{ marginBottom: "20px" }}>
+            <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+              Generated QR Destination Link (With Pre-Selected Room &amp; Hotel)
+            </label>
+            <input className="auth-input" value={url} readOnly />
+          </div>
+
+          {/* Action Buttons: Copy, Walk over to form, Export PNG, Export SVG, Print Voucher PDF */}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="button button-dark"
+              onClick={async () => {
+                await navigator.clipboard?.writeText(url);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              <span>{copied ? "Link Copied!" : "Copy URL"}</span>
+            </button>
+
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button-outline"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <ExternalLink size={14} />
+              <span>Walk Over to Form ↗</span>
+            </a>
+
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={downloadPng}
+              disabled={!qrDataUrl}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Download size={14} />
+              <span>Export PNG</span>
+            </button>
+
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={downloadSvg}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Download size={14} />
+              <span>Export SVG</span>
+            </button>
+
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={() => setShowPrintModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Printer size={14} />
+              <span>Print Display Card (PDF)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Live QR Preview Panel */}
+        <div
+          className="panel qr-preview"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "36px 24px",
+            textAlign: "center",
+          }}
+        >
+          {qrDataUrl ? (
+            <div
+              style={{
+                background: "#ffffff",
+                padding: "16px",
+                borderRadius: "12px",
+                border: "1px solid var(--line)",
+                boxShadow: "var(--shadow-md)",
+              }}
+            >
+              <img
+                src={qrDataUrl}
+                alt={`QR Code for ${label}`}
+                style={{ width: "200px", height: "200px", display: "block" }}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                width: "200px",
+                height: "200px",
+                display: "grid",
+                placeItems: "center",
+                border: "1px solid var(--line)",
+                borderRadius: "8px",
+              }}
+            >
+              Generating QR…
+            </div>
+          )}
+
+          <div style={{ marginTop: "18px" }}>
+            <strong style={{ fontSize: "15px", display: "block" }}>{identifier || label}</strong>
+            <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
+              {label}
+            </span>
+            {selectedProp && (
+              <span
+                style={{
+                  display: "inline-block",
+                  fontSize: "11px",
+                  color: "var(--sage-deep)",
+                  background: "var(--sage-soft)",
+                  padding: "3px 10px",
+                  borderRadius: "4px",
+                  marginTop: "8px",
+                  fontWeight: 600,
+                }}
+              >
+                {selectedProp.name} ({selectedProp.code})
+              </span>
+            )}
+          </div>
+          <p style={{ margin: "10px 0 0", color: "var(--muted)", fontSize: "11px" }}>
+            Pre-fills hotel location and touchpoint into the guest feedback form.
           </p>
         </div>
+      </div>
 
-        <div style={{ marginBottom: "22px" }}>
-          <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
-            Generated Link (Share with Guest or Prospect)
-          </label>
-          <input className="auth-input" value={url} readOnly />
-        </div>
-
-        <div style={{ display: "flex", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="button button-dark"
-            onClick={async () => {
-              await navigator.clipboard?.writeText(url);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
+      {/* Printable Display Voucher / PDF Card Modal */}
+      {showPrintModal && (
+        <div
+          className="drawer-backdrop"
+          style={{ display: "grid", placeItems: "center" }}
+          onClick={() => setShowPrintModal(false)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              color: "#0b100f",
+              borderRadius: "12px",
+              padding: "36px",
+              maxWidth: "460px",
+              width: "90%",
+              boxShadow: "var(--shadow-lg)",
+              border: "1px solid var(--line)",
+              textAlign: "center",
             }}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            <span>{copied ? "Link copied!" : "Copy link"}</span>
-          </button>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="button button-outline"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <ExternalLink size={14} />
-            <span>Open preview ↗</span>
-          </a>
-          <button
-            type="button"
-            className="button button-outline"
-            onClick={downloadQr}
-            disabled={!qrDataUrl}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <Download size={14} />
-            <span>Download QR PNG</span>
-          </button>
-        </div>
-      </div>
+            {/* Printable Display Voucher Presentation */}
+            <div
+              id="printable-hotel-card"
+              style={{
+                border: "2px solid #254230",
+                padding: "24px 20px",
+                borderRadius: "8px",
+                background: "#fafcfa",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-dm-mono)",
+                  fontSize: "10px",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#4e6f5b",
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                VISTORA LUXURY HOSPITALITY
+              </span>
+              <h3 style={{ margin: "0 0 4px", fontSize: "18px", color: "#0b100f" }}>
+                {selectedProp?.name || "Vistora Hotels & Resorts"}
+              </h3>
+              <p style={{ margin: "0 0 16px", fontSize: "11px", color: "#6f7c75" }}>
+                Guest Experience &amp; In-Stay Concierge
+              </p>
 
-      <div className="panel qr-preview" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px", textAlign: "center" }}>
-        {qrDataUrl ? (
-          <img
-            src={qrDataUrl}
-            alt={`QR Code for ${label}`}
-            style={{ width: "200px", height: "200px", borderRadius: "8px", border: "1px solid var(--line)", background: "#fff", padding: "8px", boxShadow: "var(--shadow-xs)" }}
-          />
-        ) : (
-          <div style={{ width: "200px", height: "200px", display: "grid", placeItems: "center", border: "1px solid var(--line)", borderRadius: "8px" }}>
-            Generating QR…
+              {qrDataUrl && (
+                <img
+                  src={qrDataUrl}
+                  alt="QR Code"
+                  style={{
+                    width: "180px",
+                    height: "180px",
+                    margin: "0 auto 14px",
+                    display: "block",
+                    padding: "8px",
+                    background: "#fff",
+                    border: "1px solid #e2e8e2",
+                    borderRadius: "6px",
+                  }}
+                />
+              )}
+
+              <div
+                style={{
+                  display: "inline-block",
+                  padding: "4px 14px",
+                  borderRadius: "20px",
+                  background: "#254230",
+                  color: "#ffffff",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  marginBottom: "8px",
+                }}
+              >
+                {identifier || "Guest Suite"}
+              </div>
+
+              <p style={{ margin: "6px 0 0", fontSize: "11px", color: "#4e6f5b", fontWeight: 500 }}>
+                Scan with your phone camera to share feedback or request concierge assistance.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "center" }}>
+              <button
+                type="button"
+                className="button button-dark"
+                onClick={() => window.print()}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <Printer size={14} />
+                <span>Print Card / Save as PDF</span>
+              </button>
+              <button
+                type="button"
+                className="button button-outline"
+                onClick={() => setShowPrintModal(false)}
+              >
+                Close
+              </button>
+            </div>
           </div>
-        )}
-        <strong style={{ marginTop: "16px", fontSize: "14px" }}>{label}</strong>
-        {selectedProp && (
-          <span style={{ fontSize: "11px", color: "var(--sage-deep)", background: "#edf4ed", padding: "2px 8px", borderRadius: "4px", marginTop: "4px" }}>
-            {selectedProp.name} ({selectedProp.code})
-          </span>
-        )}
-        <p style={{ margin: "6px 0 0", color: "var(--muted)", fontSize: "11px" }}>Scan with camera or mobile device to open feedback</p>
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
 

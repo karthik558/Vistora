@@ -113,22 +113,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!["admin", "staff", "visitor"].includes(role)) {
+    const VALID_ORG_ROLES = [
+      "super_admin",
+      "admin",
+      "general_manager",
+      "department_head",
+      "executive",
+      "front_office_staff",
+      "feedback",
+      "analyst",
+      "report",
+      "staff",
+      "visitor",
+    ];
+
+    if (!VALID_ORG_ROLES.includes(role)) {
       return NextResponse.json(
-        { success: false, error: "Role must be 'admin', 'staff', or 'visitor'." },
+        { success: false, error: "Please select a valid organizational role." },
         { status: 400 }
       );
     }
 
-    const assignedRights = role === "admin"
-      ? DEFAULT_RIGHTS.admin
-      : Array.isArray(rights)
-      ? rights
-      : DEFAULT_RIGHTS[role as keyof typeof DEFAULT_RIGHTS] || [];
+    const dbRole: "admin" | "staff" | "visitor" =
+      role === "super_admin" || role === "admin" ? "admin" : "staff";
+
+    const baseRights = Array.isArray(rights) ? rights : [];
+    const assignedRights = [
+      ...baseRights.filter((r: string) => !r.startsWith("org_role:")),
+      `org_role:${role}`,
+    ];
 
     // Parse multi-property access
     let resolvedPropertyIds: string[] = [];
-    if (role === "admin") {
+    if (dbRole === "admin") {
       resolvedPropertyIds = [];
     } else if (Array.isArray(propertyIds)) {
       resolvedPropertyIds = propertyIds.filter((id) => typeof id === "string" && id.trim().length > 0);
@@ -252,16 +269,39 @@ export async function PATCH(request: NextRequest) {
       updatePayload.full_name = sanitizeString(fullName, 100);
     }
 
-    const effectiveRole = role && ["admin", "staff", "visitor"].includes(role) ? role : currentProfile?.role;
-    if (role && ["admin", "staff", "visitor"].includes(role)) {
-      updatePayload.role = role;
+    const VALID_ORG_ROLES = [
+      "super_admin",
+      "admin",
+      "general_manager",
+      "department_head",
+      "executive",
+      "front_office_staff",
+      "feedback",
+      "analyst",
+      "report",
+      "staff",
+      "visitor",
+    ];
+
+    const chosenRole = role && VALID_ORG_ROLES.includes(role) ? role : undefined;
+    const dbRole: "admin" | "staff" | "visitor" | undefined = chosenRole
+      ? (chosenRole === "super_admin" || chosenRole === "admin" ? "admin" : "staff")
+      : undefined;
+
+    if (dbRole) {
+      updatePayload.role = dbRole;
     }
 
+    const effectiveRole = chosenRole || currentProfile?.role;
+
     // Resolve property access
-    if (effectiveRole === "admin") {
+    if (effectiveRole === "admin" || effectiveRole === "super_admin") {
       updatePayload.property_id = null;
       updatePayload.property_ids = [];
-      updatePayload.rights = DEFAULT_RIGHTS.admin;
+      updatePayload.rights = [
+        ...DEFAULT_RIGHTS.admin,
+        `org_role:${effectiveRole}`,
+      ];
     } else {
       let resolvedPropertyIds: string[] | undefined = undefined;
       if (Array.isArray(propertyIds)) {
@@ -276,7 +316,10 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (Array.isArray(rights)) {
-        updatePayload.rights = rights;
+        const rightsWithoutOrg = rights.filter((r) => !r.startsWith("org_role:"));
+        updatePayload.rights = chosenRole
+          ? [...rightsWithoutOrg, `org_role:${chosenRole}`]
+          : rights;
       }
     }
 

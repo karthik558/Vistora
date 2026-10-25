@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
-import { Building2, Plus, Trash2, X, Check, Users } from "lucide-react";
+import { Building2, Plus, Trash2, X, Check, Users, Settings, Power } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export interface PropertyItem {
@@ -15,6 +15,7 @@ export interface PropertyItem {
   country: string;
   timezone: string;
   total_rooms: number;
+  is_active?: boolean;
   created_at?: string;
   profiles?: Array<{
     id: string;
@@ -172,6 +173,29 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
     }
   }
 
+  async function handleToggleActive(propertyId: string, currentActive: boolean) {
+    try {
+      const res = await fetch("/api/properties", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId,
+          isActive: !currentActive,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to toggle status");
+      }
+      setProperties((prev) =>
+        prev.map((p) => (p.id === propertyId ? { ...p, is_active: !currentActive } : p))
+      );
+      setSuccess(`Property status set to ${!currentActive ? "Active" : "Disabled (Hidden from public forms)"}.`);
+    } catch (err: any) {
+      setError(err.message || "Failed to update property status.");
+    }
+  }
+
   function toggleUserSelection(userId: string) {
     setSelectedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
@@ -245,8 +269,21 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
               ) : (
                 properties.map((prop) => {
                   const assignedCount = prop.profiles?.length || 0;
+                  const isActive = prop.is_active !== false;
                   return (
-                    <div key={prop.id} className="panel" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "16px" }}>
+                    <div
+                      key={prop.id}
+                      className="panel"
+                      style={{
+                        padding: "20px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        opacity: isActive ? 1 : 0.82,
+                        border: isActive ? undefined : "1px dashed rgba(185, 28, 28, 0.35)",
+                      }}
+                    >
                       <div>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                           <span
@@ -254,7 +291,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                               fontFamily: "var(--font-dm-mono)",
                               fontSize: "11px",
                               letterSpacing: "0.08em",
-                              background: "#0b100f",
+                              background: isActive ? "#0b100f" : "#475569",
                               color: "#fff",
                               padding: "2px 8px",
                               borderRadius: "3px",
@@ -263,16 +300,71 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                           >
                             {prop.code}
                           </span>
-                          <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                            {prop.total_rooms} keys
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActive(prop.id, isActive)}
+                              style={{
+                                border: "1px solid",
+                                borderColor: isActive ? "#bbf7d0" : "#fecaca",
+                                cursor: "pointer",
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                                fontSize: "10px",
+                                fontFamily: "var(--font-dm-mono)",
+                                letterSpacing: "0.04em",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                background: isActive ? "#f0fdf4" : "#fef2f2",
+                                color: isActive ? "#15803d" : "#b91c1c",
+                                fontWeight: 600,
+                                transition: "all 0.15s ease",
+                              }}
+                              title={
+                                isActive
+                                  ? "Property is active. Click to disable (hides from public feedback forms)."
+                                  : "Property is disabled. Click to activate."
+                              }
+                            >
+                              <span
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: isActive ? "#22c55e" : "#ef4444",
+                                }}
+                              />
+                              {isActive ? "ACTIVE" : "DISABLED"}
+                            </button>
+                            <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                              {prop.total_rooms} keys
+                            </span>
+                          </div>
                         </div>
+
                         <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)", margin: "0 0 4px 0" }}>
                           {prop.name}
                         </h2>
                         <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 12px 0" }}>
                           {prop.location}, {prop.country} · {prop.brand}
                         </p>
+
+                        {!isActive && (
+                          <div
+                            style={{
+                              padding: "6px 10px",
+                              background: "rgba(185, 28, 28, 0.08)",
+                              border: "1px solid rgba(185, 28, 28, 0.2)",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              color: "#b91c1c",
+                              marginBottom: "10px",
+                            }}
+                          >
+                            Offline / Disabled: Hidden from guest feedback selection
+                          </div>
+                        )}
 
                         <div style={{ borderTop: "1px solid #edf1ed", paddingTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
                           <Users size={13} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
@@ -286,14 +378,25 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #edf1ed", paddingTop: "12px" }}>
-                        <a
-                          href={`/dashboard?property=${prop.id}`}
-                          className="button button-outline compact"
-                          style={{ fontSize: "11px", padding: "4px 10px" }}
-                        >
-                          View Operations ↗
-                        </a>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #edf1ed", paddingTop: "12px", gap: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <a
+                            href={`/dashboard/settings?tab=property&property=${prop.id}`}
+                            className="button button-outline compact"
+                            style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            title="Configure property-specific settings"
+                          >
+                            <Settings size={11} strokeWidth={1.75} />
+                            Settings
+                          </a>
+                          <a
+                            href={`/dashboard?property=${prop.id}`}
+                            className="button button-outline compact"
+                            style={{ fontSize: "11px", padding: "4px 10px" }}
+                          >
+                            View Ops ↗
+                          </a>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteProperty(prop.id, prop.name)}

@@ -77,8 +77,11 @@ export interface UserProfile {
   id: string;
   email: string;
   fullName: string;
-  role: "admin" | "staff" | "visitor";
+  role: string;
+  orgRole?: string;
   propertyId?: string | null;
+  propertyIds?: string[];
+  rights?: string[];
 }
 
 export interface SubmitFeedbackPayload {

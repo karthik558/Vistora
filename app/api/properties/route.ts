@@ -112,6 +112,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  try {
+    const authCheck = await requireAdminOrRight(request, "manage_properties");
+    if (authCheck.errorResponse) return authCheck.errorResponse;
+
+    const body = await request.json();
+    const { propertyId, id, name, code, location, country, brand, totalRooms, isActive, is_active } = body;
+
+    const targetId = propertyId || id;
+    if (!targetId) {
+      return NextResponse.json({ success: false, error: "Property ID is required." }, { status: 400 });
+    }
+
+    const updatePayload: Record<string, any> = {};
+    if (name !== undefined) updatePayload.name = sanitizeString(name, 100);
+    if (code !== undefined) updatePayload.code = sanitizeString(code, 10).toUpperCase();
+    if (location !== undefined) updatePayload.location = sanitizeString(location, 100);
+    if (country !== undefined) updatePayload.country = sanitizeString(country, 100);
+    if (brand !== undefined) updatePayload.brand = sanitizeString(brand, 100);
+    if (totalRooms !== undefined) updatePayload.total_rooms = Number(totalRooms);
+    if (isActive !== undefined || is_active !== undefined) {
+      updatePayload.is_active = isActive !== undefined ? Boolean(isActive) : Boolean(is_active);
+    }
+
+    const supabase = getAdminClient();
+    const { data: updated, error } = await supabase
+      .from("properties")
+      .update(updatePayload)
+      .eq("id", targetId)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    invalidateDashboardCache();
+    return NextResponse.json({ success: true, property: updated });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || "Failed to update property" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     // Strictly require administrator or manage_properties privileges

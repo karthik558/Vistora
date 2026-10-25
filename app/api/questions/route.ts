@@ -17,9 +17,10 @@ export interface FeedbackQuestion {
   id: string;
   property_id?: string | null;
   question_text: string;
-  question_type: "choice" | "rating" | "yes_no" | "text";
+  question_type: "choice" | "rating" | "yes_no" | "text" | "nps" | "csat" | "long_text" | string;
   options?: string[];
   department?: string | null;
+  translations?: Record<string, { questionText?: string; options?: string[] }>;
   is_required: boolean;
   display_order: number;
   is_active: boolean;
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { questionText, questionType = "choice", options = [], propertyId, isRequired = false, department } = body;
+    const { questionText, questionType = "choice", options = [], propertyId, isRequired = false, department, translations } = body;
 
     if (!questionText || !questionText.trim()) {
       return NextResponse.json({ success: false, error: "Question text is required." }, { status: 400 });
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
       question_type: questionType,
       options: cleanOptions,
       department: department || null,
+      translations: translations || {},
       is_required: Boolean(isRequired),
       display_order: fallbackQuestionsStore.length + 1,
       is_active: true,

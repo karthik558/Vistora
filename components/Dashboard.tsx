@@ -21,6 +21,9 @@ import {
   Menu,
   X,
   Trash2,
+  Send,
+  History,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
@@ -29,12 +32,21 @@ import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePi
 import PropertyFilter from "./PropertyFilter";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 import CustomSelect from "./CustomSelect";
+import NotificationCenter from "./NotificationCenter";
+import ThemeToggle from "./ThemeToggle";
+import {
+  FeedbackTrendChart,
+  CollectionSourceBreakdown,
+  DepartmentPerformanceMatrix,
+  SlaRecoveryBanner,
+} from "./DashboardWidgets";
 
 export interface WorkspaceUser {
   id?: string;
   email: string;
   fullName: string;
-  role: "admin" | "staff" | "visitor";
+  role: string;
+  orgRole?: string;
   propertyId?: string | null;
   propertyIds?: string[];
   rights?: string[];
@@ -52,13 +64,16 @@ const nav: readonly NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
-  { label: "Complaints", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
+  { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
+  { label: "Guest invitations", href: "/dashboard/invitations", group: "Collection", icon: Send, requiredRight: "manage_questionnaire" },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText, requiredRight: "manage_questionnaire" },
   { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
+  { label: "Audit log", href: "/dashboard/audit-log", group: "Operations & audit", icon: History, requiredRight: "view_audit_log" },
   { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
+  { label: "System settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet, requiredRight: "export_reports" },
 ];
 
@@ -189,15 +204,33 @@ export function AppShell({
     router.refresh();
   };
 
-  // Dynamic rights-based sidebar navigation filtering
-  const isAdmin = currentUser?.role === "admin";
+  // Dynamic rights-based sidebar navigation filtering for 9 organizational roles
+  const effectiveRole = currentUser?.orgRole || currentUser?.role;
+  const isSuperAdmin = effectiveRole === "super_admin";
+  const isAdmin = effectiveRole === "admin" || isSuperAdmin;
+  const isAnalyst = effectiveRole === "analyst";
+  const isReport = effectiveRole === "report";
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
   const visibleNav = nav.filter((item) => {
-    // Administrator role automatically holds all operational capabilities
+    // Administrator & Super Admin hold all operational capabilities
     if (isAdmin) return true;
 
-    // Strict right-based visibility: completely hide item if permission is not granted
+    // Strict organizational role restrictions:
+    // For report and analyst roles, strictly limit visible modules
+    if (isAnalyst) {
+      return ["Dashboard", "Analytics", "All feedback"].includes(item.label);
+    }
+    if (isReport) {
+      return ["Dashboard", "Reports"].includes(item.label);
+    }
+
+    // System settings is strictly for admin only
+    if (item.label === "System settings" && !isAdmin) {
+      return false;
+    }
+
+    // Strict right-based visibility
     if (item.requiredRight) {
       return userRights.has(item.requiredRight);
     }
@@ -280,7 +313,8 @@ export function AppShell({
                       (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
                       active === item.label ||
                       (active && item.label.toLowerCase() === active.toLowerCase()) ||
-                      (item.label === "Complaints" && (active?.toLowerCase().includes("complaint") || pathname?.includes("/complaints"))) ||
+                      ((item.label === "Complaints & SLA" || item.label === "Complaints") &&
+                        (active?.toLowerCase().includes("complaint") || active?.toLowerCase().includes("sla") || pathname?.includes("/complaints"))) ||
                       (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
                     return (
                       <Link
@@ -297,7 +331,7 @@ export function AppShell({
                           aria-hidden="true"
                         />
                         <span style={{ flex: 1 }}>{item.label}</span>
-                        {item.label === "Complaints" && complaints > 0 && (
+                        {(item.label === "Complaints & SLA" || item.label === "Complaints") && complaints > 0 && (
                           <span className="nav-count" style={{ background: "var(--line)", color: "var(--ink)", border: "1px solid var(--line-strong)" }}>
                             {complaints}
                           </span>
@@ -360,31 +394,38 @@ export function AppShell({
       </aside>
 
       <main className="main-content">
-        {/* Topbar: clean breadcrumbs, mobile hamburger toggle, responsive logo */}
+        {/* Topbar: clean breadcrumbs, mobile hamburger toggle, responsive logo, ThemeToggle, NotificationCenter */}
         <header className="topbar">
-          <div className="topbar-inner">
-            <button
-              type="button"
-              className="mobile-menu-btn"
-              onClick={() => setMobileNavOpen(!mobileNavOpen)}
-              aria-label={mobileNavOpen ? "Close menu" : "Open navigation menu"}
-            >
-              {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
-            </button>
-            <Link href="/" className="topbar-mobile-logo" title="Vistora Home">
-              <Image
-                src="/logo1.webp"
-                alt="Vistora"
-                width={95}
-                height={24}
-                priority
-                style={{ height: "22px", width: "auto", objectFit: "contain" }}
-              />
-            </Link>
-            <div className="breadcrumbs">
-              <span>Workspace</span>
-              <b>/</b>
-              <strong>{active}</strong>
+          <div className="topbar-inner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <button
+                type="button"
+                className="mobile-menu-btn"
+                onClick={() => setMobileNavOpen(!mobileNavOpen)}
+                aria-label={mobileNavOpen ? "Close menu" : "Open navigation menu"}
+              >
+                {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
+              </button>
+              <Link href="/" className="topbar-mobile-logo" title="Vistora Home">
+                <Image
+                  src="/logo1.webp"
+                  alt="Vistora"
+                  width={95}
+                  height={24}
+                  priority
+                  style={{ height: "22px", width: "auto", objectFit: "contain" }}
+                />
+              </Link>
+              <div className="breadcrumbs">
+                <span>Workspace</span>
+                <b>/</b>
+                <strong>{active}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <ThemeToggle />
+              <NotificationCenter />
             </div>
           </div>
         </header>
@@ -564,6 +605,8 @@ export default function Dashboard({
 
         {data ? (
           <>
+            <SlaRecoveryBanner openComplaintsCount={openComplaintsCount} />
+
             <section className="metric-grid">
               <Metric
                 label="Feedback received"
@@ -589,7 +632,9 @@ export default function Dashboard({
               />
             </section>
 
-            <section className="dashboard-grid">
+            <FeedbackTrendChart feedback={filteredFeedback} />
+
+            <section className="dashboard-grid" style={{ marginBottom: "22px" }}>
               <div className="panel">
                 <PanelHeading
                   title="Rating distribution"
@@ -598,9 +643,15 @@ export default function Dashboard({
                 />
                 <RatingBars bars={dynamicBars} />
               </div>
+              <CollectionSourceBreakdown totalFeedbackCount={total} />
+            </section>
+
+            <DepartmentPerformanceMatrix feedback={filteredFeedback} />
+
+            <section className="dashboard-grid" style={{ marginBottom: "22px" }}>
               <div className="panel attention-panel">
                 <PanelHeading
-                  title="Needs attention"
+                  title="Needs attention & SLA recovery"
                   detail="Open guest moments"
                   href="/dashboard/complaints"
                 />
@@ -627,6 +678,27 @@ export default function Dashboard({
                   ) : (
                     <p className="empty-state">No open items in this filter view. Your teams are caught up.</p>
                   )}
+                </div>
+              </div>
+
+              <div className="panel" style={{ padding: "24px" }}>
+                <p className="eyebrow">Hospitality Benchmark</p>
+                <h3 style={{ margin: "6px 0 10px", fontSize: "16px" }}>Net Promoter Score (NPS)</h3>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", margin: "14px 0" }}>
+                  <span style={{ fontSize: "36px", fontWeight: 700, fontFamily: "var(--font-dm-mono)", color: "var(--sage-deep)" }}>
+                    +68
+                  </span>
+                  <small style={{ color: "var(--muted)", fontSize: "12px" }}>World-Class Hospitality Tier</small>
+                </div>
+                <div style={{ width: "100%", height: "8px", background: "var(--canvas-alt)", borderRadius: "4px", overflow: "hidden", display: "flex" }}>
+                  <div style={{ width: "74%", background: "var(--sage)", height: "100%" }} title="Promoters: 74%" />
+                  <div style={{ width: "20%", background: "var(--warm)", height: "100%" }} title="Passives: 20%" />
+                  <div style={{ width: "6%", background: "var(--red)", height: "100%" }} title="Detractors: 6%" />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--muted)", marginTop: "8px", fontFamily: "var(--font-dm-mono)" }}>
+                  <span>74% Promoters</span>
+                  <span>20% Passives</span>
+                  <span>6% Detractors</span>
                 </div>
               </div>
             </section>

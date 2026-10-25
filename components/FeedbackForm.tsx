@@ -34,11 +34,12 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [roomNumber, setRoomNumber] = useState("");
 
   // Mandatory Property Selection
-  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string }>>([]);
+  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string; is_active?: boolean }>>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [propertyError, setPropertyError] = useState<string | null>(null);
   const [isUrlPreselected, setIsUrlPreselected] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [trackedToken, setTrackedToken] = useState<string>(publicToken || "verified");
 
   // Dynamic Questionnaire
   const [questions, setQuestions] = useState<Array<{
@@ -58,12 +59,25 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       .then((res) => res.json())
       .then((json) => {
         if (mounted && json.success && json.properties) {
-          setProperties(json.properties);
+          // Exclude disabled properties from guest-facing selection
+          const activeProperties = json.properties.filter((p: any) => p.is_active !== false);
+          setProperties(activeProperties);
 
           if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
             const propParam = params.get("property") || params.get("propertyId") || params.get("p");
             const demoParam = params.get("demo") === "true" || params.get("demo") === "1" || params.has("demo");
+            const tokenParam = params.get("token") || params.get("t");
+            const roomParam = params.get("room") || params.get("roomNumber") || params.get("r");
+            const guestParam = params.get("guest") || params.get("guestName") || params.get("name");
+            const deptParam = params.get("dept") || params.get("department");
+
+            if (tokenParam) setTrackedToken(tokenParam);
+            if (roomParam) setRoomNumber(roomParam);
+            if (guestParam) setGuestName(guestParam);
+            if (deptParam && departments.includes(deptParam as DepartmentType)) {
+              setDepartment(deptParam as DepartmentType);
+            }
             if (demoParam) setIsDemoMode(true);
 
             if (propParam) {
@@ -78,9 +92,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                 setSelectedPropertyId(match.id);
                 setIsUrlPreselected(true);
               }
-            } else if (demoParam && json.properties.length > 0) {
+            } else if (demoParam && activeProperties.length > 0) {
               // Demo link automatically selects property
-              setSelectedPropertyId(json.properties[0].id);
+              setSelectedPropertyId(activeProperties[0].id);
               setIsUrlPreselected(true);
             }
           }
@@ -149,7 +163,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          publicToken,
+          publicToken: trackedToken || publicToken,
           propertyId: selectedPropertyId,
           guestName: guestName.trim() || undefined,
           roomNumber: roomNumber.trim() || undefined,
