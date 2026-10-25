@@ -17,6 +17,7 @@ import {
   Building2,
   FileText,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { AppShell, FeedbackTable, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { DashboardData, PropertyRow } from "../types/experience";
@@ -82,6 +83,19 @@ export default function OperationsPage({
     ? [user.propertyId]
     : [];
 
+  // Extract user's department scope (RBAC Granular Boundary)
+  const userDeptScope = useMemo(() => {
+    if (!user || user.role === "admin") return null;
+    const org = (user as any).orgRole || (user.rights || []).find((r: string) => r.startsWith("org_role:"))?.replace("org_role:", "");
+    if (org === "super_admin" || org === "general_manager") return null;
+    const match = (user.rights || []).find((r: string) => r.startsWith("dept_scope:"));
+    if (match) {
+      const scope = match.replace("dept_scope:", "").trim();
+      return scope === "All Departments" || scope === "*" ? null : scope;
+    }
+    return (user as any).department || null;
+  }, [user]);
+
   const feedback = useMemo(
     () =>
       data.recentFeedback
@@ -96,8 +110,9 @@ export default function OperationsPage({
         .filter((item) => section !== "complaints" || item.rating <= 2 || item.status === "needs_attention")
         .filter((item) => selectedProperty === "all" || (item.propertyId && item.propertyId === selectedProperty))
         .filter((item) => isDateInRange(item.createdAt, dateFilter))
+        .filter((item) => !userDeptScope || item.department === userDeptScope)
         .filter((item) => !query || `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [data.recentFeedback, query, section, selectedProperty, dateFilter, userAllowedPropIds]
+    [data.recentFeedback, query, section, selectedProperty, dateFilter, userAllowedPropIds, userDeptScope]
   );
 
   const title =
@@ -193,6 +208,32 @@ export default function OperationsPage({
             )}
           </div>
         </div>
+
+        {userDeptScope && (
+          <div
+            style={{
+              padding: "10px 16px",
+              background: "var(--sage-soft)",
+              border: "1px solid rgba(94, 134, 111, 0.3)",
+              borderRadius: "6px",
+              marginBottom: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <ShieldCheck size={16} style={{ color: "var(--sage-deep)" }} />
+              <span>
+                <strong>Scoped Divisional View:</strong> Operational records and SLA queues are filtered strictly to your assigned division: <strong>{userDeptScope}</strong>.
+              </span>
+            </div>
+            <span style={{ fontSize: "11px", color: "var(--sage-deep)", fontWeight: 600, fontFamily: "var(--font-dm-mono)" }}>
+              RBAC Policy Active · {feedback.length} records
+            </span>
+          </div>
+        )}
 
         <motion.div
           key={section}

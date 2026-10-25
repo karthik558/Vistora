@@ -14,6 +14,7 @@ export interface UserRight {
 
 export const SYSTEM_RIGHTS: UserRight[] = [
   { id: "view_feedback", name: "View Guest Feedback", description: "Read reviews, ratings, and guest sentiment" },
+  { id: "view_guest_pii", name: "View Unmasked Guest PII (GDPR)", description: "Reveal guest phone numbers and email addresses (audit logged)" },
   { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
   { id: "reassign_property", name: "Reassign Feedback Property", description: "Change hotel property assignment on feedback records" },
   { id: "manage_properties", name: "Manage Hotel Properties", description: "Create new hotel locations and assign staff access" },
@@ -23,6 +24,30 @@ export const SYSTEM_RIGHTS: UserRight[] = [
   { id: "manage_settings", name: "System Settings", description: "Configure organization and enterprise platform defaults" },
   { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members and assign permissions" },
 ];
+
+export const HOTEL_DEPARTMENTS = [
+  "All Departments",
+  "Food & Beverage",
+  "Housekeeping",
+  "Front Desk",
+  "Concierge",
+  "Facilities & Room",
+  "Spa & Wellness",
+  "Valet & Transfers",
+] as const;
+
+export function getUserDepartment(user: WorkspaceUserItem): string {
+  const match = (user.rights || []).find((r) => r.startsWith("dept_scope:"));
+  if (match) return match.replace("dept_scope:", "").trim();
+  return "All Departments";
+}
+
+export function canUserViewPii(user: WorkspaceUserItem): boolean {
+  if (user.role === "admin") return true;
+  const org = getUserOrgRole(user);
+  if (org === "super_admin" || org === "admin" || org === "general_manager") return true;
+  return (user.rights || []).includes("view_guest_pii");
+}
 
 export interface OrganizationalRoleDef {
   id: string;
@@ -121,6 +146,7 @@ export const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
   super_admin: SYSTEM_RIGHTS.map((r) => r.id),
   admin: [
     "view_feedback",
+    "view_guest_pii",
     "manage_complaints",
     "reassign_property",
     "manage_properties",
@@ -129,11 +155,11 @@ export const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
     "view_audit_log",
     "manage_users",
   ],
-  general_manager: ["view_feedback", "manage_complaints", "export_reports", "view_audit_log"],
-  department_head: ["view_feedback", "manage_complaints", "export_reports"],
+  general_manager: ["view_feedback", "view_guest_pii", "manage_complaints", "export_reports", "view_audit_log"],
+  department_head: ["view_feedback", "view_guest_pii", "manage_complaints", "export_reports"],
   executive: ["view_feedback", "export_reports"],
   front_office_staff: ["view_feedback", "manage_questionnaire"],
-  feedback: ["view_feedback", "manage_complaints"],
+  feedback: ["view_feedback", "view_guest_pii", "manage_complaints"],
   analyst: ["view_feedback"],
   report: ["export_reports"],
   staff: ["view_feedback", "manage_complaints", "manage_questionnaire", "export_reports"],
@@ -197,6 +223,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<string>("front_office_staff");
+  const [addDepartment, setAddDepartment] = useState<string>("All Departments");
   const [addPropertyId, setAddPropertyId] = useState("");
   const [addPropertyIds, setAddPropertyIds] = useState<string[]>([]);
   const [addRights, setAddRights] = useState<string[]>(ROLE_DEFAULT_RIGHTS.front_office_staff || []);
@@ -218,6 +245,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   // Form states for Edit Access
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<string>("front_office_staff");
+  const [editDepartment, setEditDepartment] = useState<string>("All Departments");
   const [editPropertyId, setEditPropertyId] = useState("");
   const [editPropertyIds, setEditPropertyIds] = useState<string[]>([]);
   const [editRights, setEditRights] = useState<string[]>([]);
@@ -282,8 +310,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         : addPropertyIds;
 
       const rightsToSend = isFullAdmin
-        ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${addRole}`]
-        : [...addRights.filter((r) => !r.startsWith("org_role:")), `org_role:${addRole}`];
+        ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${addRole}`, `dept_scope:${addDepartment}`]
+        : [
+            ...addRights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")),
+            `org_role:${addRole}`,
+            `dept_scope:${addDepartment}`,
+          ];
 
       const res = await fetch("/api/users", {
         method: "POST",
@@ -304,12 +336,27 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
         throw new Error(data.error || "Failed to create user.");
       }
 
+      // Log to enterprise audit ledger
+      fetch("/api/audit-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "Team Member Account Created",
+          category: "permission",
+          resource: `Staff Member: ${addName.trim()} (${addEmail.trim()})`,
+          details: `Assigned role "${addRole}", department scope: "${addDepartment}", ${rightsToSend.length} active capabilities.`,
+          status: "warning",
+          complianceTag: "RBAC Scoping",
+        }),
+      }).catch(() => {});
+
       setSuccess(`User ${data.user.full_name} added successfully with assigned rights.`);
       setShowAddModal(false);
       setAddName("");
       setAddEmail("");
       setAddPassword("");
       setAddRole("front_office_staff");
+      setAddDepartment("All Departments");
       setAddPropertyId("");
       setAddPropertyIds([]);
       setAddRights(ROLE_DEFAULT_RIGHTS.front_office_staff || []);
@@ -409,8 +456,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     // Admins and Super Admins always have all rights at all times
     const isFullAdmin = editRole === "admin" || editRole === "super_admin";
     const rightsToSend = isFullAdmin
-      ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${editRole}`]
-      : [...editRights.filter((r) => !r.startsWith("org_role:")), `org_role:${editRole}`];
+      ? [...SYSTEM_RIGHTS.map((r) => r.id), `org_role:${editRole}`, `dept_scope:${editDepartment}`]
+      : [
+          ...editRights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")),
+          `org_role:${editRole}`,
+          `dept_scope:${editDepartment}`,
+        ];
 
     const propIdsToSend = isFullAdmin
       ? properties.map((p) => p.id)
@@ -434,6 +485,20 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to update access.");
       }
+
+      // Log to enterprise audit ledger
+      fetch("/api/audit-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "Member Permissions & Scope Modified",
+          category: "permission",
+          resource: `Staff Member: ${editName.trim() || editAccessUser.full_name} (${editAccessUser.email})`,
+          details: `Role updated to "${editRole}", department operational scope: "${editDepartment}", ${rightsToSend.length} active capabilities.`,
+          status: "warning",
+          complianceTag: "Privilege Escalation",
+        }),
+      }).catch(() => {});
 
       setSuccess(`Updated member profile & permissions for ${editName.trim() || editAccessUser.full_name}.`);
       setEditAccessUser(null);
@@ -551,6 +616,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                       <th>Member</th>
                       <th>Email ID</th>
                       <th>Assigned Role</th>
+                      <th>Department Scope</th>
                       <th>Property Access</th>
                       <th>Created</th>
                       <th style={{ textAlign: "right" }}>Actions</th>
@@ -559,13 +625,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                        <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
                           Loading team members…
                         </td>
                       </tr>
                     ) : users.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                        <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
                           No members found. Click &ldquo;Add member&rdquo; above to invite a user.
                         </td>
                       </tr>
@@ -642,10 +708,41 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       {isFullAdmin
                                         ? "Full administrator access"
                                         : Array.isArray(user.rights)
-                                        ? user.rights.filter((r) => !r.startsWith("org_role:")).length > 0
-                                          ? `${user.rights.filter((r) => !r.startsWith("org_role:")).length} rights active`
+                                        ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
+                                          ? `${user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length} rights active`
                                           : roleMeta.tagline
                                         : roleMeta.tagline}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td>
+                              {(() => {
+                                const dept = getUserDepartment(user);
+                                const isFullAdmin = user.role === "admin" || (user.rights || []).includes("org_role:super_admin");
+                                const piiAllowed = canUserViewPii(user);
+                                return (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        padding: "2px 7px",
+                                        borderRadius: "3px",
+                                        fontSize: "10px",
+                                        fontWeight: 600,
+                                        fontFamily: "var(--font-dm-mono)",
+                                        background: isFullAdmin || dept === "All Departments" ? "var(--canvas-alt)" : "var(--sage-soft)",
+                                        color: isFullAdmin || dept === "All Departments" ? "var(--ink)" : "var(--sage-deep)",
+                                        border: "1px solid var(--line)",
+                                      }}
+                                    >
+                                      {isFullAdmin ? "Global (All Divisions)" : dept}
+                                    </span>
+                                    <span style={{ fontSize: "9px", color: piiAllowed ? "var(--warm-deep)" : "var(--muted)" }}>
+                                      {piiAllowed ? "✓ PII Unmasked" : "⊘ PII Masked"}
                                     </span>
                                   </div>
                                 );
@@ -761,9 +858,11 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                                   onClick={() => {
                                     const org = getUserOrgRole(user);
+                                    const dept = getUserDepartment(user);
                                     setEditAccessUser(user);
                                     setEditName(user.full_name || "");
                                     setEditRole(org);
+                                    setEditDepartment(dept);
                                     setEditPropertyId(user.property_id || "");
                                     const initialPropIds = user.property_ids && user.property_ids.length > 0
                                       ? user.property_ids
@@ -774,8 +873,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     setEditRights(
                                       org === "admin" || org === "super_admin" || user.role === "admin"
                                         ? SYSTEM_RIGHTS.map((r) => r.id)
-                                        : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:")).length > 0
-                                        ? user.rights.filter((r) => !r.startsWith("org_role:"))
+                                        : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
+                                        ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:"))
                                         : ROLE_DEFAULT_RIGHTS[org] || []
                                     );
                                     setError(null);
@@ -901,6 +1000,27 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           }))}
                         />
                       </div>
+
+                      {addRole !== "admin" && addRole !== "super_admin" && (
+                        <div style={{ marginBottom: "16px" }}>
+                          <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                            Department Operational Scope (RBAC Boundary)
+                          </label>
+                          <CustomSelect
+                            value={addDepartment}
+                            onChange={(val) => setAddDepartment(val as string)}
+                            header="Assign Department Boundary"
+                            options={HOTEL_DEPARTMENTS.map((dept) => ({
+                              value: dept,
+                              label: dept,
+                              detail:
+                                dept === "All Departments"
+                                  ? "Unrestricted cross-division oversight"
+                                  : `Strictly scoped to ${dept} complaints and guest moments`,
+                            }))}
+                          />
+                        </div>
+                      )}
 
                       {addRole !== "admin" && addRole !== "super_admin" && (
                         <div style={{ marginBottom: "18px" }}>
@@ -1220,6 +1340,27 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           }))}
                         />
                       </div>
+
+                      {editRole !== "admin" && editRole !== "super_admin" && (
+                        <div style={{ marginBottom: "20px" }}>
+                          <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                            Department Operational Scope (RBAC Boundary)
+                          </label>
+                          <CustomSelect
+                            value={editDepartment}
+                            onChange={(val) => setEditDepartment(val as string)}
+                            header="Assign Department Boundary"
+                            options={HOTEL_DEPARTMENTS.map((dept) => ({
+                              value: dept,
+                              label: dept,
+                              detail:
+                                dept === "All Departments"
+                                  ? "Unrestricted cross-division oversight"
+                                  : `Strictly scoped to ${dept} complaints and guest moments`,
+                            }))}
+                          />
+                        </div>
+                      )}
 
                       {editRole !== "admin" && editRole !== "super_admin" && (
                         <div style={{ marginBottom: "20px" }}>
