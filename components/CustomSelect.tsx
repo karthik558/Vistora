@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 export interface SelectOption {
   value: string;
@@ -157,11 +158,12 @@ export default function CustomSelect({
         />
       </button>
 
-      <AnimatePresence>
-        {isOpen && (
+      {(() => {
+          if (!isOpen) return null;
+          const menu = (
           <motion.div
             ref={menuRef}
-            className="custom-select-popover"
+            className={`custom-select-popover${floating ? " is-floating" : ""}`}
             initial={{ opacity: 0, y: 4, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.99 }}
@@ -217,7 +219,7 @@ export default function CustomSelect({
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: "8px",
-                      padding: "8px 10px",
+                      padding: "10px 12px",
                       background: isSelected ? "var(--sage-soft)" : "transparent",
                       border: "none",
                       borderRadius: "5px",
@@ -249,9 +251,8 @@ export default function CustomSelect({
                             fontSize: "12px",
                             fontWeight: isSelected ? 600 : 500,
                             color: "var(--ink)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
+                            whiteSpace: "normal",
+                            lineHeight: 1.35,
                           }}
                         >
                           {option.label}
@@ -261,10 +262,9 @@ export default function CustomSelect({
                             style={{
                               fontSize: "10px",
                               color: "var(--muted)",
-                              marginTop: "1px",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              marginTop: "2px",
+                              whiteSpace: "normal",
+                              lineHeight: 1.4,
                             }}
                           >
                             {option.detail}
@@ -285,8 +285,9 @@ export default function CustomSelect({
               })}
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+          );
+          return floating && typeof document !== "undefined" ? createPortal(menu, document.body) : menu;
+        })()}
     </div>
   );
 }

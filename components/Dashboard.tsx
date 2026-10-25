@@ -25,6 +25,7 @@ import {
   History,
   Settings,
   PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Download,
   Eye,
@@ -309,6 +310,17 @@ export function AppShell({
               style={{ height: "28px", width: "auto", objectFit: "contain" }}
             />
           </Link>
+          {!sidebarCollapsed && (
+            <button
+              type="button"
+              className="sidebar-favi-toggle desktop-only"
+              onClick={toggleSidebar}
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
+            >
+              <PanelLeftClose size={18} strokeWidth={1.75} />
+            </button>
+          )}
           {sidebarCollapsed && (
             <div className="sidebar-collapsed-header">
               <button
@@ -318,7 +330,7 @@ export function AppShell({
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
               >
-                <Image src="/favicon.ico" alt="" width={22} height={22} className="sidebar-favi-icon" />
+                <PanelLeftOpen size={18} strokeWidth={1.75} />
               </button>
             </div>
           )}
@@ -388,16 +400,6 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
-          <button
-            type="button"
-            className="sidebar-rail-toggle desktop-only"
-            onClick={toggleSidebar}
-            title="Hide sidebar"
-            aria-label="Hide sidebar"
-          >
-            <PanelLeftClose size={15} strokeWidth={1.8} />
-            <span>Hide sidebar</span>
-          </button>
           <Link
             href="/feedback"
             className="sidebar-guest-link"
@@ -1184,6 +1186,24 @@ const FEEDBACK_STATUSES: { value: FeedbackStatus; label: string }[] = [
   { value: "escalated", label: "Escalated" },
 ];
 
+function splitGuestStatement(comment: string) {
+  const marker = "[Guest Questionnaire]";
+  const index = comment.indexOf(marker);
+  if (index < 0) return { note: comment.trim(), answers: [] as { question: string; answer: string }[] };
+  const note = comment.slice(0, index).trim();
+  const answers = comment
+    .slice(index + marker.length)
+    .split("\n")
+    .map((line) => line.replace(/^•\s*/, "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const splitAt = line.indexOf(": ");
+      if (splitAt < 0) return { question: line, answer: "" };
+      return { question: line.slice(0, splitAt), answer: line.slice(splitAt + 2) };
+    });
+  return { note, answers };
+}
+
 export function FeedbackTable({
   feedback: initialFeedback,
   title = "Feedback",
@@ -1762,6 +1782,7 @@ export function FeedbackTable({
                 {isAdmin ? (
                   <div style={{ display: "flex", gap: "8px", marginTop: "6px", alignItems: "flex-start" }}>
                     <CustomSelect
+                      floating
                       value={feedbackPropertyId}
                       onChange={(val) => {
                         setFeedbackPropertyId(val);
@@ -1829,9 +1850,26 @@ export function FeedbackTable({
                   <span>Guest Statement</span>
                   <span className={`status ${selected.tone}`}>{selected.statusLabel}</span>
                 </div>
-                <p className="drawer-statement-text">
-                  "{selected.comment || "No written comment provided by the guest."}"
-                </p>
+                {(() => {
+                  const statement = splitGuestStatement(selected.comment || "");
+                  return (
+                    <>
+                      <p className="drawer-statement-text">
+                        &ldquo;{statement.note || "No written comment provided by the guest."}&rdquo;
+                      </p>
+                      {statement.answers.length > 0 && (
+                        <ul className="drawer-statement-list">
+                          {statement.answers.map((item) => (
+                            <li key={item.question}>
+                              <span>{item.question}</span>
+                              <strong>{item.answer}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  );
+                })()}
                 {selected.wantsContact && (
                   <div className="drawer-contact-pill">
                     Follow-up requested by guest via {selected.contactPreference || "email"}
@@ -1917,6 +1955,7 @@ export function FeedbackTable({
                         Resolution status
                       </span>
                       <CustomSelect
+                        floating
                         value={status}
                         onChange={(val) => setStatus(val as FeedbackStatus)}
                         header="Resolution Status"

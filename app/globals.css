@@ -1140,17 +1140,19 @@ a {
   color: #254230;
 }
 .drawer-statement-card {
-  background: #fbfdfb;
-  border: 1px solid #e1ebe2;
-  border-left: 4px solid #3c6e4d;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
   border-radius: 6px;
-  padding: 18px 20px;
-  margin: 0 0 22px;
+  padding: 16px 18px 18px;
+  margin: 0 0 18px;
 }
 .drawer-statement-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
   font-size: 11px;
   font-weight: 600;
@@ -1161,21 +1163,55 @@ a {
 .drawer-statement-text {
   margin: 0;
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--ink);
   font-family: var(--font-playfair);
   font-style: italic;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.drawer-statement-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.drawer-statement-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+}
+.drawer-statement-list span {
+  font-family: var(--font-dm-sans);
+  font-size: 11px;
+  font-style: normal;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.drawer-statement-list strong {
+  font-family: var(--font-dm-sans);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
 }
 .drawer-contact-pill {
+  display: block;
   margin-top: 14px;
-  padding: 6px 10px;
-  background: #edf4ed;
-  color: #254230;
+  padding: 10px 12px;
+  background: var(--sage-soft);
+  color: var(--sage-deep);
   border-radius: 4px;
-  font-size: 11px;
-  display: inline-block;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.45;
 }
+.detail-drawer { padding-bottom: 40px; }
 .drawer-resolution-section {
   margin-top: 4px;
   padding-top: 18px;
@@ -4077,7 +4113,7 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
   .metric-label, .metric-change { font-size: 10px; line-height: 1.5; }
   .main-content { overflow-x: clip; }
   .property-filter-popover, .custom-datepicker-popover, .custom-dropdown-popover,
-  .custom-select-popover, .notification-popover {
+  .custom-select-popover:not(.is-floating), .notification-popover {
     position: fixed !important; top: 78px !important; left: 16px !important; right: 16px !important;
     width: auto !important; min-width: 0 !important; max-width: none !important;
     max-height: calc(100dvh - 164px); overflow-y: auto !important; z-index: 1100 !important;
@@ -4146,6 +4182,40 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
 [data-theme="dark"] .guest-shell .rating-button.selected,
 [data-theme="dark"] .guest-shell .rating-button:hover { background: #edf4ed !important; color: #1f3b2a !important; border-color: #4e6f5b !important; }
 [data-theme="dark"] .guest-shell .custom-select-popover { background: #ffffff !important; color: #121917 !important; }
+
+.guest-followup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 22px !important;
+  margin-bottom: 20px;
+}
+.guest-followup .guest-choice-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.guest-followup .guest-radio { padding: 2px 0 2px; }
+.guest-shell .submit-button,
+.guest-shell .submit-button:disabled,
+[data-theme="dark"] .guest-shell .button-dark.submit-button,
+[data-theme="dark"] .guest-shell .button-dark.submit-button:disabled {
+  background: #254230 !important;
+  border-color: #1c3326 !important;
+  color: #ffffff !important;
+  opacity: 1;
+  box-shadow: 0 8px 18px rgba(31, 79, 59, 0.18);
+}
+.guest-shell .submit-button:disabled { opacity: 0.72; cursor: not-allowed; }
+.guest-shell .submit-button span,
+[data-theme="dark"] .guest-shell .submit-button,
+[data-theme="dark"] .guest-shell .submit-button span { color: #ffffff !important; }
+.guest-shell .submit-button:not(:disabled):hover,
+[data-theme="dark"] .guest-shell .button-dark.submit-button:not(:disabled):hover {
+  background: #1a3326 !important;
+  border-color: #1a3326 !important;
+  color: #ffffff !important;
+}
 [data-theme="dark"] .guest-shell img[src*="logo1"] { filter: none !important; }
 [data-theme="dark"] .guest-shell .guest-card h1,
 [data-theme="dark"] .guest-shell .guest-card legend,
