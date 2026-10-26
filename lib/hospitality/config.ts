@@ -52,6 +52,12 @@ export function moduleForPath(path:string):ModuleName {
  if(/\/(settings|users|workspace)/.test(path))return "administration";
  return "feedback";
 }
+export function workspaceForPath(path:string,selected:string|null=null):"feedback"|"operations" {
+ return /^\/dashboard\/(hospitality|properties)(\/|$)/.test(path)||selected==="operations"?"operations":"feedback";
+}
+export function sidebarTokens(hex:string,dark:boolean):Record<string,string>{
+ return {"--workspace-sidebar":mix(hex,dark?"#10151d":"#111923",.65),"--workspace-sidebar-marker":mix(hex,"#ffffff",.55)};
+}
 function mix(a:string,b:string,weight:number){
  const color=(x:string)=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16));
  const first=color(a),second=color(b);

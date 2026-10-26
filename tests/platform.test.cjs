@@ -5,7 +5,19 @@ require.extensions[".ts"]=(module,file)=>module._compile(ts.transpileModule(fs.r
 const {summarize,managementReport,csvCell}=require("../lib/platform/reports.ts");
 const {newToken,hashToken,encryptSecret,decryptSecret}=require("../lib/platform/secrets.ts");
 const {validateDestination}=require("../lib/platform/transport.ts");
-const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,contrastRatio}=require("../lib/hospitality/config.ts");
+const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
+test("Module routing preserves the hotel workspace on shared pages and distinguishes sidebar palettes",()=>{
+ assert.equal(workspaceForPath("/dashboard/hospitality"),"operations");
+ assert.equal(workspaceForPath("/dashboard/properties"),"operations");
+ assert.equal(workspaceForPath("/dashboard/settings","operations"),"operations");
+ assert.equal(workspaceForPath("/dashboard/overview"),"feedback");
+ assert.equal(workspaceForPath("/dashboard/feedback"),"feedback");
+ for(const dark of [false,true]){
+  const green=sidebarTokens(DEFAULT_HOSPITALITY.colors.feedback,dark)["--workspace-sidebar"];
+  const blue=sidebarTokens(DEFAULT_HOSPITALITY.colors.property,dark)["--workspace-sidebar"];
+  assert.notEqual(green,blue);assert.ok(contrastRatio(green,"#c5d0db")>=4.5);assert.ok(contrastRatio(blue,"#c5d0db")>=4.5);
+ }
+});
 test("Hotel configuration validates colors and budget precision without floating-point cost errors",()=>{
  assert.equal(moneyToMinor("19.99"),1999);assert.equal(moneyToMinor("0.01"),1);
  for(const value of ["-1","1e3","1.001","NaN"])assert.throws(()=>moneyToMinor(value));

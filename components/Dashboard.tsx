@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -43,9 +43,8 @@ import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
 import {useAppearance} from "./AppearanceProvider";
-import {accentTokens,moduleForPath,ModuleName} from "../lib/hospitality/config";
+import {accentTokens,moduleForPath,workspaceForPath,sidebarTokens,ModuleName} from "../lib/hospitality/config";
 import CasePanel from "./CasePanel";
-import HospitalitySummary from "./HospitalitySummary";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
@@ -77,7 +76,7 @@ export interface NavItemConfig {
 }
 
 const nav: readonly NavItemConfig[] = [
-  { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
+  { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
@@ -186,8 +185,11 @@ export function AppShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams=useSearchParams();
   const appearance=useAppearance();
-  const activeModule=moduleOverride||moduleForPath(pathname||'/dashboard');
+  const workspaceArea=workspaceForPath(pathname||"",searchParams.get("workspace"));
+  const activeModule=workspaceArea==="feedback"?"feedback":moduleOverride||moduleForPath(pathname||'/dashboard');
+  const scopedHref=(href:string)=>workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
@@ -292,7 +294,13 @@ export function AppShell({
   const isReport = effectiveRole === "report";
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
-  const visibleNav = nav.filter((item) => {
+  const sharedNav=["Team & users","Settings","Workspace"];
+  const operationNav:NavItemConfig[]=[
+    ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:true})),
+    ...nav.filter(item=>["Properties",...sharedNav].includes(item.label)),
+  ];
+  const moduleNav=workspaceArea==="operations"?operationNav:nav.filter(item=>!["Hotel operations","Properties"].includes(item.label));
+  const visibleNav = moduleNav.filter((item) => {
     if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
     // Super Admin holds unconditional full platform capabilities
     if (isSuperAdmin || currentUser?.role==="admin") return true;
@@ -325,7 +333,7 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} style={accentTokens(appearance.config.colors[activeModule],appearance.dark) as React.CSSProperties}>
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={workspaceArea} style={{...accentTokens(appearance.config.colors[activeModule],appearance.dark),...sidebarTokens(appearance.config.colors[workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
         {mobileNavOpen && (
@@ -346,7 +354,7 @@ export function AppShell({
         {/* Vistora Sidebar Header with Single Desktop Collapse Toggle */}
         <div className="sidebar-brand-row">
           <Link
-            href="/"
+            href="/dashboard"
             className="brand brand-full"
             title="Vistora Home"
             onClick={() => setMobileNavOpen(false)}
@@ -452,6 +460,8 @@ export function AppShell({
 
         {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
+          <Link href="/dashboard" className="nav-item module-switch-link" title="Switch module"><LayoutDashboard size={16}/><span className="nav-label">Switch module</span></Link>
+          <p className="sidebar-module-label">{workspaceArea==="operations"?"Hotel operations":"Feedback"}</p>
           {visibleNav.length === 0 ? (
             <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
@@ -459,7 +469,8 @@ export function AppShell({
           ) : (
             visibleNav.map((item) => {
               const Icon = item.icon;
-              const isActive =
+              const isActive = item.href.startsWith("/dashboard/hospitality")?
+                pathname==="/dashboard/hospitality"&&(searchParams.get("section")||"Overview")===(item.href.includes("?")?decodeURIComponent(item.href.split("section=")[1]):"Overview"):
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
                 active === item.label ||
@@ -470,11 +481,11 @@ export function AppShell({
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={scopedHref(item.href)}
                   prefetch={true}
                   className={`nav-item ${isActive ? "active" : ""}`}
-                  onMouseEnter={() => router.prefetch(item.href)}
-                  onFocus={() => router.prefetch(item.href)}
+                  onMouseEnter={() => router.prefetch(scopedHref(item.href))}
+                  onFocus={() => router.prefetch(scopedHref(item.href))}
                   onClick={() => setMobileNavOpen(false)}
                   title={item.label}
                 >
@@ -497,7 +508,7 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
-          <Link
+          {workspaceArea==="feedback"&&<Link
             href="/feedback"
             className="sidebar-guest-link"
             onClick={() => setMobileNavOpen(false)}
@@ -505,7 +516,7 @@ export function AppShell({
           >
             <span className="guest-link-text">Open guest feedback form</span>
             <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />
-          </Link>
+          </Link>}
 
           {/* Dynamic Authenticated User Profile */}
           <div className="user-row" title={`${displayName} (${displayEmail})`}>
@@ -594,7 +605,7 @@ export function AppShell({
                 />
               </Link>
               <div className="breadcrumbs">
-                <span>Workspace</span>
+                <span>{workspaceArea==="operations"?"Hotel operations":"Feedback"}</span>
                 <b>/</b>
                 <strong>{active}</strong>
               </div>
@@ -602,67 +613,21 @@ export function AppShell({
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <ThemeToggle />
-              <NotificationCenter />
+              {workspaceArea==="feedback"&&<NotificationCenter />}
             </div>
           </div>
         </header>
         {children}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile navigation stays inside the selected workspace. */}
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
-        <Link
-          href="/dashboard"
-          className={`mobile-nav-tab ${pathname === "/dashboard" ? "active" : ""}`}
-          onClick={() => setMobileNavOpen(false)}
-          title="Dashboard overview"
-        >
-          <LayoutDashboard size={19} strokeWidth={pathname === "/dashboard" ? 2.2 : 1.75} />
-          <span>Dashboard</span>
-        </Link>
-        <Link
-          href="/dashboard/feedback"
-          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/feedback") ? "active" : ""}`}
-          onClick={() => setMobileNavOpen(false)}
-          title="All guest feedback"
-        >
-          <MessageSquare size={19} strokeWidth={pathname?.startsWith("/dashboard/feedback") ? 2.2 : 1.75} />
-          <span>Feedback</span>
-        </Link>
-        <Link
-          href="/dashboard/complaints"
-          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/complaints") ? "active" : ""}`}
-          onClick={() => setMobileNavOpen(false)}
-          title="Complaints & SLA recovery"
-        >
-          <div className="mobile-nav-icon-wrap">
-            <AlertCircle size={19} strokeWidth={pathname?.startsWith("/dashboard/complaints") ? 2.2 : 1.75} />
-            {complaints > 0 && <span className="mobile-nav-badge">{complaints}</span>}
-          </div>
-          <span>SLA &amp; Ops</span>
-        </Link>
-        <Link
-          href="/dashboard/analytics"
-          className={`mobile-nav-tab ${pathname?.startsWith("/dashboard/analytics") ? "active" : ""}`}
-          onClick={() => setMobileNavOpen(false)}
-          title="Analytics & trends"
-        >
-          <BarChart3 size={19} strokeWidth={pathname?.startsWith("/dashboard/analytics") ? 2.2 : 1.75} />
-          <span>Analytics</span>
-        </Link>
-        <button
-          type="button"
-          className={`mobile-nav-tab ${mobileNavOpen ? "active" : ""}`}
-          onClick={() => setMobileNavOpen(!mobileNavOpen)}
-          aria-label={mobileNavOpen ? "Close menu" : "Open all modules menu"}
-        >
-          {mobileNavOpen ? (
-            <X size={19} strokeWidth={2.2} />
-          ) : (
-            <Menu size={19} strokeWidth={1.75} />
-          )}
-          <span>{mobileNavOpen ? "Close" : "Menu"}</span>
-        </button>
+        {(workspaceArea==="operations"?visibleNav.slice(0,4):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
+          const Icon=item.icon;
+          const selected=pathname===item.href.split("?")[0]&&(workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
+          return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
+        })}
+        <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
       </nav>
     </div>
   );
@@ -879,7 +844,7 @@ export default function Dashboard({
           <>
             <div className="page-heading">
               <div>
-                <p className="eyebrow">Operations overview</p>
+                <p className="eyebrow">Feedback overview</p>
                 <h1>{firstName ? `Good morning, ${firstName}` : "Operations Dashboard"}</h1>
                 <p className="subheading">
                   A clear view of the guest moments that need attention today.
@@ -937,7 +902,6 @@ export default function Dashboard({
           <>
             <SlaRecoveryBanner openComplaintsCount={openComplaintsCount} />
 
-            {user?.isOrganizationAdmin && <HospitalitySummary property={selectedProperty}/>}
             <section className="metric-grid">
               <Metric
                 label="Feedback received"

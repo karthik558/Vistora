@@ -54,7 +54,13 @@ function JobForm({data,save}:{data:any;save:Save}){
 export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const query=useSearchParams();
  const section=query.get("section");
- const [tab,setTab]=useState<Tab>(tabs.includes(section as Tab)?section as Tab:"Overview");
+ const [tab,setTabState]=useState<Tab>(tabs.includes(section as Tab)?section as Tab:"Overview");
+ useEffect(()=>{setTabState(tabs.includes(section as Tab)?section as Tab:"Overview");},[section]);
+ function setTab(next:Tab){
+  setTabState(next);
+  const params=new URLSearchParams(query.toString());params.set("section",next);
+  window.history.replaceState(null,"","/dashboard/hospitality?"+params);
+ }
  const [data,setData]=useState<any>(null),[error,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const [property,setProperty]=useState(query.get("property")||"all"),[month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
  const [inspectionRoom,setInspectionRoom]=useState("");
@@ -101,13 +107,13 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {title:"Open service jobs",value:data?.metrics.openJobs,icon:ClipboardList,section:"Service jobs",color:"operations"},
   {title:"Pending cost decisions",value:data?.metrics.pendingCosts,icon:Wallet,section:"Cost controls",color:"operations"}
  ];
- return <AppShell active="Hotel operations" user={user} module={module}><div className="platform-page hotel-page">
- <header className="platform-heading"><div><p className="eyebrow">Hotel operations · Admin</p><h1>{tab==="Overview"?"Hospitality operations":tab}</h1></div><div className="platform-actions"><Link className="button button-ghost" href="/dashboard/settings">Configure modules</Link><button className="button button-ghost" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button></div></header>
+ return <AppShell active={tab} user={user} module={module}><div className="platform-page hotel-page">
+ <header className="platform-heading"><div><p className="eyebrow">Hotel operations · Admin</p><h1>{tab==="Overview"?"Hospitality operations":tab}</h1></div><div className="platform-actions"><Link className="button button-ghost" href="/dashboard/settings?workspace=operations">Configure modules</Link><button className="button button-ghost" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button></div></header>
  <nav className="platform-tabs" aria-label="Hotel modules">{tabs.map(t=><button key={t} aria-current={t===tab?"page":undefined} onClick={()=>setTab(t)}>{t}</button>)}</nav>
  {error&&<p role="alert" className="platform-notice">{error}</p>}{message&&<p role="status" className="hotel-success">{message}</p>}
  {loading&&!data&&<p role="status">Loading hotel operations…</p>}
  {data&&<><div className="hotel-filter"><label>Property<WorkspaceSelect label="Filter hotel property" value={property} onChange={setProperty} options={[{value:"all",label:"All properties"},...data.properties.map((p:any)=>({value:p.id,label:p.name}))]}/></label>{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<input type="month" value={month} onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label>}</div>
- {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in Settings to continue.</p><Link className="button button-dark" href="/dashboard/settings">Open Settings</Link></section>:<>
+ {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in Settings to continue.</p><Link className="button button-dark" href="/dashboard/settings?workspace=operations">Open Settings</Link></section>:<>
  {tab==="Service jobs"&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
  {tab==="Overview"&&<><section className="hotel-overview">{cards.map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} className="hotel-overview-card" style={{borderTopColor:config.colors[c.color as ModuleName]}}><c.icon size={17}/><span>{c.title}</span><strong>{c.value}</strong><ArrowUpRight size={14}/></button>)}</section><section className="platform-card"><h2>Connected operations</h2><div className="hotel-workflow"><span>Reserve a room</span><span>Check in</span><span>Dispatch service</span><span>Inspect readiness</span><span>Review costs</span></div><p>Room readiness, guest stays, service work and cost decisions are recorded in the same company workspace.</p></section><section className="platform-card"><h2>Recent activity</h2>{!data.activity.length&&<p>No operational changes recorded yet.</p>}{data.activity.map((a:any)=><div className="platform-row" key={a.id}><span>{label(a.entity_type)} · {a.action}<small>{a.entity_id.slice(0,8)} · {a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Former administrator":"System"}</small></span><time>{format(a.created_at)}</time></div>)}</section></>}
  {tab==="Guests"&&<><section className="platform-card"><h2>{guest?"Edit guest":"Guest profile"}</h2><fieldset className="hotel-form-lock" disabled={busy}><GuestForm guest={guest} save={save} cancel={()=>setGuest(null)}/></fieldset></section><section className="platform-card"><h2>Guest directory</h2><p>Latest 100 matching profiles. Search looks across the company directory.</p><div className="platform-table"><table><thead><tr><th>Guest</th><th>Contact</th><th>Tier</th><th>Preferences</th><th>Action</th></tr></thead><tbody>{data.guests.map((g:any)=><tr key={g.id}><td>{g.full_name}</td><td>{g.email||"—"}<small>{g.phone||""}</small></td><td>{g.vip_tier}</td><td className="hotel-wrap">{g.preferences||"—"}</td><td><button className="button button-ghost" onClick={()=>setGuest(g)}>Edit guest</button></td></tr>)}</tbody></table>{!data.guests.length&&<p>No matching guest profiles.</p>}</div></section>
