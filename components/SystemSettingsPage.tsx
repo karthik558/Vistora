@@ -16,6 +16,9 @@ import {
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { PropertyRow } from "../types/experience";
 import { ApplicationSettings } from "../lib/services/settingsService";
+import HospitalitySettings from "./HospitalitySettings";
+import {hospitalityConfig} from "../lib/hospitality/config";
+import {useAppearance} from "./AppearanceProvider";
 
 export default function SystemSettingsPage({
   initialUser,
@@ -27,6 +30,8 @@ export default function SystemSettingsPage({
     () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
   const [loading, setLoading] = useState(true);
+  const [settingsLoaded,setSettingsLoaded]=useState(false);
+  const appearance=useAppearance();
   const [savedSuccess, setSavedSuccess] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -56,22 +61,18 @@ export default function SystemSettingsPage({
 
   // Application Settings State
   const [appSettings, setAppSettings] = useState<ApplicationSettings>({
-    organizationName: "Vistora Hospitality Collection",
-    projectName: "Vistora Guest Experience Platform",
-    brandTagline: "Luxury Hospitality Service Recovery & CSAT Intelligence",
+    organizationName: "",
+    projectName: "Vistora",
+    brandTagline: "Hospitality operations",
     slaCriticalMinutes: 15,
     slaStandardMinutes: 120,
     autoGuestFollowUp: true,
-    alertEmail: "operations@vistora.app",
-    defaultTimezone: "Asia/Bangkok",
+    alertEmail: "",
+    defaultTimezone: "Asia/Kolkata",
     dataRetentionDays: 365,
   });
 
-  const isAdmin =
-    user?.role === "admin" ||
-    user?.role === "super_admin" ||
-    user?.orgRole === "admin" ||
-    user?.orgRole === "super_admin";
+  const isAdmin = user?.isOrganizationAdmin===true;
 
   useEffect(() => {
     const local = getClientUser();
@@ -91,10 +92,13 @@ export default function SystemSettingsPage({
     try {
       const res = await fetch("/api/settings");
       const json = await res.json();
+      if(!res.ok||!json.success)throw new Error(json.error||"Could not load settings.");
       if (json.success && json.appSettings) {
+        setSettingsLoaded(true);
         setAppSettings(json.appSettings);
       }
-    } catch {
+    } catch(error) {
+      setErrorMsg((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -117,6 +121,8 @@ export default function SystemSettingsPage({
       });
       const json = await res.json();
       if (json.success) {
+        setAppSettings(json.appSettings);
+        appearance.update(hospitalityConfig(json.appSettings.hospitality));
         setSavedSuccess("System & application settings saved successfully.");
         setTimeout(() => setSavedSuccess(null), 3500);
       } else {
@@ -260,6 +266,8 @@ export default function SystemSettingsPage({
                   </div>
                 ) : (
                   <form onSubmit={handleSaveAppSettings}>
+                <HospitalitySettings value={hospitalityConfig(appSettings.hospitality)} onChange={hospitality=>setAppSettings({...appSettings,hospitality})}/>
+                <div className="hospitality-settings hotel-settings-fields"><label>Company logo URL<input type="url" placeholder="https://…" value={appSettings.logoUrl||""} onChange={e=>setAppSettings({...appSettings,logoUrl:e.target.value})}/></label><label>Guest welcome message<input maxLength={160} value={appSettings.guestWelcomeMessage||""} onChange={e=>setAppSettings({...appSettings,guestWelcomeMessage:e.target.value})}/></label></div>
 
                 {/* Organization Identity */}
                 <div style={{ marginBottom: "24px", borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
@@ -439,7 +447,7 @@ export default function SystemSettingsPage({
                         Automated Guest Service Recovery Follow-Up
                       </strong>
                       <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--muted)" }}>
-                        Automatically send digital apology and recovery voucher invitation when a critical review is logged.
+                        Queue a guest recovery follow-up when a case with an email contact is resolved.
                       </p>
                     </div>
                     <button
@@ -472,7 +480,7 @@ export default function SystemSettingsPage({
                 <div style={{ marginTop: "32px", display: "flex", justifyContent: "flex-end" }}>
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || loading || !settingsLoaded}
                     className="button button-dark"
                     style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px" }}
                   >

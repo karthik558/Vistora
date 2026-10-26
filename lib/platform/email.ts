@@ -1,6 +1,7 @@
 export function emailContent(kind:string,payload:any) {
- const subjects:Record<string,string>={sla:"Service case overdue",followup:"How was your concern resolved?",invitation:"Tell us about your stay",team_invitation:"Join your Vistora workspace",report:"Your guest experience report"};
+ const subjects:Record<string,string>={sla:"Service case overdue",followup:"How was your concern resolved?",invitation:"Tell us about your stay",team_invitation:"Join your Vistora workspace",report:"Your guest experience report",operations_alert:"Hotel service job overdue"};
  let body=payload.link?"Open your secure link: "+payload.link:"";
+ if(kind==="operations_alert")body="A hotel service job is overdue.\nJob: "+payload.jobId+"\nTitle: "+payload.title+"\nDeadline: "+payload.deadline;
  if(kind==="sla")body="A service case is overdue.\nCase: "+payload.feedbackId+"\nDepartment: "+payload.department+"\nDeadline: "+payload.deadline;
  if(kind==="report")body="Guest experience report\nPeriod: "+payload.summary.from+" to "+payload.summary.to+"\n\n"+Object.entries(payload.summary.current).map(([k,v])=>k+": "+(v??"No responses")).join("\n");
  return {subject:subjects[kind]||"Workspace notification",text:body};

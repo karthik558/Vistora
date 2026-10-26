@@ -54,10 +54,14 @@ export default function CustomSelect({
       const node = containerRef.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
+      const shell=node.closest(".app-shell");
+      const accents:Record<string,string>={};
+      if(shell){const theme=getComputedStyle(shell);for(const key of ["--sage","--sage-deep","--sage-soft","--sage-hover","--module-accent"])accents[key]=theme.getPropertyValue(key);}
       const width = Math.max(rect.width, 196);
       const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
       const openUp = window.innerHeight - rect.bottom < 220;
       setFloatingStyle({
+        ...accents,
         position: "fixed",
         top: openUp ? "auto" : rect.bottom + 6,
         bottom: openUp ? window.innerHeight - rect.top + 6 : "auto",

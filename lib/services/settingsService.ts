@@ -1,8 +1,11 @@
 import { checked, workspaceDb, workspaceUser } from "../platform/db";
+import {HospitalityConfig,hospitalityConfig} from "../hospitality/config";
 export interface ApplicationSettings {
   organizationName: string; projectName: string; brandTagline: string;
   slaCriticalMinutes: number; slaStandardMinutes: number; autoGuestFollowUp: boolean;
   alertEmail: string; defaultTimezone: string; dataRetentionDays: number;
+  hospitality?:HospitalityConfig;
+  logoUrl?:string; guestWelcomeMessage?:string;
 }
 export interface PropertySettingConfig {
   propertyId: string; propertyName: string; propertyCode: string; brand: string; isActive: boolean;
@@ -11,14 +14,13 @@ export interface PropertySettingConfig {
 const defaults: ApplicationSettings = { organizationName:"",projectName:"Vistora",brandTagline:"Guest experience operations",slaCriticalMinutes:15,slaStandardMinutes:120,autoGuestFollowUp:true,alertEmail:"",defaultTimezone:"Asia/Kolkata",dataRetentionDays:365 };
 export async function getApplicationSettings(): Promise<ApplicationSettings> {
   const db=workspaceDb(), org=workspaceUser().organizationId;
-  const organization=checked(await db.from("organizations").select("name,timezone").eq("id",org).single());
+  const organization=checked(await db.from("organizations").select("name,timezone,logo_url,welcome_message").eq("id",org).single());
   const rows=checked(await db.from("organization_settings").select("settings").eq("organization_id",org));
-  return {...defaults,...(rows[0]?.settings || {}),organizationName:organization.name,defaultTimezone:organization.timezone};
+  return {...defaults,...(rows[0]?.settings || {}),organizationName:organization.name,defaultTimezone:organization.timezone,logoUrl:organization.logo_url||"",guestWelcomeMessage:organization.welcome_message,hospitality:hospitalityConfig(rows[0]?.settings?.hospitality)};
 }
 export async function updateApplicationSettings(patch: Partial<ApplicationSettings>) {
   const next={...await getApplicationSettings(),...patch};
-  checked(await workspaceDb().from("organizations").update({name:next.organizationName,timezone:next.defaultTimezone}).eq("id",workspaceUser().organizationId).select("id").single());
-  checked(await workspaceDb().from("organization_settings").upsert({organization_id:workspaceUser().organizationId,settings:next,updated_at:new Date().toISOString()}).select().single());
+  checked(await workspaceDb().rpc("save_hotel_settings",{p_settings:next}));
   return next;
 }
 export async function getAllPropertySettings(): Promise<PropertySettingConfig[]> {

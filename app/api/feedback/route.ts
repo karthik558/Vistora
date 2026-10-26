@@ -17,6 +17,9 @@ export async function POST(request:NextRequest) {
   const departments=["Front Desk","Housekeeping","Food & Beverage","Concierge","Facilities & Room","Spa & Wellness","Valet & Transfers"];
   if(!departments.includes(body.department))throw new PlatformError("Choose a valid department.");
   let invitationId:string|undefined;
+  let stayId:string|undefined;
+  let stayRoom:string|undefined;
+  let stayGuest:string|undefined;
   if(body.publicToken&&body.publicToken!=="verified") {
     const token=text(body.publicToken,"Invitation",200);
     const {data:inv,error}=await db.from("guest_invitations").select("id,property_id,status,expires_at").eq("token_hash",hashToken(token)).maybeSingle();
@@ -25,8 +28,13 @@ export async function POST(request:NextRequest) {
       if(inv.property_id!==property.id||inv.status!=="pending"||Date.parse(inv.expires_at)<=Date.now())throw new PlatformError("This invitation has expired or was already used.",410);
       invitationId=inv.id;
     } else {
-      const {data:stay}=await db.from("stays").select("id").eq("public_token",token).eq("property_id",property.id).eq("status","active").maybeSingle();
+      const {data:stay,error:stayError}=await db.from("stays").select("id,room_number,guests(full_name)").eq("public_token",token).eq("property_id",property.id).eq("status","active").maybeSingle();
+      if(stayError)checked({data:stay,error:stayError});
       if(!stay)throw new PlatformError("Invitation not found.",404);
+      stayId=stay.id;
+      stayRoom=stay.room_number;
+      const guest=Array.isArray(stay.guests)?stay.guests[0]:stay.guests;
+      stayGuest=guest?.full_name;
     }
   }
   const questions=checked(await db.from("feedback_questions").select("id,question_text,question_type,is_required,department,options").eq("organization_id",property.organization_id).eq("is_active",true).or("property_id.is.null,property_id.eq."+property.id));
@@ -40,8 +48,8 @@ export async function POST(request:NextRequest) {
   if(relevant.some(q=>q.is_required&&!answers.some(a=>a.questionId===q.id&&a.answerValue)))throw new PlatformError("Please answer the required questions.");
   const npsQuestion=relevant.find(q=>q.question_type==="nps"),npsAnswer=answers.find(a=>a.questionId===npsQuestion?.id)?.answerValue;
   const created=await createFeedback({
-    organizationId:property.organization_id,propertyId:property.id,invitationId,rating,department:body.department,
-    guestName:text(body.guestName||"Guest","Name",100),roomNumber:text(body.roomNumber||"Guest","Room",50),
+    organizationId:property.organization_id,propertyId:property.id,invitationId,stayId,rating,department:body.department,
+    guestName:text(stayGuest||body.guestName||"Guest","Name",100),roomNumber:text(stayRoom||body.roomNumber||"Guest","Room",50),
     comment:text(body.comment,"Comment",4000,false),guestEmail:body.guestEmail?text(body.guestEmail,"Email",254):undefined,
     guestPhone:body.guestPhone?text(body.guestPhone,"Phone",30):undefined,wantsContact:body.wantsContact===true,
     contactPreference:["email","phone","in_person"].includes(body.contactPreference)?body.contactPreference:undefined,

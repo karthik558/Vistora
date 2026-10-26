@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  ClipboardList,
   BarChart3,
   MessageSquare,
   AlertCircle,
@@ -41,7 +42,10 @@ import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterD
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
+import {useAppearance} from "./AppearanceProvider";
+import {accentTokens,moduleForPath,ModuleName} from "../lib/hospitality/config";
 import CasePanel from "./CasePanel";
+import HospitalitySummary from "./HospitalitySummary";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
@@ -83,6 +87,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
   { label: "Audit log", href: "/dashboard/audit-log", group: "Operations & audit", icon: History, requiredRight: "view_audit_log" },
+  { label: "Hotel operations", href: "/dashboard/hospitality", group: "Operations", icon: ClipboardList, adminOnly: true },
   { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
   { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
@@ -171,14 +176,18 @@ export function AppShell({
   active = "Dashboard",
   complaints = 0,
   user: propUser,
+  module: moduleOverride,
 }: {
   children: React.ReactNode;
   active?: string;
   complaints?: number;
   user?: WorkspaceUser | null;
+  module?:ModuleName;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const appearance=useAppearance();
+  const activeModule=moduleOverride||moduleForPath(pathname||'/dashboard');
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
@@ -316,7 +325,7 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} style={accentTokens(appearance.config.colors[activeModule],appearance.dark) as React.CSSProperties}>
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
         {mobileNavOpen && (
@@ -928,6 +937,7 @@ export default function Dashboard({
           <>
             <SlaRecoveryBanner openComplaintsCount={openComplaintsCount} />
 
+            {user?.isOrganizationAdmin && <HospitalitySummary property={selectedProperty}/>}
             <section className="metric-grid">
               <Metric
                 label="Feedback received"

@@ -91,6 +91,7 @@ export interface UserProfile {
 }
 
 export interface SubmitFeedbackPayload {
+  stayId?:string;
   organizationId?: string;
   invitationId?: string;
   recommendationScore?: number | null;

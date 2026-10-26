@@ -6,6 +6,8 @@ import {sendEmail} from "./email";
 export async function runWorker(org?:string) {
  const db=serviceDb();
  checked({data:true,error:(await db.rpc("schedule_workspace_work",{p_org:org||null})).error});
+ const hotelSchedule=await db.rpc("schedule_hotel_work",{p_org:org||null});
+ if(!hotelSchedule.error||!["42883","PGRST202"].includes(hotelSchedule.error.code))checked({data:true,error:hotelSchedule.error});
  const jobs=checked(await db.rpc("claim_workspace_jobs",{p_org:org||null,p_limit:5})),results=[];
  for(const job of jobs) {
   let status="retry",detail="";
@@ -20,6 +22,11 @@ export async function runWorker(org?:string) {
   }
   try {
    const payload={...job.payload};
+   if(job.kind==="operations_alert") {
+    const record=await db.from("service_jobs").select("status").eq("id",payload.jobId).eq("organization_id",job.organization_id).maybeSingle();
+    if(record.error)throw new Error(record.error.message);
+    if(!record.data||!["open","in_progress"].includes(record.data.status)){status="failed";throw new Error("Service job is closed or removed; alert cancelled.");}
+   }
    if(job.kind==="sla") {
     const record=await db.from("feedback").select("status").eq("id",payload.feedbackId).eq("organization_id",job.organization_id).maybeSingle();
     if(record.error)throw new Error(record.error.message);

@@ -265,6 +265,7 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
       property_id: propertyId,
       organization_id: payload.organizationId,
       invitation_id: payload.invitationId || null,
+      stay_id:payload.stayId||null,
       recommendation_score: payload.recommendationScore ?? null,
       guest_name: payload.guestName || "Guest",
       guest_email: payload.guestEmail || null,

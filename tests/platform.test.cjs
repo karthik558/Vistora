@@ -5,6 +5,20 @@ require.extensions[".ts"]=(module,file)=>module._compile(ts.transpileModule(fs.r
 const {summarize,managementReport,csvCell}=require("../lib/platform/reports.ts");
 const {newToken,hashToken,encryptSecret,decryptSecret}=require("../lib/platform/secrets.ts");
 const {validateDestination}=require("../lib/platform/transport.ts");
+const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,contrastRatio}=require("../lib/hospitality/config.ts");
+test("Hotel configuration validates colors and budget precision without floating-point cost errors",()=>{
+ assert.equal(moneyToMinor("19.99"),1999);assert.equal(moneyToMinor("0.01"),1);
+ for(const value of ["-1","1e3","1.001","NaN"])assert.throws(()=>moneyToMinor(value));
+ assert.throws(()=>validateHospitality({...DEFAULT_HOSPITALITY,colors:{...DEFAULT_HOSPITALITY.colors,feedback:"red"}}));
+ assert.throws(()=>validateHospitality({...DEFAULT_HOSPITALITY,monthlyBudgetMinor:-1}));
+ assert.throws(()=>validateHospitality({...DEFAULT_HOSPITALITY,inspectionChecklist:["Same","Same"]}));
+ assert.equal(validateHospitality({}).alertsEnabled,false);
+});
+test("Custom section colors retain readable variants in light and dark mode",()=>{
+ for(const hex of ["#ffffff","#000000","#00ff00","#243d6a"])for(const dark of [false,true]){
+  const tokens=accentTokens(hex,dark);assert.ok(contrastRatio(tokens["--sage-deep"],dark?"#1c1f24":"#ffffff")>=4.5);
+ }
+});
 const base={property_id:"one",department:"Front Desk",rating:5,recommendation_score:null,status:"under_review",assigned_to:null,category:"general",created_at:"2026-10-20T00:00:00Z",first_response_at:null,resolved_at:null,sla_deadline:null};
 test("CSV escapes quotes and neutralizes spreadsheet formulas",()=>{assert.equal(csvCell('=HYPERLINK("https://example.com")'),'"\'=HYPERLINK(""https://example.com"")"');assert.equal(csvCell(-100),'"-100"');});
 test("NPS uses genuine 0–10 answers, including zero; five-star history is excluded",()=>{
@@ -63,7 +77,7 @@ test("Worker records blocked providers, cancels resolved alerts, and queues retr
 });
 test("Workspace API rejects non-admins even with operational rights; report permission remains separate",async()=>{
  const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server");
- const workspace=require("../app/api/platform/route.ts"),reports=require("../app/api/reports/workspace/route.ts");
+ const workspace=require("../app/api/platform/route.ts"),reports=require("../app/api/reports/workspace/route.ts"),hotel=require("../app/api/hospitality/route.ts"),settings=require("../app/api/settings/route.ts");
  const originalSession=db.sessionDb;
  const user={id:"member",organizationId:"company",isOrganizationAdmin:false,accessToken:"verified",rights:["view_feedback","manage_complaints","manage_settings","manage_users","export_reports"],role:"staff"};
  const client={from(){throw new Error("Unauthorized request reached the database");}};
@@ -76,5 +90,11 @@ test("Workspace API rejects non-admins even with operational rights; report perm
   }
   const response=await db.workspaceContext.run({user:{...user,rights:[]},client},()=>reports.GET(new NextRequest("http://localhost/api/reports/workspace")));
   assert.equal(response.status,403,"Report data still requires export_reports");
+  for(const method of ["GET","POST","PATCH"]){
+   const denied=await db.workspaceContext.run({user,client},()=>hotel[method](new NextRequest("http://localhost/api/hospitality",{method,...(method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:"{}"})})));
+   assert.equal(denied.status,403,"Hotel modules must be admin-only: "+method);
+  }
+  const settingsDenied=await db.workspaceContext.run({user,client},()=>settings.GET(new NextRequest("http://localhost/api/settings")));
+  assert.equal(settingsDenied.status,403,"Configuration must be admin-only even with manage_settings");
  }finally{db.sessionDb=originalSession;}
 });

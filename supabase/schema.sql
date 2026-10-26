@@ -1295,3 +1295,341 @@ DROP TRIGGER IF EXISTS cleanup_assignments ON public.properties;
 CREATE TRIGGER cleanup_assignments BEFORE DELETE ON public.properties FOR EACH ROW EXECUTE FUNCTION public.cleanup_property_assignments();
 COMMIT;
 
+-- 20. HOTEL OPERATIONS: GUEST STAYS, ROOM READINESS, JOBS AND INSPECTIONS
+-- Apply section 20 onward to an installation already upgraded through section 19.
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+ALTER TABLE public.guests ADD COLUMN IF NOT EXISTS preferences text NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS public.hotel_rooms(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+ room_number text NOT NULL CHECK(length(room_number) BETWEEN 1 AND 30), floor text NOT NULL DEFAULT '',
+ room_type text NOT NULL DEFAULT 'Standard', capacity integer NOT NULL DEFAULT 2 CHECK(capacity BETWEEN 1 AND 20),
+ status text NOT NULL DEFAULT 'dirty' CHECK(status IN ('dirty','clean','inspected','out_of_service')),
+ notes text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(property_id,room_number)
+);
+ALTER TABLE public.stays ADD COLUMN IF NOT EXISTS room_id uuid REFERENCES public.hotel_rooms(id) ON DELETE RESTRICT;
+ALTER TABLE public.stays ADD COLUMN IF NOT EXISTS guest_count integer NOT NULL DEFAULT 1 CHECK(guest_count BETWEEN 1 AND 20);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='hotel_stay_dates' AND conrelid='public.stays'::regclass) THEN
+  ALTER TABLE public.stays ADD CONSTRAINT hotel_stay_dates CHECK(room_id IS NULL OR check_out_date>check_in_date);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='hotel_stay_no_overlap' AND conrelid='public.stays'::regclass) THEN
+  ALTER TABLE public.stays ADD CONSTRAINT hotel_stay_no_overlap EXCLUDE USING gist
+   (room_id WITH =,daterange(check_in_date,check_out_date,'[)') WITH &&)
+   WHERE(room_id IS NOT NULL AND status IN ('reserved','active'));
+ END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS public.service_jobs(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+ room_id uuid REFERENCES public.hotel_rooms(id) ON DELETE SET NULL, feedback_id uuid REFERENCES public.feedback(id) ON DELETE SET NULL,
+ kind text NOT NULL CHECK(kind IN ('guest_request','cleaning','maintenance','inspection')),
+ title text NOT NULL CHECK(length(title) BETWEEN 1 AND 160), description text NOT NULL DEFAULT '',
+ status text NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed','cancelled')),
+ priority text NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high','critical')),
+ assigned_to uuid REFERENCES public.profiles(id), created_by uuid REFERENCES public.profiles(id),
+ due_at timestamptz NOT NULL, escalated_at timestamptz, completed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.room_inspections(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+ room_id uuid NOT NULL REFERENCES public.hotel_rooms(id) ON DELETE CASCADE,
+ inspector_id uuid NOT NULL REFERENCES public.profiles(id), answers jsonb NOT NULL, passed boolean NOT NULL DEFAULT false,
+ notes text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.hotel_activity(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ entity_type text NOT NULL, entity_id uuid NOT NULL, actor_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+ action text NOT NULL, changes jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS hotel_rooms_property ON public.hotel_rooms(organization_id,property_id,status);
+CREATE INDEX IF NOT EXISTS hotel_stays_room ON public.stays(room_id,status,check_in_date);
+CREATE INDEX IF NOT EXISTS service_jobs_due ON public.service_jobs(organization_id,status,due_at);
+CREATE INDEX IF NOT EXISTS room_inspections_room ON public.room_inspections(room_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS hotel_activity_company ON public.hotel_activity(organization_id,created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.hotel_enabled(module text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT COALESCE((SELECT (settings->'hospitality'->'modules'->>module)::boolean FROM public.organization_settings WHERE organization_id=public.workspace_org()),true)
+$$;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['hotel_rooms','service_jobs','room_inspections','hotel_activity'] LOOP
+  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL ON public.%I FROM anon,authenticated',t);
+  EXECUTE format('GRANT ALL ON public.%I TO service_role',t);
+  EXECUTE format('GRANT SELECT ON public.%I TO authenticated',t);
+  EXECUTE format('DROP POLICY IF EXISTS hotel_read ON public.%I',t);
+  EXECUTE format('CREATE POLICY hotel_read ON public.%I FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin())',t);
+  IF t<>'hotel_activity' THEN
+   EXECUTE format('GRANT INSERT,UPDATE ON public.%I TO authenticated',t);
+   EXECUTE format('DROP POLICY IF EXISTS hotel_write ON public.%I',t);
+   EXECUTE format('CREATE POLICY hotel_write ON public.%I FOR INSERT TO authenticated WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin())',t);
+   IF t<>'room_inspections' THEN
+    EXECUTE format('DROP POLICY IF EXISTS hotel_update ON public.%I',t);
+    EXECUTE format('CREATE POLICY hotel_update ON public.%I FOR UPDATE TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin())',t);
+   END IF;
+   EXECUTE format('DROP TRIGGER IF EXISTS stamp_workspace_trigger ON public.%I',t);
+   EXECUTE format('CREATE TRIGGER stamp_workspace_trigger BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.stamp_workspace()',t);
+   EXECUTE format('DROP TRIGGER IF EXISTS workspace_links_trigger ON public.%I',t);
+   EXECUTE format('CREATE TRIGGER workspace_links_trigger BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.check_workspace_links()',t);
+  END IF;
+ END LOOP;
+END $$;
+DROP POLICY IF EXISTS hotel_guest_insert ON public.guests;
+CREATE POLICY hotel_guest_insert ON public.guests FOR INSERT TO authenticated WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin() AND public.hotel_enabled('guests'));
+DROP POLICY IF EXISTS hotel_guest_update ON public.guests;
+CREATE POLICY hotel_guest_update ON public.guests FOR UPDATE TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin() AND public.hotel_enabled('guests'));
+DROP POLICY IF EXISTS hotel_stay_insert ON public.stays;
+CREATE POLICY hotel_stay_insert ON public.stays FOR INSERT TO authenticated WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin() AND public.hotel_enabled('guests'));
+DROP POLICY IF EXISTS hotel_stay_update ON public.stays;
+CREATE POLICY hotel_stay_update ON public.stays FOR UPDATE TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin() AND public.hotel_enabled('guests'));
+
+CREATE OR REPLACE FUNCTION public.hotel_record_activity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE changes jsonb;
+BEGIN
+ IF TG_OP='INSERT' THEN changes:=jsonb_build_object('event','created');
+ ELSE changes:=(SELECT COALESCE(jsonb_object_agg(n.key,jsonb_build_object('from',o.value,'to',n.value)),'{}') FROM jsonb_each(to_jsonb(NEW)) n JOIN jsonb_each(to_jsonb(OLD)) o USING(key) WHERE n.value IS DISTINCT FROM o.value AND n.key IN ('status','priority','assigned_to','due_at','passed')); END IF;
+ IF changes<>'{}' THEN INSERT INTO public.hotel_activity(organization_id,entity_type,entity_id,actor_id,action,changes) VALUES(NEW.organization_id,TG_TABLE_NAME,NEW.id,auth.uid(),lower(TG_OP),changes); END IF;
+ RETURN NEW;
+END $$;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['guests','stays','hotel_rooms','service_jobs','room_inspections'] LOOP
+  EXECUTE format('DROP TRIGGER IF EXISTS hotel_history ON public.%I',t);
+  EXECUTE format('CREATE TRIGGER hotel_history AFTER INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.hotel_record_activity()',t);
+ END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.hotel_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE room public.hotel_rooms; parent_org uuid; enabled boolean; checklist jsonb; all_passed boolean; config jsonb; matched integer;
+BEGIN
+ IF TG_TABLE_NAME='hotel_rooms' THEN
+  IF TG_OP='UPDATE' AND (NEW.organization_id,NEW.property_id,NEW.id) IS DISTINCT FROM (OLD.organization_id,OLD.property_id,OLD.id) THEN RAISE EXCEPTION 'Room identity and property cannot be changed'; END IF;
+  IF NEW.status='inspected' AND (TG_OP='INSERT' OR OLD.status<>'inspected') AND (pg_trigger_depth()<2 OR NOT EXISTS(SELECT 1 FROM public.room_inspections i WHERE i.room_id=NEW.id AND i.passed AND (TG_OP='INSERT' OR i.created_at>=OLD.updated_at))) THEN RAISE EXCEPTION 'Record a passing inspection to mark a room inspected'; END IF;
+  NEW.updated_at:=now(); RETURN NEW;
+ END IF;
+ SELECT settings->'hospitality' INTO config FROM public.organization_settings WHERE organization_id=NEW.organization_id;
+ IF TG_TABLE_NAME='stays' THEN
+  IF NEW.room_id IS NULL THEN RETURN NEW; END IF;
+  SELECT * INTO STRICT room FROM public.hotel_rooms WHERE id=NEW.room_id FOR UPDATE;
+  IF room.organization_id<>NEW.organization_id OR room.property_id<>NEW.property_id THEN RAISE EXCEPTION 'Room belongs to another company or property'; END IF;
+  IF NEW.guest_count>room.capacity THEN RAISE EXCEPTION 'Room capacity exceeded'; END IF;
+  IF TG_OP='UPDATE' AND OLD.status IN ('checked_out','cancelled') AND NEW IS DISTINCT FROM OLD THEN RAISE EXCEPTION 'Closed stays are immutable'; END IF;
+  IF TG_OP='UPDATE' AND OLD.status='active' AND (NEW.guest_id,NEW.room_id,NEW.property_id,NEW.check_in_date,NEW.check_out_date) IS DISTINCT FROM (OLD.guest_id,OLD.room_id,OLD.property_id,OLD.check_in_date,OLD.check_out_date) THEN RAISE EXCEPTION 'Active stay dates and guest cannot be changed'; END IF;
+  IF NEW.status NOT IN ('reserved','active','checked_out','cancelled') THEN RAISE EXCEPTION 'Invalid stay status'; END IF;
+  IF TG_OP='INSERT' AND NEW.status<>'reserved' THEN RAISE EXCEPTION 'Create a reservation before check-in'; END IF;
+  IF TG_OP='UPDATE' AND NEW.status='checked_out' AND OLD.status<>'active' THEN RAISE EXCEPTION 'Only active stays can check out'; END IF;
+  IF NEW.status IN ('reserved','active') AND room.status='out_of_service' THEN RAISE EXCEPTION 'Room is out of service'; END IF;
+  IF NEW.status='active' AND (TG_OP='INSERT' OR OLD.status<>'active') THEN
+   IF room.status NOT IN ('clean','inspected') OR (COALESCE((config->>'requireInspection')::boolean,true) AND room.status<>'inspected') THEN RAISE EXCEPTION 'Room must be ready and inspected before check-in'; END IF;
+   IF timezone(COALESCE((SELECT timezone FROM public.properties WHERE id=NEW.property_id),'UTC'),now())::date<NEW.check_in_date OR timezone(COALESCE((SELECT timezone FROM public.properties WHERE id=NEW.property_id),'UTC'),now())::date>=NEW.check_out_date THEN RAISE EXCEPTION 'Check-in must be within the reserved dates'; END IF;
+  END IF;
+  IF TG_OP='UPDATE' AND OLD.status='active' AND NEW.status IN ('checked_out','cancelled') THEN
+   UPDATE public.hotel_rooms SET status=CASE WHEN status='out_of_service' THEN status ELSE 'dirty' END WHERE id=NEW.room_id;
+  END IF;
+  NEW.room_number:=room.room_number; RETURN NEW;
+ END IF;
+ IF NEW.room_id IS NOT NULL THEN
+  SELECT * INTO STRICT room FROM public.hotel_rooms WHERE id=NEW.room_id FOR UPDATE;
+  IF room.organization_id<>NEW.organization_id OR room.property_id<>NEW.property_id THEN RAISE EXCEPTION 'Room belongs to another company or property'; END IF;
+ END IF;
+ IF TG_TABLE_NAME='service_jobs' THEN
+  IF NEW.created_by IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=NEW.created_by AND organization_id=NEW.organization_id) THEN RAISE EXCEPTION 'Job creator belongs to another company'; END IF;
+  IF NEW.feedback_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.feedback WHERE id=NEW.feedback_id AND organization_id=NEW.organization_id AND property_id=NEW.property_id) THEN RAISE EXCEPTION 'Feedback belongs to another property'; END IF;
+  IF NEW.assigned_to IS NOT NULL AND (TG_OP='INSERT' OR NEW.assigned_to IS DISTINCT FROM OLD.assigned_to) AND NOT EXISTS(SELECT 1 FROM public.organization_members m JOIN public.profiles p ON p.id=m.user_id WHERE m.user_id=NEW.assigned_to AND m.organization_id=NEW.organization_id AND m.is_active AND (m.role IN ('owner','admin') OR p.property_id=NEW.property_id OR NEW.property_id=ANY(p.property_ids))) THEN RAISE EXCEPTION 'Assignee needs active access to this property'; END IF;
+  IF TG_OP='UPDATE' AND OLD.status IN ('completed','cancelled') AND
+   ((to_jsonb(NEW)-'feedback_id'-'room_id'-'updated_at') IS DISTINCT FROM (to_jsonb(OLD)-'feedback_id'-'room_id'-'updated_at')
+   OR (NEW.feedback_id IS DISTINCT FROM OLD.feedback_id AND NEW.feedback_id IS NOT NULL)
+   OR (NEW.room_id IS DISTINCT FROM OLD.room_id AND NEW.room_id IS NOT NULL)) THEN RAISE EXCEPTION 'Closed jobs are immutable; create a follow-up job'; END IF;
+  IF NEW.status='completed' AND (TG_OP='INSERT' OR OLD.status<>'completed') THEN
+   NEW.completed_at:=now();
+   IF NEW.kind='cleaning' AND NEW.room_id IS NOT NULL THEN UPDATE public.hotel_rooms SET status='clean' WHERE id=NEW.room_id AND status<>'out_of_service'; END IF;
+  END IF;
+  NEW.updated_at:=now(); RETURN NEW;
+ END IF;
+ IF TG_TABLE_NAME='room_inspections' THEN
+  IF NEW.inspector_id IS DISTINCT FROM auth.uid() AND auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Inspection must be attributed to the signed-in administrator'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=NEW.inspector_id AND organization_id=NEW.organization_id AND is_active AND role IN ('owner','admin')) THEN RAISE EXCEPTION 'Inspector must be an active company administrator'; END IF;
+  checklist:=COALESCE(config->'inspectionChecklist','["Room cleaned and linen replaced","Bathroom and amenities checked","Safety equipment checked","Maintenance issues cleared"]'::jsonb);
+  IF jsonb_typeof(NEW.answers)<>'array' OR jsonb_array_length(NEW.answers)<>jsonb_array_length(checklist) THEN RAISE EXCEPTION 'Answer every inspection check'; END IF;
+  SELECT count(DISTINCT a->>'label'),bool_and((a->>'passed')::boolean) INTO matched,all_passed FROM jsonb_array_elements(NEW.answers) a WHERE checklist @> jsonb_build_array(a->>'label') AND jsonb_typeof(a->'passed')='boolean';
+  IF matched<>jsonb_array_length(checklist) THEN RAISE EXCEPTION 'Inspection checklist changed; reload before submitting'; END IF;
+  NEW.passed:=COALESCE(all_passed,false); RETURN NEW;
+ END IF;
+ RETURN NEW;
+END $$;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['hotel_rooms','stays','service_jobs','room_inspections'] LOOP
+  EXECUTE format('DROP TRIGGER IF EXISTS zz_hotel_guard ON public.%I',t);
+  EXECUTE format('CREATE TRIGGER zz_hotel_guard BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.hotel_guard()',t);
+ END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION public.apply_inspection_result() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ UPDATE public.hotel_rooms SET status=CASE WHEN status='out_of_service' THEN status WHEN NEW.passed THEN 'inspected' ELSE 'dirty' END WHERE id=NEW.room_id;
+ IF NOT NEW.passed THEN INSERT INTO public.service_jobs(organization_id,property_id,room_id,kind,title,description,priority,created_by,due_at)
+ VALUES(NEW.organization_id,NEW.property_id,NEW.room_id,'maintenance','Inspection follow-up','Review failed checks from inspection '||NEW.id,'high',NEW.inspector_id,now()+make_interval(mins=>COALESCE((SELECT (settings->'hospitality'->>'taskResponseMinutes')::integer FROM public.organization_settings WHERE organization_id=NEW.organization_id),120))); END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS inspection_result ON public.room_inspections;
+CREATE TRIGGER inspection_result AFTER INSERT ON public.room_inspections FOR EACH ROW EXECUTE FUNCTION public.apply_inspection_result();
+COMMIT;
+
+-- 21. COST APPROVALS WITH TRANSACTIONAL HARD BUDGET LIMITS
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.operating_costs(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE RESTRICT,
+ job_id uuid REFERENCES public.service_jobs(id) ON DELETE RESTRICT, description text NOT NULL CHECK(length(description) BETWEEN 1 AND 300),
+ category text NOT NULL CHECK(category IN ('supplies','maintenance','guest_recovery','other')),
+ amount_minor bigint NOT NULL CHECK(amount_minor>0), currency text NOT NULL, expense_date date NOT NULL DEFAULT CURRENT_DATE,
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+ requested_by uuid NOT NULL REFERENCES public.profiles(id), approved_by uuid REFERENCES public.profiles(id),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS operating_costs_month ON public.operating_costs(organization_id,expense_date,currency,status);
+ALTER TABLE public.operating_costs ALTER COLUMN expense_date SET DEFAULT (now() AT TIME ZONE 'UTC')::date;
+ALTER TABLE public.operating_costs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.operating_costs FROM anon,authenticated;
+GRANT ALL ON public.operating_costs TO service_role;
+GRANT SELECT,INSERT,UPDATE ON public.operating_costs TO authenticated;
+DROP POLICY IF EXISTS costs_admin ON public.operating_costs;
+CREATE POLICY costs_admin ON public.operating_costs FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin());
+DROP TRIGGER IF EXISTS stamp_workspace_trigger ON public.operating_costs;
+CREATE TRIGGER stamp_workspace_trigger BEFORE INSERT OR UPDATE ON public.operating_costs FOR EACH ROW EXECUTE FUNCTION public.stamp_workspace();
+DROP TRIGGER IF EXISTS workspace_links_trigger ON public.operating_costs;
+CREATE TRIGGER workspace_links_trigger BEFORE INSERT OR UPDATE ON public.operating_costs FOR EACH ROW EXECUTE FUNCTION public.check_workspace_links();
+CREATE OR REPLACE FUNCTION public.guard_operating_cost() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE config jsonb; used bigint; cap bigint; per_expense bigint;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text,0));
+ SELECT settings->'hospitality' INTO config FROM public.organization_settings WHERE organization_id=NEW.organization_id;
+ cap:=COALESCE((config->>'monthlyBudgetMinor')::bigint,0);per_expense:=COALESCE((config->>'perExpenseLimitMinor')::bigint,0);
+ IF TG_OP='UPDATE' THEN
+  IF (NEW.organization_id,NEW.property_id,NEW.job_id,NEW.amount_minor,NEW.currency,NEW.expense_date,NEW.description,NEW.category,NEW.requested_by) IS DISTINCT FROM (OLD.organization_id,OLD.property_id,OLD.job_id,OLD.amount_minor,OLD.currency,OLD.expense_date,OLD.description,OLD.category,OLD.requested_by) THEN RAISE EXCEPTION 'Cost details are immutable; reject a pending entry and create a correction'; END IF;
+  IF OLD.status<>'pending' THEN RAISE EXCEPTION 'Final cost decisions are immutable'; END IF;
+  IF NEW.status NOT IN ('approved','rejected') THEN RAISE EXCEPTION 'Choose approve or reject'; END IF;
+ ELSE
+  NEW.currency:=COALESCE(config->>'currency','INR');
+  NEW.status:=CASE WHEN NEW.amount_minor<=COALESCE((config->>'approvalThresholdMinor')::bigint,0) THEN 'approved' ELSE 'pending' END;
+  NEW.requested_by:=COALESCE(auth.uid(),NEW.requested_by);
+  IF date_trunc('month',NEW.expense_date)<>date_trunc('month',(now() AT TIME ZONE 'UTC')::date) THEN RAISE EXCEPTION 'New operating costs must belong to the current UTC month'; END IF;
+ END IF;
+ IF NEW.job_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.service_jobs WHERE id=NEW.job_id AND organization_id=NEW.organization_id AND property_id=NEW.property_id) THEN RAISE EXCEPTION 'Job belongs to another property'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=NEW.requested_by AND organization_id=NEW.organization_id AND is_active AND role IN ('owner','admin')) THEN RAISE EXCEPTION 'Cost creator must be a company administrator'; END IF;
+ IF NEW.status IN ('pending','approved') THEN
+  IF cap<=0 OR per_expense<=0 THEN RAISE EXCEPTION 'Configure positive monthly and per-expense limits in Settings before recording costs'; END IF;
+  IF NEW.amount_minor>per_expense THEN RAISE EXCEPTION 'Per-expense hard limit exceeded'; END IF;
+  SELECT COALESCE(sum(amount_minor),0) INTO used FROM public.operating_costs WHERE organization_id=NEW.organization_id AND currency=NEW.currency AND date_trunc('month',expense_date)=date_trunc('month',NEW.expense_date) AND status IN ('pending','approved') AND id<>NEW.id;
+  IF used+NEW.amount_minor>cap THEN RAISE EXCEPTION 'Monthly hard budget limit exceeded; pending approvals also reserve budget'; END IF;
+ END IF;
+ NEW.approved_by:=CASE WHEN NEW.status IN ('approved','rejected') THEN COALESCE(auth.uid(),NEW.requested_by) ELSE NULL END;
+ NEW.updated_at:=now();RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS zz_cost_guard ON public.operating_costs;
+CREATE TRIGGER zz_cost_guard BEFORE INSERT OR UPDATE ON public.operating_costs FOR EACH ROW EXECUTE FUNCTION public.guard_operating_cost();
+DROP TRIGGER IF EXISTS hotel_history ON public.operating_costs;
+CREATE TRIGGER hotel_history AFTER INSERT OR UPDATE ON public.operating_costs FOR EACH ROW EXECUTE FUNCTION public.hotel_record_activity();
+CREATE OR REPLACE FUNCTION public.guard_hotel_budget_settings() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE config jsonb; previous jsonb; used bigint; old_currency text;
+BEGIN
+ IF TG_OP='DELETE' THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(OLD.organization_id::text,0));
+  IF EXISTS(SELECT 1 FROM public.operating_costs WHERE organization_id=OLD.organization_id AND date_trunc('month',expense_date)=date_trunc('month',(now() AT TIME ZONE 'UTC')::date) AND status IN ('pending','approved')) THEN RAISE EXCEPTION 'Cannot remove budget settings while current-month costs are reserved or approved'; END IF;
+  RETURN OLD;
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text,0));
+ config:=NEW.settings->'hospitality';
+ IF config IS NULL THEN
+  IF EXISTS(SELECT 1 FROM public.operating_costs WHERE organization_id=NEW.organization_id AND date_trunc('month',expense_date)=date_trunc('month',(now() AT TIME ZONE 'UTC')::date) AND status IN ('pending','approved')) THEN RAISE EXCEPTION 'Budget settings are required while current-month costs are reserved or approved'; END IF;
+  RETURN NEW;
+ END IF;
+ IF TG_OP='UPDATE' THEN previous:=OLD.settings->'hospitality'; END IF;
+ old_currency:=COALESCE(previous->>'currency','INR');
+ SELECT COALESCE(sum(amount_minor),0) INTO used FROM public.operating_costs WHERE organization_id=NEW.organization_id AND date_trunc('month',expense_date)=date_trunc('month',(now() AT TIME ZONE 'UTC')::date) AND status IN ('pending','approved');
+ IF EXISTS(SELECT 1 FROM public.operating_costs WHERE organization_id=NEW.organization_id AND currency<>COALESCE(config->>'currency','INR') AND date_trunc('month',expense_date)=date_trunc('month',(now() AT TIME ZONE 'UTC')::date) AND status IN ('pending','approved')) THEN RAISE EXCEPTION 'Currency cannot change while this month has reserved or approved costs'; END IF;
+ IF used>0 AND COALESCE(config->>'currency','INR')<>old_currency THEN RAISE EXCEPTION 'Currency cannot change while this month has reserved or approved costs'; END IF;
+ IF used>COALESCE((config->>'monthlyBudgetMinor')::bigint,0) THEN RAISE EXCEPTION 'Monthly budget cannot be lower than this month reserved and approved costs'; END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS hotel_budget_settings ON public.organization_settings;
+CREATE TRIGGER hotel_budget_settings BEFORE INSERT OR UPDATE OR DELETE ON public.organization_settings FOR EACH ROW EXECUTE FUNCTION public.guard_hotel_budget_settings();
+CREATE OR REPLACE FUNCTION public.hotel_budget_snapshot(p_month date DEFAULT CURRENT_DATE) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=public AS $$
+DECLARE config jsonb; approved bigint; pending bigint; cap bigint;
+BEGIN
+ IF NOT public.workspace_admin() THEN RAISE EXCEPTION 'Administrator access required' USING ERRCODE='42501'; END IF;
+ SELECT settings->'hospitality' INTO config FROM public.organization_settings WHERE organization_id=public.workspace_org();
+ cap:=COALESCE((config->>'monthlyBudgetMinor')::bigint,0);
+ SELECT COALESCE(sum(amount_minor) FILTER(WHERE status='approved'),0),COALESCE(sum(amount_minor) FILTER(WHERE status='pending'),0) INTO approved,pending FROM public.operating_costs WHERE organization_id=public.workspace_org() AND currency=COALESCE(config->>'currency','INR') AND date_trunc('month',expense_date)=date_trunc('month',p_month);
+ RETURN jsonb_build_object('currency',COALESCE(config->>'currency','INR'),'limit',cap,'approved',approved,'pending',pending,'remaining',GREATEST(0,cap-approved-pending));
+END $$;
+GRANT EXECUTE ON FUNCTION public.hotel_budget_snapshot(date) TO authenticated,service_role;
+COMMIT;
+
+-- 22. OVERDUE OPERATIONS ALERTS THROUGH THE EXISTING DELIVERY WORKER
+BEGIN;
+ALTER TABLE public.notification_outbox DROP CONSTRAINT IF EXISTS notification_outbox_kind_check;
+ALTER TABLE public.notification_outbox ADD CONSTRAINT notification_outbox_kind_check CHECK(kind IN ('sla','followup','invitation','team_invitation','report','webhook','asset_cleanup','operations_alert'));
+CREATE OR REPLACE FUNCTION public.schedule_hotel_work(p_org uuid DEFAULT NULL) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE job record; recipient text; queued integer:=0; inserted integer;
+BEGIN
+ FOR job IN SELECT j.* FROM public.service_jobs j JOIN public.organization_settings s ON s.organization_id=j.organization_id WHERE j.status IN ('open','in_progress') AND j.due_at<now() AND COALESCE((s.settings->'hospitality'->>'alertsEnabled')::boolean,false) AND (p_org IS NULL OR j.organization_id=p_org) FOR UPDATE OF j SKIP LOCKED LOOP
+  SELECT settings->>'alertEmail' INTO recipient FROM public.organization_settings WHERE organization_id=job.organization_id;
+  INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload) VALUES(job.organization_id,'operations_alert','hotel-job:'||job.id||':'||job.due_at,jsonb_build_object('jobId',job.id,'title',job.title,'deadline',job.due_at,'recipient',recipient)) ON CONFLICT(dedup_key) DO NOTHING;
+  GET DIAGNOSTICS inserted=ROW_COUNT;queued:=queued+inserted;
+  UPDATE public.service_jobs SET escalated_at=COALESCE(escalated_at,now()) WHERE id=job.id AND escalated_at IS NULL;
+ END LOOP;
+ RETURN queued;
+END $$;
+REVOKE ALL ON FUNCTION public.schedule_hotel_work(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.schedule_hotel_work(uuid) TO service_role;
+COMMIT;
+
+-- 23. ATOMIC ADMIN CONFIGURATION
+BEGIN;
+CREATE OR REPLACE FUNCTION public.save_hotel_settings(p_settings jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=public AS $$
+DECLARE org uuid;
+BEGIN
+ IF NOT public.workspace_admin() THEN RAISE EXCEPTION 'Company administrator required' USING ERRCODE='42501'; END IF;
+ org:=public.workspace_org();
+ UPDATE public.organizations SET name=p_settings->>'organizationName',timezone=p_settings->>'defaultTimezone',
+ logo_url=NULLIF(p_settings->>'logoUrl',''),welcome_message=COALESCE(p_settings->>'guestWelcomeMessage',''),
+ brand_color=COALESCE(p_settings->'hospitality'->'colors'->>'feedback',brand_color) WHERE id=org;
+ INSERT INTO public.organization_settings(organization_id,settings,updated_at) VALUES(org,p_settings,now())
+ ON CONFLICT(organization_id) DO UPDATE SET settings=excluded.settings,updated_at=now();
+ RETURN p_settings;
+END $$;
+REVOKE ALL ON FUNCTION public.save_hotel_settings(jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.save_hotel_settings(jsonb) TO authenticated;
+COMMIT;
+
+
+-- 24. LINK VERIFIED STAY FEEDBACK TO GUEST HISTORY
+BEGIN;
+CREATE OR REPLACE FUNCTION public.guard_feedback_stay() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ IF NEW.stay_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.stays WHERE id=NEW.stay_id AND organization_id=NEW.organization_id AND property_id=NEW.property_id) THEN
+  RAISE EXCEPTION 'Feedback must belong to the same property as its guest stay';
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS zz_feedback_stay ON public.feedback;
+CREATE TRIGGER zz_feedback_stay BEFORE INSERT OR UPDATE OF stay_id,property_id,organization_id ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.guard_feedback_stay();
+CREATE OR REPLACE FUNCTION public.submit_guest_feedback(p_feedback jsonb,p_answers jsonb DEFAULT '[]') RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE row public.feedback; answer jsonb;
+BEGIN
+ INSERT INTO public.feedback(organization_id,property_id,stay_id,invitation_id,recommendation_score,guest_name,guest_email,guest_phone,room_number,department,rating,comment,wants_contact,contact_preference,status,tone,resolved_at,resolution_notes)
+ VALUES((p_feedback->>'organization_id')::uuid,(p_feedback->>'property_id')::uuid,(p_feedback->>'stay_id')::uuid,(p_feedback->>'invitation_id')::uuid,(p_feedback->>'recommendation_score')::smallint,
+ p_feedback->>'guest_name',p_feedback->>'guest_email',p_feedback->>'guest_phone',p_feedback->>'room_number',(p_feedback->>'department')::department_type,(p_feedback->>'rating')::smallint,p_feedback->>'comment',
+ COALESCE((p_feedback->>'wants_contact')::boolean,false),p_feedback->>'contact_preference',(p_feedback->>'status')::feedback_status,(p_feedback->>'tone')::feedback_tone,(p_feedback->>'resolved_at')::timestamptz,p_feedback->>'resolution_notes') RETURNING * INTO row;
+ FOR answer IN SELECT * FROM jsonb_array_elements(p_answers) LOOP
+  INSERT INTO public.feedback_answers(organization_id,feedback_id,question_id,question_text,answer_value)
+  VALUES(row.organization_id,row.id,(answer->>'questionId')::uuid,answer->>'questionText',answer->>'answerValue');
+ END LOOP;
+ RETURN to_jsonb(row);
+END $$;
+REVOKE ALL ON FUNCTION public.submit_guest_feedback(jsonb,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_guest_feedback(jsonb,jsonb) TO service_role;
+COMMIT;
+

@@ -2,7 +2,9 @@ import {NextRequest,NextResponse} from "next/server";
 import {withWorkspace,text,email,number} from "../../../lib/platform/http";
 import {getApplicationSettings,updateApplicationSettings,getPropertySetting,getAllPropertySettings,updatePropertySetting} from "../../../lib/services/settingsService";
 import {assertProperty,PlatformError,workspaceUser} from "../../../lib/platform/db";
+import {validateHospitality} from "../../../lib/hospitality/config";
 export const GET=withWorkspace(async(request:NextRequest)=>{
+ if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Workspace administrator required.",403);
  const propertyId=request.nextUrl.searchParams.get("propertyId");
  return NextResponse.json({success:true,appSettings:await getApplicationSettings(),...(propertyId?{propertySetting:await getPropertySetting(propertyId)}:{propertySettings:await getAllPropertySettings()})});
 },"manage_settings");
@@ -17,6 +19,9 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
    if(p.dataRetentionDays!==undefined)patch.dataRetentionDays=number(p.dataRetentionDays,"Retention",30,3650);
    if(p.alertEmail!==undefined)patch.alertEmail=p.alertEmail?email(p.alertEmail):"";
    if(p.autoGuestFollowUp!==undefined){if(typeof p.autoGuestFollowUp!=="boolean")throw new PlatformError("Invalid follow-up setting.");patch.autoGuestFollowUp=p.autoGuestFollowUp;}
+   if(p.hospitality!==undefined)try{patch.hospitality=validateHospitality(p.hospitality);}catch(error){throw new PlatformError((error as Error).message);}
+   if(p.logoUrl!==undefined){const url=text(p.logoUrl,"Logo URL",1000,false);if(url&&!/^https:\/\/[^\s]+$/.test(url))throw new PlatformError("Use an HTTPS logo URL.");patch.logoUrl=url;}
+   if(p.guestWelcomeMessage!==undefined)patch.guestWelcomeMessage=text(p.guestWelcomeMessage,"Welcome message",160,false);
    return NextResponse.json({success:true,appSettings:await updateApplicationSettings(patch)});
  }
  if(b.type==="property"){

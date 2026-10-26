@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --test tests/platform.test.cjs",
-    "test:database": "node tests/workspace-database.test.mjs"
+    "test:database": "node tests/workspace-database.test.mjs",
+    "test:hospitality": "node tests/hospitality-database.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
