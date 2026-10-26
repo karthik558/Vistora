@@ -82,6 +82,25 @@ DO $$ BEGIN
  BEGIN PERFORM save_hotel_settings('{}'); RAISE EXCEPTION 'Staff changed configuration'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+UPDATE profiles SET rights=ARRAY['module_access:configured','module:hospitality','view_feedback','manage_complaints'] WHERE id=(SELECT staff FROM hotel_fixture);
+INSERT INTO properties(id,organization_id,name,slug,code,location,country) SELECT gen_random_uuid(),org_a,'Unassigned hotel','unassigned-hotel','OTHER','City','India' FROM hotel_fixture;
+INSERT INTO hotel_rooms(organization_id,property_id,room_number) SELECT org_a,p.id,'PRIVATE' FROM hotel_fixture f JOIN properties p ON p.organization_id=f.org_a AND p.name='Unassigned hotel';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF NOT workspace_module('hospitality') OR workspace_module('feedback') OR workspace_right('view_feedback') THEN RAISE EXCEPTION 'Explicit module grant not enforced'; END IF;
+ IF (SELECT count(*) FROM hotel_rooms)<>1 OR EXISTS(SELECT 1 FROM hotel_rooms WHERE room_number='PRIVATE') THEN RAISE EXCEPTION 'Module grant crossed assigned property scope'; END IF;
+ IF EXISTS(SELECT 1 FROM operating_costs) OR EXISTS(SELECT 1 FROM feedback) THEN RAISE EXCEPTION 'Hotel read access exposed financial or revoked feedback data'; END IF;
+ UPDATE hotel_rooms SET notes='Staff must not edit';
+ IF EXISTS(SELECT 1 FROM hotel_rooms WHERE notes='Staff must not edit') THEN RAISE EXCEPTION 'Read-only module grant permitted editing'; END IF;
+END $$;
+RESET ROLE;
+UPDATE profiles SET rights=ARRAY['module_access:configured','module:feedback','view_feedback'] WHERE id=(SELECT staff FROM hotel_fixture);
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM hotel_rooms) OR EXISTS(SELECT 1 FROM service_jobs) THEN RAISE EXCEPTION 'Revoked module remains accessible'; END IF;
+ IF NOT workspace_right('view_feedback') OR NOT EXISTS(SELECT 1 FROM feedback) THEN RAISE EXCEPTION 'Assigned feedback module did not restore action permissions'; END IF;
+END $$;
+RESET ROLE;
 ROLLBACK;
 `);
 console.log("Hotel workflows, room overlap, inspections, budgets, isolation and atomic configuration passed.");

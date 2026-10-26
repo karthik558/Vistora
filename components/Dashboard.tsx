@@ -44,6 +44,7 @@ import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
 import {useAppearance} from "./AppearanceProvider";
 import {accentTokens,moduleForPath,workspaceForPath,sidebarTokens,ModuleName} from "../lib/hospitality/config";
+import {hasModuleAccess} from "../lib/auth/modules";
 import CasePanel from "./CasePanel";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
@@ -296,12 +297,13 @@ export function AppShell({
 
   const sharedNav=["Team & users","Settings","Workspace"];
   const operationNav:NavItemConfig[]=[
-    ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:true})),
+    ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
     ...nav.filter(item=>["Properties",...sharedNav].includes(item.label)),
   ];
   const moduleNav=workspaceArea==="operations"?operationNav:nav.filter(item=>!["Hotel operations","Properties"].includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
     if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
+    if(workspaceArea==="operations"&&item.href.startsWith("/dashboard/hospitality"))return hasModuleAccess(currentUser,"hospitality");
     // Super Admin holds unconditional full platform capabilities
     if (isSuperAdmin || currentUser?.role==="admin") return true;
 

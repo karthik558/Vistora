@@ -5,6 +5,21 @@ require.extensions[".ts"]=(module,file)=>module._compile(ts.transpileModule(fs.r
 const {summarize,managementReport,csvCell}=require("../lib/platform/reports.ts");
 const {newToken,hashToken,encryptSecret,decryptSecret}=require("../lib/platform/secrets.ts");
 const {validateDestination}=require("../lib/platform/transport.ts");
+const {hasModuleAccess,withModuleAssignments,effectiveModuleRights}=require("../lib/auth/modules.ts");
+test("Explicit module grants can revoke feedback while preserving existing users and admin authority",()=>{
+ const legacy=["view_feedback","manage_complaints"];
+ assert.equal(hasModuleAccess({rights:legacy},"feedback"),true);
+ assert.equal(hasModuleAccess({rights:legacy},"hospitality"),false);
+ assert.ok(withModuleAssignments(legacy).includes("module:feedback"));
+ assert.equal(hasModuleAccess({rights:["module:feedback"]},"feedback"),true);
+ const hotelOnly=["module_access:configured","module:hospitality","view_feedback","manage_complaints","view_guest_pii"];
+ assert.equal(hasModuleAccess({rights:hotelOnly},"feedback"),false);
+ assert.equal(hasModuleAccess({rights:hotelOnly},"hospitality"),true);
+ assert.deepEqual(effectiveModuleRights(hotelOnly,false),["module_access:configured","module:hospitality","view_guest_pii"]);
+ assert.equal(hasModuleAccess({rights:[],isOrganizationAdmin:true},"hospitality"),true);
+ assert.deepEqual(effectiveModuleRights(hotelOnly,true),hotelOnly);
+ assert.equal(hasModuleAccess({rights:["module_access:configured"]},"feedback"),false);
+});
 const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
 test("Module routing preserves the hotel workspace on shared pages and distinguishes sidebar palettes",()=>{
  assert.equal(workspaceForPath("/dashboard/hospitality"),"operations");
@@ -87,7 +102,7 @@ test("Worker records blocked providers, cancels resolved alerts, and queues retr
   assert.equal((await runWorker("org"))[0].status,"queued");assert.equal(finished.p_status,"retry");
  }finally{db.serviceDb=originalDb;email.sendEmail=originalSend;for(const key of Object.keys(process.env))if(!(key in env))delete process.env[key];Object.assign(process.env,env);}
 });
-test("Workspace API rejects non-admins even with operational rights; report permission remains separate",async()=>{
+test("Workspace API rejects unassigned hotel access; admin configuration and report permission remain separate",async()=>{
  const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server");
  const workspace=require("../app/api/platform/route.ts"),reports=require("../app/api/reports/workspace/route.ts"),hotel=require("../app/api/hospitality/route.ts"),settings=require("../app/api/settings/route.ts");
  const originalSession=db.sessionDb;
@@ -104,9 +119,43 @@ test("Workspace API rejects non-admins even with operational rights; report perm
   assert.equal(response.status,403,"Report data still requires export_reports");
   for(const method of ["GET","POST","PATCH"]){
    const denied=await db.workspaceContext.run({user,client},()=>hotel[method](new NextRequest("http://localhost/api/hospitality",{method,...(method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:"{}"})})));
-   assert.equal(denied.status,403,"Hotel modules must be admin-only: "+method);
+   assert.equal(denied.status,403,"Unassigned hotel access must be denied: "+method);
   }
   const settingsDenied=await db.workspaceContext.run({user,client},()=>settings.GET(new NextRequest("http://localhost/api/settings")));
   assert.equal(settingsDenied.status,403,"Configuration must be admin-only even with manage_settings");
  }finally{db.sessionDb=originalSession;}
+});
+test("Assigned hotel staff receive a read-only payload without financial or configuration queries",async()=>{
+ const db=require("../lib/platform/db.ts"),hotel=require("../app/api/hospitality/route.ts"),{NextRequest}=require("next/server");
+ const queried=[];
+ let granted=true;
+ const client={rpc:async()=>({data:granted,error:null}),from(table){
+  queried.push(table);let head=false;
+  const query={select(_fields,options){head=!!options?.head;return query;},eq(){return query;},in(){return query;},not(){return query;},order(){return query;},limit(){return query;},then(resolve){resolve({data:head?null:[],count:0,error:null});}};
+  return query;
+ }};
+ const user={id:"staff",organizationId:"company",isOrganizationAdmin:false,accessToken:"verified",rights:["module_access:configured","module:hospitality"],role:"staff"};
+ const original=db.sessionDb;db.sessionDb=()=>client;
+ try{
+  const response=await db.workspaceContext.run({user,client},()=>hotel.GET(new NextRequest("http://localhost/api/hospitality")));
+  assert.equal(response.status,200);const payload=await response.json();
+  assert.equal(payload.canManage,false);assert.equal(payload.budget,null);assert.deepEqual(payload.costs,[]);assert.deepEqual(payload.guests,[]);
+  assert.ok(!queried.some(table=>["operating_costs","organization_settings","hotel_activity","guests"].includes(table)));
+  for(const method of ["POST","PATCH"]){const denied=await db.workspaceContext.run({user,client},()=>hotel[method](new NextRequest("http://localhost/api/hospitality",{method,body:"{}"})));assert.equal(denied.status,403);}
+  granted=false;
+  const denied=await db.workspaceContext.run({user,client},()=>hotel.GET(new NextRequest("http://localhost/api/hospitality")));
+  assert.equal(denied.status,403,"A revoked database module grant must override stale client/session state");
+ }finally{db.sessionDb=original;}
+});
+test("Member access cannot be saved before the module database policies are installed",async()=>{
+ const db=require("../lib/platform/db.ts"),users=require("../app/api/users/route.ts"),{NextRequest}=require("next/server");
+ const client={rpc:async()=>({data:null,error:{code:"PGRST202",message:"Function missing"}}),from(){throw new Error("Profile access occurred before the schema check");}};
+ const user={id:"admin",organizationId:"company",isOrganizationAdmin:true,accessToken:"verified",rights:[],role:"admin"};
+ const original=db.sessionDb;db.sessionDb=()=>client;
+ try{
+  for(const method of ["POST","PATCH"]){
+   const response=await db.workspaceContext.run({user,client},()=>users[method](new NextRequest("http://localhost/api/users",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:"target",email:"member@test.local",fullName:"Test member",password:"test-password-only"})})));
+   assert.equal(response.status,503);assert.match((await response.json()).error,/section 25/);
+  }
+ }finally{db.sessionDb=original;}
 });

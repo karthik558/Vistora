@@ -5,6 +5,8 @@ import {getApplicationSettings} from "../../../lib/services/settingsService";
 import {hospitalityConfig,moneyToMinor} from "../../../lib/hospitality/config";
 import {newToken} from "../../../lib/platform/secrets";
 import {logAuditEvent} from "../../../lib/services/auditLogService";
+import {hasModuleAccess} from "../../../lib/auth/modules";
+import {hotelReadView} from "../../../lib/hospitality/read-view";
 
 function admin(){if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Company administrator access required.",403);}
 function date(value:unknown,label:string){
@@ -19,7 +21,9 @@ async function property(id:string){
 async function room(id:string){return checked(await workspaceDb().from("hotel_rooms").select("*").eq("id",id).single());}
 function list(q:any,id:string|null){return id&&id!=="all"?q.eq("property_id",id):q;}
 export const GET=withWorkspace(async(request:NextRequest)=>{
- admin();const db=workspaceDb(),settings=await getApplicationSettings(),config=hospitalityConfig(settings.hospitality);
+ if(!hasModuleAccess(workspaceUser(),"hospitality"))throw new PlatformError("Hotel operations module access required.",403);
+ if(!workspaceUser().isOrganizationAdmin)return hotelReadView(request);
+ const db=workspaceDb(),settings=await getApplicationSettings(),config=hospitalityConfig(settings.hospitality);
  const linkId=request.nextUrl.searchParams.get("stayLink");
  if(linkId){
   const stay=checked(await db.from("stays").select("id,public_token,status").eq("id",linkId).single());

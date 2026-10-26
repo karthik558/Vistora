@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checked, PlatformError, serviceDb, sessionDb, workspaceContext } from "../platform/db";
+import {effectiveModuleRights} from "./modules";
 
 export interface VerifiedUser {
   id: string; email: string; fullName: string; role: string; orgRole?: string;
@@ -37,7 +38,7 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
     id: data.user.id, email: data.user.email || "", fullName: profile.full_name,
     role: isAdmin ? "admin" : profile.role, orgRole: rights.find((r: string) => r.startsWith("org_role:"))?.slice(9) || profile.role,
     organizationId: membership.organization_id, isOrganizationAdmin: isAdmin, accessToken: token,
-    propertyId: profile.property_id, propertyIds: (properties || []).map(p => p.id), rights
+    propertyId: profile.property_id, propertyIds: (properties || []).map(p => p.id), rights:effectiveModuleRights(rights,isAdmin)
   };
 }
 export function publicUser(user: VerifiedUser) {

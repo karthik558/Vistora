@@ -1,10 +1,12 @@
 "use client";
 import {useEffect,useState} from "react";
 import WorkspaceSelect from "./WorkspaceSelect";
+import WorkspaceDateField from "./WorkspaceDateField";
 export default function CasePanel({id,onUpdate}:{id:string;onUpdate?:()=>void}) {
  const [data,setData]=useState<any>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[note,setNote]=useState("");
+ const [deadline,setDeadline]=useState("");
  async function load(){const r=await fetch("/api/cases/"+id),j=await r.json();if(!r.ok)throw new Error(j.error);setData(j);}
- useEffect(()=>{setData(null);setError("");load().catch(e=>setError(e.message));},[id]);
+ useEffect(()=>{setData(null);setError("");setDeadline("");load().catch(e=>setError(e.message));},[id]);
  async function perform(work:()=>Promise<void>){setBusy(true);setError("");try{await work();await load();onUpdate?.();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function send(url:string,body:any,method="POST"){const r=await fetch(url,{method,headers:body instanceof FormData?undefined:{"Content-Type":"application/json"},body:body instanceof FormData?body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error);return j;}
  return <section className="case-panel"><h3>Case workspace</h3>{error&&<p role="alert">{error}</p>}
@@ -12,7 +14,7 @@ export default function CasePanel({id,onUpdate}:{id:string;onUpdate?:()=>void}) 
  <label>Case owner<WorkspaceSelect label="Case owner" floating={false} value={data?.record?.assigned_to||""} disabled={busy} onChange={assignedTo=>perform(async()=>{await send("/api/feedback/"+id,{assignedTo},"PATCH");})} options={[{value:"",label:"Unassigned"},...Array.from(new Set<string>([...(data?.team||[]),...(data?.record?.assigned_to?[data.record.assigned_to]:[])])).map(name=>({value:name,label:name}))]}/></label>
  <label>Status<WorkspaceSelect label="Case status" floating={false} value={data?.record?.status||""} disabled={busy} placeholder="Choose status" onChange={status=>perform(async()=>{await send("/api/feedback/"+id,{status},"PATCH");})} options={["needs_attention","under_review","escalated","resolved"].map(v=>({value:v,label:v.replaceAll("_"," ")}))}/></label>
  <label>Category<input placeholder={data?.record?.category||"e.g. cleanliness"} maxLength={60} onBlur={e=>{if(e.target.value)perform(async()=>{await send("/api/feedback/"+id,{category:e.target.value},"PATCH");});}} disabled={busy}/></label>
- <label>Response deadline<input type="datetime-local" disabled={busy} onChange={e=>{if(e.target.value)perform(async()=>{await send("/api/feedback/"+id,{deadline:new Date(e.target.value).toISOString()},"PATCH");});}}/></label></div>
+ <div><label>Response deadline<fieldset className="hotel-form-lock" disabled={busy}><WorkspaceDateField key={id} label="Response deadline" mode="datetime" onChange={setDeadline}/></fieldset></label><button type="button" className="button button-ghost" disabled={busy||!deadline} onClick={()=>perform(async()=>{await send("/api/feedback/"+id,{deadline:new Date(deadline).toISOString()},"PATCH");})}>Set deadline</button></div></div>
  <form onSubmit={e=>{e.preventDefault();perform(async()=>{await send("/api/cases/"+id,{body:note});setNote("");});}}><label>Internal note<textarea value={note} onChange={e=>setNote(e.target.value)} maxLength={4000} required rows={3}/></label><button className="button button-dark" disabled={busy||!note.trim()}>Add note</button></form>
  {data&&<form onSubmit={e=>{e.preventDefault();const notes=new FormData(e.currentTarget).get("resolution");perform(async()=>{await send("/api/feedback/"+id,{notes},"PATCH");});}}><label>Resolution notes<textarea key={data.record.resolution_notes} name="resolution" defaultValue={data.record.resolution_notes||""} maxLength={4000} rows={3}/></label><button className="button button-ghost" disabled={busy}>Save resolution notes</button></form>}
  <label className="platform-upload">Private attachment · JPG, PNG, PDF or TXT, up to 5 MB<input type="file" accept=".jpg,.jpeg,.png,.pdf,.txt" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)perform(async()=>{const body=new FormData();body.append("file",file);await send("/api/cases/"+id,body);});e.target.value="";}}/></label>

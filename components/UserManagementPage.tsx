@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import { TableLoadingRows } from "./TableLoadingRows";
+import ModuleAccessFields from "./ModuleAccessFields";
+import {withModuleAssignments} from "../lib/auth/modules";
 
 export interface UserRight {
   id: string;
@@ -1135,12 +1137,13 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           type="password"
                           value={addPassword}
                           onChange={(e) => setAddPassword(e.target.value)}
-                          placeholder="Minimum 6 characters"
+                          placeholder="Minimum 10 characters"
                           required
-                          minLength={6}
+                          minLength={10}
                         />
                       </label>
 
+                      <ModuleAccessFields rights={addRights} onChange={setAddRights} admin={["admin","super_admin"].includes(addRole)}/>
                       {addRole === "super_admin" ? (
                         <div
                           style={{
@@ -1199,7 +1202,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setAddRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                                onClick={() => setAddRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...SYSTEM_RIGHTS.map(r=>r.id)])}
                               >
                                 All
                               </button>
@@ -1207,7 +1210,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setAddRights([])}
+                                onClick={() => setAddRights(current=>withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")))}
                               >
                                 Clear
                               </button>
@@ -1474,6 +1477,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
+                      <ModuleAccessFields rights={editRights} onChange={setEditRights} admin={["admin","super_admin"].includes(editRole)}/>
                       {editRole === "super_admin" ? (
                         <div
                           style={{
@@ -1532,7 +1536,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setEditRights(SYSTEM_RIGHTS.map((r) => r.id))}
+                                onClick={() => setEditRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...SYSTEM_RIGHTS.map(r=>r.id)])}
                               >
                                 All
                               </button>
@@ -1540,7 +1544,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setEditRights([])}
+                                onClick={() => setEditRights(current=>withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")))}
                               >
                                 Clear
                               </button>
@@ -1842,9 +1846,9 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           type="password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Enter new password (min. 6 characters)"
+                          placeholder="Enter new password (min. 10 characters)"
                           required
-                          minLength={6}
+                          minLength={10}
                           autoFocus
                         />
                       </label>

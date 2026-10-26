@@ -1633,3 +1633,26 @@ REVOKE ALL ON FUNCTION public.submit_guest_feedback(jsonb,jsonb) FROM PUBLIC,ano
 GRANT EXECUTE ON FUNCTION public.submit_guest_feedback(jsonb,jsonb) TO service_role;
 COMMIT;
 
+-- 25. EXPLICIT MODULE GRANTS AND PROPERTY-SCOPED HOTEL READ ACCESS
+-- Existing users retain feedback access until an administrator saves explicit module assignments.
+BEGIN;
+CREATE OR REPLACE FUNCTION public.workspace_module(module text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT public.workspace_admin() OR EXISTS(
+  SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND p.organization_id=public.workspace_org() AND
+  (('module:'||module)=ANY(p.rights) OR (module='feedback' AND NOT ('module_access:configured'=ANY(p.rights)) AND p.rights && ARRAY['view_feedback','manage_complaints','reassign_property','manage_questionnaire','export_reports','view_audit_log']::text[]))
+ )
+$$;
+REVOKE ALL ON FUNCTION public.workspace_module(text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.workspace_module(text) TO authenticated,service_role;
+CREATE OR REPLACE FUNCTION public.workspace_right(r text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT public.workspace_admin() OR EXISTS(SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND p.organization_id=public.workspace_org() AND r=ANY(p.rights)
+ AND (r NOT IN ('view_feedback','manage_complaints','reassign_property','manage_questionnaire','export_reports','view_audit_log') OR public.workspace_module('feedback')))
+$$;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['hotel_rooms','service_jobs','room_inspections'] LOOP
+  EXECUTE format('DROP POLICY IF EXISTS hotel_module_read ON public.%I',t);
+  EXECUTE format('CREATE POLICY hotel_module_read ON public.%I FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_module(''hospitality'') AND public.workspace_property(property_id))',t);
+ END LOOP;
+END $$;
+COMMIT;
+
