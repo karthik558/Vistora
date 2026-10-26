@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowRight, CheckCircle2, MessageCircleMore, ChartNoAxesCombined, TimerReset } from "lucide-react";
+import ThemeToggle from "../components/ThemeToggle";
+import { ArrowRight, CheckCircle2, MessageCircleMore, ChartNoAxesCombined, TimerReset, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function HomePage() {
           <Image src="/vistora_wordmark_white.webp" alt="Vistora" width={140} height={34} className="brand-logo-dark" priority />
         </Link>
         <div className="landing-header-actions">
+          <ThemeToggle />
           <Link href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">
             {isLoggedIn ? "Dashboard" : "Sign in"}<ArrowRight size={15} />
           </Link>
@@ -38,13 +40,13 @@ export default async function HomePage() {
           <p className="eyebrow">Guest experience operations</p>
           <h1>Turn every stay into a <em>lasting impression.</em></h1>
           <p className="landing-copy">
-            Give hospitality teams one calm, intelligent workspace to listen, resolve, and elevate every guest moment.
+            One workspace for guest feedback, hotel operations and the teams behind every stay.
           </p>
           <div className="landing-actions">
             <Link className="button button-dark landing-primary" href={isLoggedIn ? "/dashboard" : "/login"}>
               {isLoggedIn ? "Open workspace" : "Access workspace"}<ArrowRight size={16} />
             </Link>
-            <span className="landing-assurance"><CheckCircle2 size={15} /> Built for service recovery</span>
+            <span className="landing-assurance"><CheckCircle2 size={15} /> Built for hospitality teams</span>
           </div>
         </div>
 
@@ -85,6 +87,10 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section className="landing-modules" aria-label="Explore Vistora">
+        <article><MessageCircleMore size={21} strokeWidth={1.75}/><div><h2>Guest feedback</h2><p>Collect responses, understand ratings and follow up on guest concerns.</p></div></article>
+        <article><Building2 size={21} strokeWidth={1.75}/><div><h2>Hotel operations</h2><p>Coordinate guest stays, room readiness, service jobs and inspections.</p></div></article>
+      </section>
       <footer className="landing-foot">
         <span>© 2026 Vistora. All rights reserved.</span>
       </footer>

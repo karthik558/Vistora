@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import ThemeToggle from "./ThemeToggle";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 
@@ -63,6 +64,7 @@ export default function LoginForm() {
               <Image src="/vistora_wordmark_green.webp" alt="Vistora" width={130} height={32} className="brand-logo-light" priority />
               <Image src="/vistora_wordmark_white.webp" alt="Vistora" width={130} height={32} className="brand-logo-dark" priority />
             </Link>
+            <ThemeToggle />
           </div>
 
           <div className="auth-heading-wrap">

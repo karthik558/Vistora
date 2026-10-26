@@ -1,4 +1,7 @@
 /* Shared workspace controls use the active module palette in both themes. */
+.theme-toggle-btn,.landing-header-actions .theme-toggle-btn{display:inline-flex!important;align-items:center;justify-content:center;width:40px!important;height:40px!important;min-height:40px!important;flex:0 0 40px;padding:0!important;border-radius:5px!important;border:1px solid var(--line)!important;background:var(--panel)!important;color:var(--ink)!important;box-shadow:none!important;cursor:pointer;transition:background .15s,border-color .15s}
+button.theme-toggle-btn:hover{background:var(--canvas-alt)!important;border-color:var(--line-strong)!important}
+.theme-toggle-btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 :is(.app-shell,.module-launcher-card){
  --module-accent:var(--palette-light-module-accent);--sage:var(--palette-light-sage);--sage-deep:var(--palette-light-sage-deep);--sage-hover:var(--palette-light-sage-hover);--sage-soft:var(--palette-light-sage-soft);
 }

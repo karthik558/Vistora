@@ -35,15 +35,7 @@ export default function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <div
-        style={{
-          width: "36px",
-          height: "36px",
-          borderRadius: "8px",
-          border: "1px solid var(--line)",
-          background: "var(--panel)",
-        }}
-      />
+      <span className="theme-toggle-btn" aria-hidden="true" />
     );
   }
 
@@ -55,19 +47,6 @@ export default function ThemeToggle() {
       aria-pressed={theme === "dark"}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-      style={{
-        width: "36px",
-        height: "36px",
-        borderRadius: "8px",
-        border: "1px solid var(--line)",
-        background: "var(--panel)",
-        color: "var(--ink)",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        transition: "all var(--transition-fast)",
-      }}
     >
       {theme === "dark" ? (
         <Sun size={17} strokeWidth={1.8} />

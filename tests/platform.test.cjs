@@ -20,16 +20,22 @@ test("Explicit module grants can revoke feedback while preserving existing users
  assert.deepEqual(effectiveModuleRights(hotelOnly,true),hotelOnly);
  assert.equal(hasModuleAccess({rights:["module_access:configured"]},"feedback"),false);
 });
-const {canOpenTeam,canOpenSettings,isAdministrationPath}=require("../lib/auth/administration.ts");
+const {canOpenTeam,canOpenSettings,canOpenProperties,canOpenWorkspace,isAdministrationPath}=require("../lib/auth/administration.ts");
 test("Shared administration links preserve existing rights independently of module grants",()=>{
  for(const user of [null,{rights:[]},{rights:["module:hospitality"]},{rights:["module:feedback"]}]){
   assert.equal(canOpenTeam(user),false);assert.equal(canOpenSettings(user),false);
+  assert.equal(canOpenProperties(user),false);assert.equal(canOpenWorkspace(user),false);
  }
  assert.equal(canOpenTeam({rights:["manage_users"]}),true);
  assert.equal(canOpenSettings({rights:["manage_settings"]}),false);
  assert.equal(canOpenTeam({isOrganizationAdmin:true}),true);
  assert.equal(canOpenSettings({isOrganizationAdmin:true}),true);
- for(const path of ["/dashboard/users","/dashboard/settings","/dashboard/users/member"])assert.equal(isAdministrationPath(path),true);
+ assert.equal(canOpenProperties({isOrganizationAdmin:true}),true);
+ assert.equal(canOpenWorkspace({isOrganizationAdmin:true}),true);
+ assert.equal(canOpenProperties({rights:["manage_properties"]}),false);
+ assert.equal(canOpenProperties({rights:["module:hospitality","manage_properties"]}),true);
+ assert.equal(canOpenWorkspace({rights:["manage_settings","manage_users"]}),false);
+ for(const path of ["/dashboard/users","/dashboard/settings","/dashboard/users/member","/dashboard/properties","/dashboard/workspace"])assert.equal(isAdministrationPath(path),true);
  for(const path of ["/dashboard/overview","/dashboard/hospitality","/dashboard/settings-other"])assert.equal(isAdministrationPath(path),false);
 });
 const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,themedAccentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
