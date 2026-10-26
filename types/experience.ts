@@ -7,6 +7,12 @@ export type FeedbackRow = Database["public"]["Tables"]["feedback"]["Row"];
 export type FeedbackInsert = Database["public"]["Tables"]["feedback"]["Insert"];
 
 export interface FeedbackViewModel {
+  recommendationScore?: number | null;
+  priority?: string;
+  deadline?: string | null;
+  firstResponseAt?: string | null;
+  resolvedAt?: string | null;
+  category?: string;
   id: string;
   initials: string;
   name: string;
@@ -85,6 +91,9 @@ export interface UserProfile {
 }
 
 export interface SubmitFeedbackPayload {
+  organizationId?: string;
+  invitationId?: string;
+  recommendationScore?: number | null;
   publicToken?: string;
   propertyId?: string;
   guestName: string;

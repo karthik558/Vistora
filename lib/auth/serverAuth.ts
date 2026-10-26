@@ -1,238 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL!;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_ANON_KEY!;
+import { checked, PlatformError, serviceDb, sessionDb, workspaceContext } from "../platform/db";
 
 export interface VerifiedUser {
-  id: string;
-  email: string;
-  fullName: string;
-  role: string;
-  orgRole?: string;
-  propertyId: string | null;
-  propertyIds: string[];
-  rights: string[];
+  id: string; email: string; fullName: string; role: string; orgRole?: string;
+  organizationId: string; isOrganizationAdmin: boolean; accessToken: string;
+  propertyId: string | null; propertyIds: string[]; rights: string[];
 }
+// These compatibility invalidators remain for existing management routes. Authorization is no longer cached.
+export function invalidateAuthCache(_email?: string) {}
+export function invalidateSessionCache(_email?: string) {}
+export function getCachedProfile(_email: string): any | null { return null; }
+export function setCachedProfile(_email: string, _profile: any) {}
 
-function getAdminClient() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
-
-interface CachedVerifiedUser {
-  user: VerifiedUser;
-  timestamp: number;
-}
-const verifiedUserCache = new Map<string, CachedVerifiedUser>();
-const AUTH_CACHE_TTL = 30_000; // 30 seconds
-
-export function invalidateAuthCache(email?: string) {
-  if (email) {
-    verifiedUserCache.delete(email.toLowerCase());
-  } else {
-    verifiedUserCache.clear();
-  }
-}
-
-interface CachedProfile {
-  profile: any;
-  timestamp: number;
-}
-const sessionProfileCache = new Map<string, CachedProfile>();
-const SESSION_CACHE_TTL = 30_000;
-
-export function getCachedProfile(email: string): any | null {
-  const cached = sessionProfileCache.get(email.toLowerCase());
-  if (cached && Date.now() - cached.timestamp < SESSION_CACHE_TTL) {
-    return cached.profile;
-  }
-  return null;
-}
-
-export function setCachedProfile(email: string, profile: any) {
-  sessionProfileCache.set(email.toLowerCase(), { profile, timestamp: Date.now() });
-}
-
-export function invalidateSessionCache(email?: string) {
-  if (email) {
-    sessionProfileCache.delete(email.toLowerCase());
-  } else {
-    sessionProfileCache.clear();
-  }
-}
-
-/**
- * Extracts and securely verifies the session user from cookies and tokens.
- * Always validates against the database public.profiles record.
- */
 export async function getAuthenticatedUser(request: NextRequest): Promise<VerifiedUser | null> {
-  const adminClient = getAdminClient();
-
-  // 1. Try Bearer token or sb-access-token
-  const authHeader = request.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const cookieToken = request.cookies.get("sb-access-token")?.value;
-  const token = bearerToken || cookieToken;
-
-  if (token) {
-    try {
-      const { data, error } = await adminClient.auth.getUser(token);
-      if (!error && data?.user) {
-        const { data: profile } = await adminClient
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .maybeSingle();
-
-        const role = profile?.role || data.user.user_metadata?.role || "visitor";
-        const propertyIds: string[] = Array.isArray(profile?.property_ids)
-          ? profile.property_ids
-          : profile?.property_id
-          ? [profile.property_id]
-          : [];
-
-        const rights = profile?.rights || [];
-        const orgRole = (rights as string[]).find((r) => r.startsWith("org_role:"))?.replace("org_role:", "") || role;
-
-        return {
-          id: data.user.id,
-          email: data.user.email || "",
-          fullName: profile?.full_name || data.user.user_metadata?.full_name || "User",
-          role,
-          orgRole,
-          propertyId: profile?.property_id || null,
-          propertyIds,
-          rights,
-        };
-      }
-    } catch {}
-  }
-
-  // 2. Fall back to vistora-user workspace cookie with DB profile verification
-  const userCookie = request.cookies.get("vistora-user")?.value;
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(userCookie);
-      if (parsed?.email) {
-        const cacheKey = parsed.email.toLowerCase();
-        const now = Date.now();
-        const cached = verifiedUserCache.get(cacheKey);
-        if (cached && (now - cached.timestamp) < AUTH_CACHE_TTL) {
-          return cached.user;
-        }
-
-        const { data: profile } = await adminClient
-          .from("profiles")
-          .select("*")
-          .ilike("email", parsed.email)
-          .maybeSingle();
-
-        if (profile) {
-          const propertyIds: string[] = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
-            ? profile.property_ids
-            : profile.property_id
-            ? [profile.property_id]
-            : [];
-
-          const rights = profile.rights || [];
-          const orgRole = (rights as string[]).find((r) => r.startsWith("org_role:"))?.replace("org_role:", "") || parsed.orgRole || profile.role;
-
-          const verified: VerifiedUser = {
-            id: profile.id,
-            email: profile.email,
-            fullName: profile.full_name,
-            role: profile.role,
-            orgRole,
-            propertyId: profile.property_id || null,
-            propertyIds,
-            rights,
-          };
-          verifiedUserCache.set(cacheKey, { user: verified, timestamp: now });
-          return verified;
-        }
-      }
-    } catch {}
-  }
-
-  return null;
-}
-
-/**
- * Enforces that the request is made by a verified Administrator.
- * Returns either { user } or { errorResponse }.
- */
-export async function requireAdmin(request: NextRequest): Promise<
-  { user: VerifiedUser; errorResponse?: never } | { user?: never; errorResponse: NextResponse }
-> {
-  const user = await getAuthenticatedUser(request);
-
-  if (!user) {
-    return {
-      errorResponse: NextResponse.json(
-        { success: false, error: "Authentication required. Please sign in to continue." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  if (user.role !== "admin" && user.role !== "super_admin" && user.orgRole !== "admin" && user.orgRole !== "super_admin") {
-    return {
-      errorResponse: NextResponse.json(
-        { success: false, error: "Access denied. Administrator privileges required." },
-        { status: 403 }
-      ),
-    };
-  }
-
-  return { user };
-}
-
-/**
- * Enforces that the request is made by a verified Administrator OR a team member holding the required right.
- */
-export async function requireAdminOrRight(
-  request: NextRequest,
-  requiredRight: string
-): Promise<{ user: VerifiedUser; errorResponse?: never } | { user?: never; errorResponse: NextResponse }> {
-  const user = await getAuthenticatedUser(request);
-
-  if (!user) {
-    return {
-      errorResponse: NextResponse.json(
-        { success: false, error: "Authentication required. Please sign in to continue." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  if (user.role === "admin" || (Array.isArray(user.rights) && user.rights.includes(requiredRight))) {
-    return { user };
-  }
-
+  const existing = workspaceContext.getStore();
+  if (existing) return existing.user;
+  const header = request.headers.get("authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : request.cookies.get("sb-access-token")?.value;
+  if (!token) return null;
+  const { data, error } = await sessionDb(token).auth.getUser(token);
+  if (error || !data.user) return null;
+  const db = serviceDb();
+  const { data: profile, error: profileError } = await db.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
+  if (profileError) checked({data: profile, error: profileError});
+  if (!profile) return null;
+  const memberResult = await db.from("organization_members").select("organization_id, role").eq("user_id", data.user.id).eq("is_active", true).maybeSingle();
+  if(memberResult.error)checked(memberResult);
+  const membership=memberResult.data;
+  if(!membership)return null;
+  if (!membership.organization_id || membership.organization_id !== profile.organization_id) throw new PlatformError("Your workspace membership is not configured.", 403);
+  const rights = Array.isArray(profile.rights) ? profile.rights.filter((r: unknown) => typeof r === "string") : [];
+  const isAdmin = ["owner", "admin"].includes(membership.role);
+  const { data: properties, error: propError } = await sessionDb(token).from("properties").select("id");
+  if (propError) checked({data: properties, error: propError});
   return {
-    errorResponse: NextResponse.json(
-      { success: false, error: `Access denied. '${requiredRight}' permission or Administrator role required.` },
-      { status: 403 }
-    ),
+    id: data.user.id, email: data.user.email || "", fullName: profile.full_name,
+    role: isAdmin ? "admin" : profile.role, orgRole: rights.find((r: string) => r.startsWith("org_role:"))?.slice(9) || profile.role,
+    organizationId: membership.organization_id, isOrganizationAdmin: isAdmin, accessToken: token,
+    propertyId: profile.property_id, propertyIds: (properties || []).map(p => p.id), rights
   };
 }
-
-/**
- * Determines property access scope for a user.
- * Admin users have unrestricted global access.
- * Non-admin users are strictly confined to their assigned property_ids.
- */
+export function publicUser(user: VerifiedUser) {
+  const { accessToken: _token, ...safe } = user;
+  return safe;
+}
+export async function requireAdmin(request: NextRequest): Promise<{user: VerifiedUser; errorResponse?: never} | {user?: never; errorResponse: NextResponse}> {
+  const user = await getAuthenticatedUser(request);
+  if (!user) return { errorResponse: NextResponse.json({success:false,error:"Authentication required."},{status:401}) };
+  if (!user.isOrganizationAdmin) return { errorResponse: NextResponse.json({success:false,error:"Workspace administrator access required."},{status:403}) };
+  return {user};
+}
+export async function requireAdminOrRight(request: NextRequest, right: string): ReturnType<typeof requireAdmin> {
+  const user = await getAuthenticatedUser(request);
+  if (!user) return { errorResponse: NextResponse.json({success:false,error:"Authentication required."},{status:401}) };
+  if (!user.isOrganizationAdmin && !user.rights.includes(right)) return { errorResponse: NextResponse.json({success:false,error:"Permission required: "+right},{status:403}) };
+  return {user};
+}
 export function getPropertyAccessScope(user: VerifiedUser | null) {
-  if (!user || user.role === "admin") {
-    return { isGlobal: true, allowedPropertyIds: null as string[] | null };
-  }
-  return {
-    isGlobal: false,
-    allowedPropertyIds: user.propertyIds,
-  };
+  return { isGlobal: false, allowedPropertyIds: user?.propertyIds || [] };
 }

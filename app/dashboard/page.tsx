@@ -1,18 +1,11 @@
-import { cookies } from "next/headers";
+import { serverUser } from "../../lib/platform/server-session";
 import Dashboard, { WorkspaceUser } from "../../components/Dashboard";
 import { getDashboardData } from "../../lib/services/guestExperienceService";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  let initialUser: WorkspaceUser | null = null;
-  try {
-    const cookieStore = await cookies();
-    const userCookie = cookieStore.get("vistora-user")?.value;
-    if (userCookie) {
-      initialUser = JSON.parse(userCookie);
-    }
-  } catch {}
+  const initialUser = await serverUser();
 
   let initialData = null;
   try {

@@ -28,7 +28,7 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
 
@@ -42,7 +42,7 @@ export default function LoginForm() {
         } catch {}
       }
 
-      router.replace("/dashboard");
+      router.replace(data.needsOnboarding?"/start":"/dashboard");
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please try again.");
     } finally {
@@ -92,6 +92,7 @@ export default function LoginForm() {
             </button>
           </form>
 
+          <Link href="/start" className="auth-home-link">Create workspace</Link>
           <Link href="/" className="auth-home-link">← Return home</Link>
         </section>
       </div>

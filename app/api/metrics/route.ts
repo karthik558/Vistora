@@ -1,13 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest,NextResponse } from "next/server";
+import { withWorkspace } from "../../../lib/platform/http";
 import { getDashboardData } from "../../../lib/services/guestExperienceService";
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const propertyId = searchParams.get("propertyId") || "all";
-    const data = await getDashboardData(propertyId);
-    return NextResponse.json({ success: true, data });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
-}
+import { workspaceUser } from "../../../lib/platform/db";
+export const GET=withWorkspace(async(request:NextRequest)=>NextResponse.json({success:true,data:await getDashboardData(request.nextUrl.searchParams.get("propertyId")||"all",workspaceUser().propertyIds)}),"view_feedback");

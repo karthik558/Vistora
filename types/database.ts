@@ -175,6 +175,11 @@ export interface Database {
       };
       feedback: {
         Row: {
+          organization_id?: string;
+          recommendation_score?: number | null;
+          priority?: string;
+          first_response_at?: string | null;
+          category?: string;
           id: string;
           property_id: string;
           stay_id: string | null;

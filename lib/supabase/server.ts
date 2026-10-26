@@ -1,20 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { Database } from "../../types/database";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { sessionDb, workspaceContext } from "../platform/db";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_ANON_KEY;
-
-export function createServerSupabaseClient() {
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return null;
-  }
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+// Ordinary server queries always carry the caller's JWT and therefore enforce RLS.
+export async function createServerSupabaseClient(): Promise<SupabaseClient<Database> | null> {
+  const context = workspaceContext.getStore();
+  if (context) return context.client as unknown as SupabaseClient<Database>;
+  const token = (await cookies()).get("sb-access-token")?.value;
+  if (!token) return null;
+  return sessionDb(token) as unknown as SupabaseClient<Database>;
 }

@@ -1,168 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  fetchFeedbackList,
-  createFeedback,
-  deleteFeedback,
-  updateFeedbackProperty,
-} from "../../../lib/services/guestExperienceService";
-import { FeedbackStatus } from "../../../types/database";
-import { getAuthenticatedUser, requireAdmin } from "../../../lib/auth/serverAuth";
-import { sanitizeString, sanitizeEmail, isValidUuid } from "../../../lib/security/sanitize";
-import { markInvitationCompleted } from "../../../lib/services/invitationsService";
+import { fetchFeedbackList,createFeedback,deleteFeedback,updateFeedbackProperty,invalidateDashboardCache } from "../../../lib/services/guestExperienceService";
+import { withWorkspace,errorResponse,text,number } from "../../../lib/platform/http";
+import { checked,serviceDb,workspaceDb,workspaceUser,assertProperty,PlatformError } from "../../../lib/platform/db";
+import { hashToken } from "../../../lib/platform/secrets";
 import { logAuditEvent } from "../../../lib/services/auditLogService";
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const propertyId = searchParams.get("propertyId") || undefined;
-    const status = (searchParams.get("status") as FeedbackStatus | "all") || undefined;
-    const search = searchParams.get("search") || undefined;
-
-    // Strict multi-tenant property access validation
-    const user = await getAuthenticatedUser(request);
-    let effectivePropertyId = propertyId;
-
-    // Strict multi-tenant property access validation:
-    // Super Admins can query all properties globally. Hotel Admins and staff are strictly scoped.
-    const isSuperAdmin = user?.orgRole === "super_admin" || (user?.rights || []).includes("org_role:super_admin");
-    if (user && !isSuperAdmin) {
-      const allowed = user.propertyIds?.length
-        ? user.propertyIds
-        : user.propertyId
-        ? [user.propertyId]
-        : [];
-
-      if (propertyId && !allowed.includes(propertyId)) {
-        // Prevent unauthorized property data access
-        return NextResponse.json({ success: true, data: [] });
-      }
-
-      if (!propertyId && allowed.length > 0) {
-        effectivePropertyId = allowed[0];
-      }
+export const GET=withWorkspace(async(request:NextRequest)=>{
+  const params=request.nextUrl.searchParams;
+  const list=await fetchFeedbackList({propertyId:params.get("propertyId")||undefined,status:(params.get("status")||"all") as any,search:params.get("search")||undefined});
+  return NextResponse.json({success:true,data:list});
+},"view_feedback");
+export async function POST(request:NextRequest) {
+ try {
+  const body=await request.json(), db=serviceDb();
+  const property=checked(await db.from("properties").select("id,organization_id,is_active,organizations(is_demo)").eq("id",body.propertyId).eq("is_active",true).maybeSingle());
+  const rating=number(body.rating,"Rating",1,5);
+  const departments=["Front Desk","Housekeeping","Food & Beverage","Concierge","Facilities & Room","Spa & Wellness","Valet & Transfers"];
+  if(!departments.includes(body.department))throw new PlatformError("Choose a valid department.");
+  let invitationId:string|undefined;
+  if(body.publicToken&&body.publicToken!=="verified") {
+    const token=text(body.publicToken,"Invitation",200);
+    const {data:inv,error}=await db.from("guest_invitations").select("id,property_id,status,expires_at").eq("token_hash",hashToken(token)).maybeSingle();
+    if(error)checked({data:inv,error});
+    if(inv) {
+      if(inv.property_id!==property.id||inv.status!=="pending"||Date.parse(inv.expires_at)<=Date.now())throw new PlatformError("This invitation has expired or was already used.",410);
+      invitationId=inv.id;
+    } else {
+      const {data:stay}=await db.from("stays").select("id").eq("public_token",token).eq("property_id",property.id).eq("status","active").maybeSingle();
+      if(!stay)throw new PlatformError("Invitation not found.",404);
     }
-
-    const list = await fetchFeedbackList({
-      propertyId: effectivePropertyId,
-      status,
-      search: search ? sanitizeString(search, 100) : undefined,
-    });
-
-    return NextResponse.json({ success: true, data: list });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
+  const questions=checked(await db.from("feedback_questions").select("id,question_text,question_type,is_required,department,options").eq("organization_id",property.organization_id).eq("is_active",true).or("property_id.is.null,property_id.eq."+property.id));
+  const relevant=questions.filter(q=>!q.department||q.department===body.department);
+  const answers:Array<{questionId:string;questionText:string;answerValue:string}>=Array.isArray(body.answers)?body.answers.slice(0,80).map((a:any)=>{
+   const question=relevant.find(q=>q.id===a.questionId);if(!question)throw new PlatformError("This questionnaire changed. Reload the form and try again.");
+   const value=text(a.answerValue,"Answer",2000,false);
+   if(["nps","csat"].includes(question.question_type)&&(!/^\d+$/.test(value)||Number(value)<(question.question_type==="nps"?0:1)||Number(value)>10))throw new PlatformError("Choose a valid recommendation or satisfaction score.");
+   return {questionId:question.id,questionText:question.question_text,answerValue:value};
+  }):[];
+  if(relevant.some(q=>q.is_required&&!answers.some(a=>a.questionId===q.id&&a.answerValue)))throw new PlatformError("Please answer the required questions.");
+  const npsQuestion=relevant.find(q=>q.question_type==="nps"),npsAnswer=answers.find(a=>a.questionId===npsQuestion?.id)?.answerValue;
+  const created=await createFeedback({
+    organizationId:property.organization_id,propertyId:property.id,invitationId,rating,department:body.department,
+    guestName:text(body.guestName||"Guest","Name",100),roomNumber:text(body.roomNumber||"Guest","Room",50),
+    comment:text(body.comment,"Comment",4000,false),guestEmail:body.guestEmail?text(body.guestEmail,"Email",254):undefined,
+    guestPhone:body.guestPhone?text(body.guestPhone,"Phone",30):undefined,wantsContact:body.wantsContact===true,
+    contactPreference:["email","phone","in_person"].includes(body.contactPreference)?body.contactPreference:undefined,
+    recommendationScore:body.recommendationScore===null||body.recommendationScore===undefined?(npsAnswer?Number(npsAnswer):null):number(body.recommendationScore,"Recommendation score",0,10),answers
+  });
+  invalidateDashboardCache();
+  await logAuditEvent({organizationId:property.organization_id,actorName:"Guest",actorEmail:"guest@vistora.app",actorRole:"guest",action:"Guest feedback submitted",resource:created.id,details:"Rating: "+rating});
+  return NextResponse.json({success:true,data:created},{status:201});
+ } catch(error){return errorResponse(error);}
 }
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    const rating = parseInt(body.rating, 10);
-    if (!rating || rating < 1 || rating > 5) {
-      return NextResponse.json(
-        { success: false, error: "A valid rating between 1 and 5 is required." },
-        { status: 400 }
-      );
-    }
-
-    if (!body.propertyId || !isValidUuid(body.propertyId)) {
-      return NextResponse.json(
-        { success: false, error: "A valid property selection is mandatory." },
-        { status: 400 }
-      );
-    }
-
-    // Sanitize user inputs to prevent injection and XSS
-    const sanitizedPayload = {
-      ...body,
-      rating,
-      guestName: sanitizeString(body.guestName || body.name || "Guest", 100),
-      comment: sanitizeString(body.comment, 2000),
-      roomNumber: sanitizeString(body.roomNumber, 50),
-      guestEmail: body.guestEmail ? sanitizeEmail(body.guestEmail) : undefined,
-      guestPhone: body.guestPhone ? sanitizeString(body.guestPhone, 30) : undefined,
-      department: sanitizeString(body.department, 50),
-      answers: body.answers && typeof body.answers === "object" ? body.answers : {},
-    };
-
-    const created = await createFeedback(sanitizedPayload);
-
-    // If submitted via a tracked invitation token, mark invitation as completed
-    if (body.publicToken) {
-      try {
-        markInvitationCompleted(body.publicToken, created.rating, created.id);
-      } catch {}
-    }
-
-    // Log operational audit trail
-    try {
-      logAuditEvent({
-        actorName: created.name || "Guest",
-        actorEmail: created.guestEmail || "guest@vistora.app",
-        actorRole: "guest",
-        action: created.rating <= 2 ? "Urgent Complaint Logged" : "Guest Feedback Submitted",
-        resource: `${created.name} (${created.roomNumber}) · ${created.department}`,
-        details: `${created.rating}★ rating received. Status: ${created.statusLabel}.`,
-        status: created.rating <= 2 ? "alert" : "success",
-      });
-    } catch {}
-
-    return NextResponse.json({ success: true, data: created }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
-}
-
-export async function PATCH(request: NextRequest) {
-  try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.errorResponse) return authCheck.errorResponse;
-
-    const body = await request.json();
-    const { id, propertyId } = body;
-
-    if (!id || !propertyId) {
-      return NextResponse.json(
-        { success: false, error: "Feedback ID and Property ID are required." },
-        { status: 400 }
-      );
-    }
-
-    if (!isValidUuid(id) || !isValidUuid(propertyId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid ID format provided." },
-        { status: 400 }
-      );
-    }
-
-    await updateFeedbackProperty(id, propertyId);
-    return NextResponse.json({ success: true, message: "Property assigned successfully." });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.errorResponse) return authCheck.errorResponse;
-
-    const body = await request.json();
-    const ids = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
-
-    if (!ids || ids.length === 0) {
-      return NextResponse.json({ success: false, error: "No feedback IDs provided" }, { status: 400 });
-    }
-
-    const validIds = ids.filter(isValidUuid);
-    if (validIds.length === 0) {
-      return NextResponse.json({ success: false, error: "No valid UUIDs provided." }, { status: 400 });
-    }
-
-    const result = await deleteFeedback(validIds);
-    return NextResponse.json({ success: true, count: result.count });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
-}
+export const PATCH=withWorkspace(async(request:NextRequest)=>{
+ const body=await request.json();await assertProperty(body.propertyId);
+ checked(await workspaceDb().from("feedback").select("id").eq("id",body.id).single());
+ await updateFeedbackProperty(body.id,body.propertyId);
+ return NextResponse.json({success:true});
+},"manage_complaints");
+export const DELETE=withWorkspace(async(request:NextRequest)=>{
+ if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Administrator access required.",403);
+ const body=await request.json(),ids=Array.isArray(body.ids)?body.ids:[body.id];
+ if(!ids.length||ids.length>100)throw new PlatformError("Select 1–100 records.");
+ const visible=checked(await workspaceDb().from("feedback").select("id").in("id",ids));
+ if(visible.length!==ids.length)throw new PlatformError("One or more records are unavailable.",404);
+ return NextResponse.json({success:true,...await deleteFeedback(ids)});
+});

@@ -1,118 +1,42 @@
+import { checked, workspaceDb, workspaceUser } from "../platform/db";
 export interface ApplicationSettings {
-  organizationName: string;
-  projectName: string;
-  brandTagline: string;
-  slaCriticalMinutes: number;
-  slaStandardMinutes: number;
-  autoGuestFollowUp: boolean;
-  alertEmail: string;
-  defaultTimezone: string;
-  dataRetentionDays: number;
+  organizationName: string; projectName: string; brandTagline: string;
+  slaCriticalMinutes: number; slaStandardMinutes: number; autoGuestFollowUp: boolean;
+  alertEmail: string; defaultTimezone: string; dataRetentionDays: number;
 }
-
 export interface PropertySettingConfig {
-  propertyId: string;
-  propertyName: string;
-  propertyCode: string;
-  brand: string;
-  isActive: boolean;
-  totalRooms: number;
-  location: string;
-  contactEmail: string;
-  contactPhone: string;
-  welcomeMessage: string;
+  propertyId: string; propertyName: string; propertyCode: string; brand: string; isActive: boolean;
+  totalRooms: number; location: string; contactEmail: string; contactPhone: string; welcomeMessage: string;
 }
-
-let appSettingsStore: ApplicationSettings = {
-  organizationName: "Vistora Hospitality Collection",
-  projectName: "Vistora Guest Experience & SLA Platform",
-  brandTagline: "Luxury Hospitality Service Recovery & CSAT Intelligence",
-  slaCriticalMinutes: 15,
-  slaStandardMinutes: 120,
-  autoGuestFollowUp: true,
-  alertEmail: "operations@vistora.app",
-  defaultTimezone: "Asia/Bangkok",
-  dataRetentionDays: 365,
-};
-
-let propertySettingsStore: Record<string, PropertySettingConfig> = {
-  "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11": {
-    propertyId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    propertyName: "Vistora Riverside Bangkok",
-    propertyCode: "VRB",
-    brand: "Vistora Hotels & Resorts",
-    isActive: true,
-    totalRooms: 376,
-    location: "Bangkok, Thailand",
-    contactEmail: "riverside.ops@vistora.app",
-    contactPhone: "+66 2 123 4567",
-    welcomeMessage: "Welcome to Vistora Riverside Bangkok. Your comfort is our supreme honor.",
-  },
-  "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22": {
-    propertyId: "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
-    propertyName: "Vistora Siam Bangkok",
-    propertyCode: "VSB",
-    brand: "Vistora Hotels & Resorts",
-    isActive: true,
-    totalRooms: 354,
-    location: "Bangkok, Thailand",
-    contactEmail: "siam.ops@vistora.app",
-    contactPhone: "+66 2 987 6543",
-    welcomeMessage: "Welcome to Vistora Siam. Experience elevated urban tranquility.",
-  },
-  "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33": {
-    propertyId: "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33",
-    propertyName: "Vistora Chiang Mai Resort",
-    propertyCode: "VCM",
-    brand: "Vistora Hotels & Resorts",
-    isActive: true,
-    totalRooms: 84,
-    location: "Chiang Mai, Thailand",
-    contactEmail: "chiangmai.ops@vistora.app",
-    contactPhone: "+66 53 123 789",
-    welcomeMessage: "Welcome to Vistora Chiang Mai Resort. An sanctuary of peace and cultural grandeur.",
-  },
-};
-
-export function getApplicationSettings(): ApplicationSettings {
-  return { ...appSettingsStore };
+const defaults: ApplicationSettings = { organizationName:"",projectName:"Vistora",brandTagline:"Guest experience operations",slaCriticalMinutes:15,slaStandardMinutes:120,autoGuestFollowUp:true,alertEmail:"",defaultTimezone:"Asia/Kolkata",dataRetentionDays:365 };
+export async function getApplicationSettings(): Promise<ApplicationSettings> {
+  const db=workspaceDb(), org=workspaceUser().organizationId;
+  const organization=checked(await db.from("organizations").select("name,timezone").eq("id",org).single());
+  const rows=checked(await db.from("organization_settings").select("settings").eq("organization_id",org));
+  return {...defaults,...(rows[0]?.settings || {}),organizationName:organization.name,defaultTimezone:organization.timezone};
 }
-
-export function updateApplicationSettings(patch: Partial<ApplicationSettings>): ApplicationSettings {
-  appSettingsStore = { ...appSettingsStore, ...patch };
-  return { ...appSettingsStore };
+export async function updateApplicationSettings(patch: Partial<ApplicationSettings>) {
+  const next={...await getApplicationSettings(),...patch};
+  checked(await workspaceDb().from("organizations").update({name:next.organizationName,timezone:next.defaultTimezone}).eq("id",workspaceUser().organizationId).select("id").single());
+  checked(await workspaceDb().from("organization_settings").upsert({organization_id:workspaceUser().organizationId,settings:next,updated_at:new Date().toISOString()}).select().single());
+  return next;
 }
-
-export function getPropertySetting(propertyId: string): PropertySettingConfig | null {
-  return propertySettingsStore[propertyId] || null;
+export async function getAllPropertySettings(): Promise<PropertySettingConfig[]> {
+  const db=workspaceDb();
+  const [properties,settings]=await Promise.all([db.from("properties").select("*"),db.from("property_settings").select("*")]);
+  return checked(properties).map((p:any)=>({
+    propertyId:p.id,propertyName:p.name,propertyCode:p.code,brand:p.brand,isActive:p.is_active,totalRooms:p.total_rooms,
+    location:p.location,contactEmail:"",contactPhone:"",welcomeMessage:"Tell us about your stay.",
+    ...(checked(settings).find((s:any)=>s.property_id===p.id)?.settings || {})
+  }));
 }
-
-export function getAllPropertySettings(): PropertySettingConfig[] {
-  return Object.values(propertySettingsStore);
+export async function getPropertySetting(propertyId:string) {
+  return (await getAllPropertySettings()).find(p=>p.propertyId===propertyId)||null;
 }
-
-export function updatePropertySetting(
-  propertyId: string,
-  patch: Partial<PropertySettingConfig>
-): PropertySettingConfig {
-  const existing = propertySettingsStore[propertyId] || {
-    propertyId,
-    propertyName: "Hotel Property",
-    propertyCode: "HTL",
-    brand: "Vistora",
-    isActive: true,
-    totalRooms: 100,
-    location: "Thailand",
-    contactEmail: "concierge@vistora.app",
-    contactPhone: "",
-    welcomeMessage: "Welcome to Vistora.",
-  };
-
-  propertySettingsStore[propertyId] = {
-    ...existing,
-    ...patch,
-    propertyId,
-  };
-
-  return propertySettingsStore[propertyId];
+export async function updatePropertySetting(propertyId:string,patch:Partial<PropertySettingConfig>) {
+  const existing=await getPropertySetting(propertyId);
+  if(!existing) throw new Error("Property not found or access denied.");
+  const next={...existing,...patch,propertyId};
+  checked(await workspaceDb().from("property_settings").upsert({property_id:propertyId,organization_id:workspaceUser().organizationId,settings:next,updated_at:new Date().toISOString()}).select().single());
+  return next;
 }

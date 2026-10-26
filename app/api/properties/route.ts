@@ -1,3 +1,5 @@
+import { withWorkspace, errorResponse } from "../../../lib/platform/http";
+import { workspaceDb, serviceDb, checked } from "../../../lib/platform/db";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUser, requireAdmin, requireAdminOrRight } from "../../../lib/auth/serverAuth";
@@ -10,13 +12,9 @@ const supabaseServiceKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.SUPABASE_ANON_KEY!;
 
-function getAdminClient() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
+function getAdminClient() { return workspaceDb(); }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser(request);
     const supabase = getAdminClient();
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     // Strictly require administrator or manage_properties privileges
     const authCheck = await requireAdminOrRight(request, "manage_properties");
@@ -130,7 +128,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+async function PATCHImpl(request: NextRequest) {
   try {
     const authCheck = await requireAdminOrRight(request, "manage_properties");
     if (authCheck.errorResponse) return authCheck.errorResponse;
@@ -176,7 +174,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+async function DELETEImpl(request: NextRequest) {
   try {
     // Strictly require administrator or manage_properties privileges
     const authCheck = await requireAdminOrRight(request, "manage_properties");
@@ -203,3 +201,13 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+export async function GET(request:NextRequest) {
+ if(request.nextUrl.searchParams.get("public")!=="true"&&(request.cookies.get("sb-access-token") || request.headers.get("authorization")))return withWorkspace(GETImpl)(request);
+ try {
+  const properties=checked(await serviceDb().from("properties").select("id,name,code,location,is_active,organizations(name,logo_url,brand_color,welcome_message)").eq("is_active",true).order("name"));
+  return NextResponse.json({success:true,properties});
+ }catch(error){return errorResponse(error);}
+}
+export const POST=withWorkspace(POSTImpl,"manage_properties");
+export const PATCH=withWorkspace(PATCHImpl,"manage_properties");
+export const DELETE=withWorkspace(DELETEImpl,"manage_properties");

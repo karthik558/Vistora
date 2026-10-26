@@ -1866,7 +1866,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
               open={pendingDelete !== null}
               title="Remove team member"
               recordName={pendingDelete ? `${pendingDelete.full_name} (${pendingDelete.email})` : ""}
-              consequence="This removes their workspace access. It cannot be undone."
+              consequence="This disables workspace access and retains their case history. Send a new team invitation to restore access."
               confirmLabel="Remove member"
               pending={deletingUser}
               onCancel={() => { if (!deletingUser) setPendingDelete(null); }}

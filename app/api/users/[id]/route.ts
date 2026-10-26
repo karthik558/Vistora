@@ -1,58 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { requireAdminOrRight, invalidateAuthCache, invalidateSessionCache } from "../../../../lib/auth/serverAuth";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL!;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_ANON_KEY!;
-
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const authCheck = await requireAdminOrRight(request, "manage_users");
-    if (authCheck.errorResponse) return authCheck.errorResponse;
-
-    const resolvedParams = await context.params;
-    const userId = resolvedParams?.id;
-
-    if (!userId) {
-      return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
-    }
-
-    // Prevent admin from deleting their own active session
-    if (authCheck.user?.id === userId) {
-      return NextResponse.json(
-        { success: false, error: "Security restriction: You cannot delete your own administrator account." },
-        { status: 400 }
-      );
-    }
-
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
-
-    // Delete user from Supabase Auth (which cascades to profiles)
-    try {
-      await adminClient.auth.admin.deleteUser(userId);
-    } catch (e) {
-      console.warn("Could not delete from auth.users:", e);
-    }
-
-    // Explicitly delete from profiles table
-    await adminClient.from("profiles").delete().eq("id", userId);
-
-    invalidateAuthCache();
-    invalidateSessionCache();
-
-    return NextResponse.json({ success: true, message: "User removed successfully." });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to remove user." },
-      { status: 500 }
-    );
-  }
-}
+import {NextRequest,NextResponse} from "next/server";
+import {withWorkspace} from "../../../../lib/platform/http";
+import {checked,serviceDb,workspaceDb,workspaceUser,PlatformError} from "../../../../lib/platform/db";
+export const DELETE=withWorkspace(async(_request:NextRequest,{params}:{params:Promise<{id:string}>})=>{
+ const user=workspaceUser(),{id}=await params;if(!user.isOrganizationAdmin||user.id===id)throw new PlatformError("You cannot remove this account.",403);
+ checked(await workspaceDb().from("profiles").select("id").eq("id",id).single());
+ const member=checked(await serviceDb().from("organization_members").select("*").eq("user_id",id).eq("organization_id",user.organizationId).single());
+ if(member.role==="owner")throw new PlatformError("Company owner access cannot be revoked.",403);
+ checked(await serviceDb().from("organization_members").update({is_active:false}).eq("user_id",id).eq("organization_id",user.organizationId).select().single());
+ return NextResponse.json({success:true,message:"Workspace access revoked. Historical records are preserved."});
+},"manage_users");

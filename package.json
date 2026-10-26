@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/platform.test.cjs",
+    "test:database": "node tests/workspace-database.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -25,6 +25,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
   // Form fields
   const [rating, setRating] = useState<number | null>(null);
+  const [recommendationScore,setRecommendationScore]=useState<number|null>(null);
   const [department, setDepartment] = useState<DepartmentType>("Front Desk");
   const [comment, setComment] = useState("");
   const [wantsContact, setWantsContact] = useState(false);
@@ -34,7 +35,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [roomNumber, setRoomNumber] = useState("");
 
   // Mandatory Property Selection
-  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string; is_active?: boolean }>>([]);
+  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string; is_active?: boolean;organizations?:{name:string;logo_url:string|null;brand_color:string;welcome_message:string} }>>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [propertyError, setPropertyError] = useState<string | null>(null);
   const [isUrlPreselected, setIsUrlPreselected] = useState(false);
@@ -45,9 +46,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [questions, setQuestions] = useState<Array<{
     id: string;
     question_text: string;
-    question_type: "choice" | "rating" | "yes_no" | "text";
+    question_type: string;
     options?: string[];
     is_required?: boolean;
+    department?:string|null;
   }>>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
@@ -55,7 +57,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     let mounted = true;
 
     // Fetch properties and check for URL pre-selection or demo mode link
-    fetch("/api/properties", { cache: "no-store" })
+    fetch("/api/properties?public=true", { cache: "no-store" })
       .then((res) => res.json())
       .then((json) => {
         if (mounted && json.success && json.properties) {
@@ -124,21 +126,21 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       setLoading(false);
     }
 
-    // Fetch active questionnaire questions
-    fetch("/api/questions", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((json) => {
-        if (mounted && json.success && json.questions) {
-          setQuestions(json.questions);
-        }
-      })
-      .catch(() => { });
 
     return () => {
       mounted = false;
     };
   }, [publicToken]);
 
+  useEffect(()=>{
+    setQuestions([]);setAnswers({});
+    if(!selectedPropertyId)return;
+    const controller=new AbortController();
+    fetch("/api/questions?public=true&propertyId="+encodeURIComponent(selectedPropertyId),{signal:controller.signal}).then(r=>r.json()).then(j=>{if(j.success)setQuestions(j.questions);}).catch(()=>{});
+    return ()=>controller.abort();
+  },[selectedPropertyId]);
+
+  const activeQuestions=questions.filter(q=>!q.department||q.department===department);
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPropertyError(null);
@@ -148,10 +150,12 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       return;
     }
     if (!rating) return;
+    if(activeQuestions.some(q=>q.is_required&&!answers[q.id]?.trim())){setPropertyError("Please answer the required questions.");return;}
+    if(isDemoMode){setSubmitted(true);return;}
 
     setSubmitting(true);
     try {
-      const answersPayload = questions
+      const answersPayload = activeQuestions
         .map((q) => ({
           questionId: q.id,
           questionText: q.question_text,
@@ -169,6 +173,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           roomNumber: roomNumber.trim() || undefined,
           department,
           rating,
+          recommendationScore:activeQuestions.some(q=>q.question_type==="nps")?null:recommendationScore,
           comment: comment.trim() || undefined,
           answers: answersPayload,
           wantsContact,
@@ -180,9 +185,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       const json = await res.json();
       if (json.success) {
         setSubmitted(true);
-      }
+      } else setPropertyError(json.error||"Could not submit feedback. Please try again.");
     } catch (err) {
       console.error("Failed to submit feedback", err);
+      setPropertyError("Could not submit feedback. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -212,9 +218,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         <div className="guest-card success-card">
           <div className="success-mark">✓</div>
           <p className="eyebrow">Thank you</p>
-          <h1>Your feedback is<br /><em>with our team.</em></h1>
+          <h1>{isDemoMode?"Demo complete":<>Your feedback is<br /><em>with our team.</em></>}</h1>
           <p>
-            We received this note{roomNumber.trim() ? ` for ${roomNumber.trim()}` : ""}{selectedProperty ? ` at ${selectedProperty.name.trim()}` : ""}.
+            {isDemoMode?"This was a preview. No feedback was saved.":`We received this note${roomNumber.trim() ? " for "+roomNumber.trim() : ""}${selectedProperty ? " at "+selectedProperty.name.trim() : ""}.`}
           </p>
           <dl className="guest-receipt">
             {selectedProperty && <div><dt>Property</dt><dd>{selectedProperty.name}</dd></div>}
@@ -224,7 +230,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             {guestName.trim() && <div><dt>Name</dt><dd>{guestName.trim()}</dd></div>}
             {comment.trim() && <div><dt>Note</dt><dd>{comment.trim()}</dd></div>}
           </dl>
-          {managerFollowUp && (
+          {managerFollowUp && !isDemoMode && (
             <p className="guest-followup-note">
               {`A manager will follow up on this stay${wantsContact && contactValue.trim() ? ` by ${contactPreference === "email" ? "email" : "phone"} at ${contactValue.trim()}` : ""}.`}
             </p>
@@ -238,6 +244,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   return (
     <main className="guest-shell">
       <div className="guest-card">
+        {selectedProperty?.organizations&&<div style={{borderBottom:"2px solid "+selectedProperty.organizations.brand_color,paddingBottom:12,marginBottom:16}}>{selectedProperty.organizations.logo_url&&<img src={selectedProperty.organizations.logo_url} alt={selectedProperty.organizations.name} style={{maxWidth:140,maxHeight:50,objectFit:"contain"}}/>}<p>{selectedProperty.organizations.welcome_message||selectedProperty.organizations.name}</p></div>}
         <div className="guest-top">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
             <Image
@@ -299,6 +306,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             )}
           </div>
 
+          {!activeQuestions.some(q=>q.question_type==="nps")&&<fieldset><legend>How likely are you to recommend us?</legend><p className="guest-helper">Optional · 0 = not at all likely, 10 = extremely likely</p><div className="nps-input">{Array.from({length:11},(_,n)=><button type="button" key={n} aria-pressed={recommendationScore===n} onClick={()=>setRecommendationScore(recommendationScore===n?null:n)}>{n}</button>)}</div></fieldset>}
           {/* Rating */}
           <fieldset>
             <legend>How would you rate your experience overall?</legend>
@@ -368,16 +376,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           </div>
 
           {/* Dynamic Questionnaire Questions */}
-          {questions.length > 0 && (
+          {activeQuestions.length > 0 && (
             <div className="guest-question-block">
-              {questions.map((q) => (
+              {activeQuestions.map((q) => (
                 <div key={q.id} className="guest-question">
                   <label className="guest-question-label">
                     {q.question_text}
                     {q.is_required && <span className="guest-required">*</span>}
                   </label>
 
-                  {q.question_type === "choice" && q.options && q.options.length > 0 && (
+                  {["choice","multi_choice","dropdown","emoji","touchpoint"].includes(q.question_type) && q.options && q.options.length > 0 && (
                     <div className="guest-choice-row">
                       {q.options.map((opt) => {
                         const isSelected = answers[q.id] === opt;
@@ -431,7 +439,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                     </div>
                   )}
 
-                  {q.question_type === "text" && (
+                  {["nps","csat"].includes(q.question_type)&&<div className="nps-input">{Array.from({length:q.question_type==="nps"?11:10},(_,i)=>q.question_type==="nps"?i:i+1).map(n=><button type="button" key={n} aria-pressed={answers[q.id]===String(n)} onClick={()=>setAnswers(prev=>({...prev,[q.id]:String(n)}))}>{n}</button>)}</div>}
+                  {["text","long_text"].includes(q.question_type) && (
                     <input
                       type="text"
                       className="guest-field"

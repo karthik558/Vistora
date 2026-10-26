@@ -708,3 +708,590 @@ FROM public.profiles p
 WHERE p.property_id IS NOT NULL
 ON CONFLICT (user_id, property_id) DO NOTHING;
 
+-- ==============================================================================
+-- 12. COMPANY WORKSPACES AND PERSISTENT OPERATIONS (append-only upgrade, 2026-10-26)
+-- Run this section onward for an existing installation. Existing records are kept.
+-- All existing unassigned records belong to the legacy workspace, never a new customer.
+-- ==============================================================================
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE IF NOT EXISTS public.organizations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL,
+  slug text NOT NULL UNIQUE, logo_url text, brand_color text NOT NULL DEFAULT '#3e5a4b',
+  welcome_message text NOT NULL DEFAULT 'Tell us about your stay.',
+  timezone text NOT NULL DEFAULT 'Asia/Kolkata', is_demo boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.organizations(id,name,slug) VALUES
+ ('00000000-0000-4000-8000-000000000001','Existing Vistora workspace','vistora-legacy') ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS public.organization_members (
+  organization_id uuid NOT NULL REFERENCES public.organizations(id),
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  role text NOT NULL DEFAULT 'member' CHECK(role IN ('owner','admin','member')),
+  is_active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(organization_id,user_id)
+);
+DO $$ DECLARE t text; fresh boolean; BEGIN
+  FOREACH t IN ARRAY ARRAY['properties','profiles','guests','stays','feedback','feedback_questions','feedback_answers','audit_logs','property_access'] LOOP
+    SELECT NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id') INTO fresh;
+    EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES public.organizations(id)',t);
+    IF fresh THEN EXECUTE format('UPDATE public.%I SET organization_id = %L WHERE organization_id IS NULL',t,'00000000-0000-4000-8000-000000000001'); END IF;
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON public.%I(organization_id)',t||'_organization_idx',t);
+  END LOOP;
+END $$;
+-- Backfill memberships once; rerunning never changes roles or reactivates members.
+INSERT INTO public.organization_members(organization_id,user_id,role)
+SELECT organization_id,id,CASE WHEN role::text='admin' THEN 'admin' ELSE 'member' END
+FROM public.profiles WHERE organization_id IS NOT NULL ON CONFLICT(user_id) DO NOTHING;
+ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS recommendation_score smallint CHECK(recommendation_score BETWEEN 0 AND 10);
+ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high','critical'));
+ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS first_response_at timestamptz;
+ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'general';
+
+CREATE OR REPLACE FUNCTION public.workspace_org() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT organization_id FROM public.organization_members WHERE user_id=auth.uid() AND is_active LIMIT 1
+$$;
+CREATE OR REPLACE FUNCTION public.workspace_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=auth.uid() AND is_active AND role IN ('owner','admin'))
+$$;
+CREATE OR REPLACE FUNCTION public.workspace_right(r text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT public.workspace_admin() OR EXISTS(SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND p.organization_id=public.workspace_org() AND r=ANY(p.rights))
+$$;
+CREATE OR REPLACE FUNCTION public.workspace_property(pid uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT EXISTS(SELECT 1 FROM public.properties h WHERE h.id=pid AND h.organization_id=public.workspace_org() AND
+ (public.workspace_admin() OR EXISTS(SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND
+ (p.property_id=pid OR pid=ANY(p.property_ids))) OR EXISTS(SELECT 1 FROM public.property_access a WHERE a.user_id=auth.uid() AND a.property_id=pid AND a.organization_id=public.workspace_org())))
+$$;
+CREATE OR REPLACE FUNCTION public.workspace_department(dept text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT public.workspace_admin()
+ OR NOT EXISTS(SELECT 1 FROM public.profiles p,unnest(p.rights) r WHERE p.id=auth.uid() AND r LIKE 'dept_scope:%')
+ OR EXISTS(SELECT 1 FROM public.profiles p,unnest(p.rights) r WHERE p.id=auth.uid() AND r IN ('dept_scope:*','dept_scope:All Departments','dept_scope:'||dept))
+$$;
+CREATE OR REPLACE FUNCTION public.stamp_workspace() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$
+BEGIN
+ IF TG_OP='INSERT' AND NEW.organization_id IS NULL THEN NEW.organization_id:=public.workspace_org(); END IF;
+ IF TG_TABLE_NAME='profiles' AND NEW.organization_id IS NULL THEN RETURN NEW; END IF;
+ IF NEW.organization_id IS NULL THEN RAISE EXCEPTION 'Workspace is required'; END IF;
+ IF TG_OP='UPDATE' AND OLD.organization_id IS NOT NULL AND NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN RAISE EXCEPTION 'Moving records between companies is prohibited'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TABLE IF NOT EXISTS public.organization_settings (
+ organization_id uuid PRIMARY KEY REFERENCES public.organizations(id), settings jsonb NOT NULL DEFAULT '{}', updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.property_settings (
+ property_id uuid PRIMARY KEY REFERENCES public.properties(id) ON DELETE CASCADE,
+ organization_id uuid NOT NULL REFERENCES public.organizations(id), settings jsonb NOT NULL DEFAULT '{}', updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.guest_invitations (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id), token_hash text NOT NULL UNIQUE,
+ guest_name text NOT NULL, guest_email text, guest_phone text, room_number text NOT NULL,
+ channel text NOT NULL DEFAULT 'direct_link' CHECK(channel IN ('direct_link','email','sms','whatsapp')),
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed','expired')),
+ expires_at timestamptz NOT NULL DEFAULT now()+interval '7 days', completed_at timestamptz,
+ feedback_id uuid REFERENCES public.feedback(id), feedback_rating smallint CHECK(feedback_rating BETWEEN 1 AND 5),
+ notes text, created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.guest_invitations ADD COLUMN IF NOT EXISTS token_encrypted text;
+ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS invitation_id uuid UNIQUE REFERENCES public.guest_invitations(id);
+CREATE TABLE IF NOT EXISTS public.feedback_comments (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ feedback_id uuid NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
+ author_id uuid NOT NULL REFERENCES public.profiles(id), body text NOT NULL CHECK(length(body) BETWEEN 1 AND 4000), created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.feedback_activity (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ feedback_id uuid NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
+ actor_id uuid REFERENCES auth.users(id) ON DELETE SET NULL, action text NOT NULL, changes jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.feedback_attachments (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ feedback_id uuid NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
+ uploaded_by uuid NOT NULL REFERENCES public.profiles(id), object_path text NOT NULL UNIQUE,
+ filename text NOT NULL, content_type text NOT NULL, size_bytes integer NOT NULL CHECK(size_bytes BETWEEN 1 AND 5242880), created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.sla_policies (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid NOT NULL REFERENCES public.properties(id), department text NOT NULL,
+ response_minutes integer NOT NULL CHECK(response_minutes BETWEEN 1 AND 10080),
+ escalation_email text NOT NULL, UNIQUE(property_id,department), created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.recovery_followups (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ feedback_id uuid NOT NULL REFERENCES public.feedback(id), token_hash text NOT NULL UNIQUE,
+ resolution_cycle timestamptz NOT NULL, expires_at timestamptz NOT NULL DEFAULT now()+interval '7 days',
+ responded_at timestamptz, rating smallint CHECK(rating BETWEEN 1 AND 5), recommendation_score smallint CHECK(recommendation_score BETWEEN 0 AND 10), comment text,
+ UNIQUE(feedback_id,resolution_cycle), created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.saved_views (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ user_id uuid NOT NULL REFERENCES public.profiles(id), name text NOT NULL CHECK(length(name) BETWEEN 1 AND 80),
+ filters jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.report_schedules (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ property_id uuid REFERENCES public.properties(id), created_by uuid NOT NULL REFERENCES public.profiles(id),
+ name text NOT NULL, recipient_email text NOT NULL, frequency text NOT NULL CHECK(frequency IN ('daily','weekly','monthly')),
+ period_days integer NOT NULL CHECK(period_days BETWEEN 1 AND 366), next_run_at timestamptz NOT NULL DEFAULT now(),
+ is_active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.report_runs (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ schedule_id uuid REFERENCES public.report_schedules(id) ON DELETE SET NULL, scheduled_for timestamptz NOT NULL,
+ summary jsonb, status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','generated','delivered','failed','blocked')),
+ created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(schedule_id,scheduled_for)
+);
+CREATE TABLE IF NOT EXISTS public.team_invitations (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ email text NOT NULL, token_hash text NOT NULL UNIQUE, invited_by uuid NOT NULL REFERENCES public.profiles(id),
+ property_ids uuid[] NOT NULL DEFAULT '{}', rights text[] NOT NULL DEFAULT '{view_feedback}',
+ expires_at timestamptz NOT NULL DEFAULT now()+interval '7 days', accepted_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.api_keys (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ name text NOT NULL, key_hash text NOT NULL UNIQUE, prefix text NOT NULL, scopes text[] NOT NULL DEFAULT '{feedback:read}',
+ created_by uuid NOT NULL REFERENCES public.profiles(id), expires_at timestamptz NOT NULL, revoked_at timestamptz, last_used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.webhook_endpoints (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ url text NOT NULL CHECK(url LIKE 'https://%'), secret_encrypted text NOT NULL,
+ is_active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.notification_outbox (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ kind text NOT NULL CHECK(kind IN ('sla','followup','invitation','team_invitation','report','webhook')),
+ dedup_key text NOT NULL UNIQUE, payload jsonb NOT NULL,
+ status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','sending','delivered','failed','blocked')),
+ attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(),
+ locked_until timestamptz, lease_token uuid, last_error text, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.notification_deliveries (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ outbox_id uuid NOT NULL REFERENCES public.notification_outbox(id), attempt integer NOT NULL,
+ status text NOT NULL CHECK(status IN ('delivered','retry','failed','blocked')), detail text, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(outbox_id,attempt)
+);
+ALTER TABLE public.notification_outbox ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 5;
+CREATE INDEX IF NOT EXISTS outbox_due_idx ON public.notification_outbox(status,available_at);
+CREATE INDEX IF NOT EXISTS feedback_due_idx ON public.feedback(organization_id,sla_deadline) WHERE status <> 'resolved';
+CREATE INDEX IF NOT EXISTS comments_feedback_idx ON public.feedback_comments(feedback_id,created_at);
+CREATE INDEX IF NOT EXISTS activity_feedback_idx ON public.feedback_activity(feedback_id,created_at);
+
+-- Enforce matching organizations even when a privileged worker writes child records.
+CREATE OR REPLACE FUNCTION public.check_workspace_links() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE parent_org uuid; parent_id uuid; field text;
+BEGIN
+ IF to_jsonb(NEW)?'property_id' AND to_jsonb(NEW)->>'property_id' IS NOT NULL THEN
+  parent_id:=(to_jsonb(NEW)->>'property_id')::uuid;
+  SELECT organization_id INTO parent_org FROM public.properties WHERE id=parent_id;
+  IF parent_org IS DISTINCT FROM NEW.organization_id THEN RAISE EXCEPTION 'Property belongs to another company'; END IF;
+ END IF;
+ IF to_jsonb(NEW)?'feedback_id' AND to_jsonb(NEW)->>'feedback_id' IS NOT NULL THEN
+  SELECT organization_id INTO parent_org FROM public.feedback WHERE id=(to_jsonb(NEW)->>'feedback_id')::uuid;
+  IF parent_org IS DISTINCT FROM NEW.organization_id THEN RAISE EXCEPTION 'Feedback belongs to another company'; END IF;
+ END IF;
+ IF to_jsonb(NEW)?'user_id' AND to_jsonb(NEW)->>'user_id' IS NOT NULL THEN
+  SELECT organization_id INTO parent_org FROM public.profiles WHERE id=(to_jsonb(NEW)->>'user_id')::uuid;
+  IF parent_org IS DISTINCT FROM NEW.organization_id THEN RAISE EXCEPTION 'User belongs to another company'; END IF;
+ END IF;
+ FOREACH field IN ARRAY ARRAY['guest_id','stay_id','question_id'] LOOP
+  parent_id:=(to_jsonb(NEW)->>field)::uuid;
+  IF parent_id IS NOT NULL THEN
+   IF field='guest_id' THEN SELECT organization_id INTO parent_org FROM public.guests WHERE id=parent_id;
+   ELSIF field='stay_id' THEN SELECT organization_id INTO parent_org FROM public.stays WHERE id=parent_id;
+   ELSE SELECT organization_id INTO parent_org FROM public.feedback_questions WHERE id=parent_id; END IF;
+   IF parent_org IS DISTINCT FROM NEW.organization_id THEN RAISE EXCEPTION 'Linked record belongs to another company'; END IF;
+  END IF;
+ END LOOP;
+ IF to_jsonb(NEW)?'property_ids' AND EXISTS(SELECT 1 FROM jsonb_array_elements_text(to_jsonb(NEW)->'property_ids') v WHERE NOT EXISTS(SELECT 1 FROM public.properties p WHERE p.id=v::uuid AND p.organization_id=NEW.organization_id)) THEN RAISE EXCEPTION 'Property assignment belongs to another company'; END IF;
+ RETURN NEW;
+END $$;
+
+-- Remove permissive legacy policies, including policies without a TO clause.
+DO $$ DECLARE t text; pol record; BEGIN
+ FOREACH t IN ARRAY ARRAY['organizations','organization_members','properties','profiles','guests','stays','feedback','feedback_questions','feedback_answers','audit_logs','property_access','organization_settings','property_settings','guest_invitations','feedback_comments','feedback_activity','feedback_attachments','sla_policies','recovery_followups','saved_views','report_schedules','report_runs','team_invitations','api_keys','webhook_endpoints','notification_outbox','notification_deliveries'] LOOP
+  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
+  FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename=t LOOP
+   EXECUTE format('DROP POLICY %I ON public.%I',pol.policyname,t);
+  END LOOP;
+  EXECUTE format('REVOKE ALL ON public.%I FROM anon',t);
+  EXECUTE format('GRANT ALL ON public.%I TO service_role',t);
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated',t);
+  IF t NOT IN ('organizations','organization_members') THEN
+   EXECUTE format('DROP TRIGGER IF EXISTS stamp_workspace_trigger ON public.%I',t);
+   EXECUTE format('CREATE TRIGGER stamp_workspace_trigger BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.stamp_workspace()',t);
+   EXECUTE format('DROP TRIGGER IF EXISTS workspace_links_trigger ON public.%I',t);
+   EXECUTE format('CREATE TRIGGER workspace_links_trigger BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.check_workspace_links()',t);
+  END IF;
+ END LOOP;
+END $$;
+CREATE POLICY org_read ON public.organizations FOR SELECT TO authenticated USING(id=public.workspace_org());
+CREATE POLICY org_update ON public.organizations FOR UPDATE TO authenticated USING(id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(id=public.workspace_org());
+CREATE POLICY members_read ON public.organization_members FOR SELECT TO authenticated USING(organization_id=public.workspace_org());
+CREATE POLICY profiles_read ON public.profiles FOR SELECT TO authenticated USING(organization_id=public.workspace_org());
+CREATE POLICY profiles_manage ON public.profiles FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin());
+CREATE POLICY properties_read ON public.properties FOR SELECT TO authenticated USING(public.workspace_property(id));
+CREATE POLICY properties_manage ON public.properties FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('manage_properties')) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_right('manage_properties'));
+CREATE POLICY feedback_read ON public.feedback FOR SELECT TO authenticated USING(public.workspace_property(property_id) AND public.workspace_department(department::text) AND (public.workspace_right('view_feedback') OR public.workspace_right('manage_complaints') OR public.workspace_right('export_reports')));
+CREATE POLICY feedback_update ON public.feedback FOR UPDATE TO authenticated USING(public.workspace_property(property_id) AND public.workspace_department(department::text) AND public.workspace_right('manage_complaints')) WITH CHECK(public.workspace_property(property_id) AND organization_id=public.workspace_org() AND public.workspace_department(department::text));
+CREATE POLICY feedback_delete ON public.feedback FOR DELETE TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin());
+CREATE POLICY questions_read ON public.feedback_questions FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND (property_id IS NULL OR public.workspace_property(property_id)));
+CREATE POLICY questions_manage ON public.feedback_questions FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('manage_questionnaire')) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_right('manage_questionnaire') AND (property_id IS NULL OR public.workspace_property(property_id)));
+CREATE POLICY answers_read ON public.feedback_answers FOR SELECT TO authenticated USING(EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY property_access_read ON public.property_access FOR SELECT TO authenticated USING(organization_id=public.workspace_org());
+CREATE POLICY property_access_manage ON public.property_access FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin());
+CREATE POLICY audit_read ON public.audit_logs FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('view_audit_log'));
+CREATE POLICY audit_insert ON public.audit_logs FOR INSERT TO authenticated WITH CHECK(organization_id=public.workspace_org() AND actor_email=(SELECT email FROM public.profiles WHERE id=auth.uid()));
+CREATE POLICY guest_read ON public.guests FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('view_guest_pii'));
+CREATE POLICY stays_read ON public.stays FOR SELECT TO authenticated USING(public.workspace_property(property_id));
+CREATE POLICY comments_read ON public.feedback_comments FOR SELECT TO authenticated USING(public.workspace_right('manage_complaints') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY comments_insert ON public.feedback_comments FOR INSERT TO authenticated WITH CHECK(organization_id=public.workspace_org() AND author_id=auth.uid() AND public.workspace_right('manage_complaints') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY activity_read ON public.feedback_activity FOR SELECT TO authenticated USING(public.workspace_right('manage_complaints') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY attachments_read ON public.feedback_attachments FOR SELECT TO authenticated USING(public.workspace_right('manage_complaints') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY attachments_insert ON public.feedback_attachments FOR INSERT TO authenticated WITH CHECK(uploaded_by=auth.uid() AND organization_id=public.workspace_org() AND public.workspace_right('manage_complaints') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+CREATE POLICY views_own ON public.saved_views FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND user_id=auth.uid()) WITH CHECK(organization_id=public.workspace_org() AND user_id=auth.uid());
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['organization_settings','property_settings','sla_policies','report_schedules','team_invitations','api_keys','webhook_endpoints'] LOOP
+  EXECUTE format('CREATE POLICY company_admin ON public.%I FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin())',t);
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['organization_settings','property_settings','guest_invitations','sla_policies','recovery_followups','report_runs','notification_outbox','notification_deliveries'] LOOP
+  EXECUTE format('CREATE POLICY company_read ON public.%I FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin())',t);
+ END LOOP;
+END $$;
+CREATE POLICY invitation_manage ON public.guest_invitations FOR ALL TO authenticated USING(public.workspace_property(property_id) AND public.workspace_right('manage_questionnaire')) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_property(property_id) AND public.workspace_right('manage_questionnaire'));
+
+-- Safe Auth trigger: user-controlled metadata never grants workspace membership or privileges.
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ INSERT INTO public.profiles(id,email,full_name,role,rights)
+ VALUES(NEW.id,NEW.email,COALESCE(NEW.raw_user_meta_data->>'full_name','Team member'),'visitor','{}') ON CONFLICT(id) DO NOTHING;
+ RETURN NEW;
+END $$;
+-- Existing schemas may use a differently named auth sync trigger: replace all profile sync triggers explicitly.
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+CREATE OR REPLACE FUNCTION public.provision_workspace_user(p_user uuid,p_org uuid,p_email text,p_name text,p_admin boolean,p_properties uuid[],p_rights text[]) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=p_user AND organization_id<>p_org) THEN RAISE EXCEPTION 'Account already belongs to another company'; END IF;
+ IF EXISTS(SELECT 1 FROM unnest(p_properties) x LEFT JOIN public.properties h ON h.id=x WHERE h.organization_id IS DISTINCT FROM p_org) THEN RAISE EXCEPTION 'Invalid property assignment'; END IF;
+ -- New Auth profiles have no organization. They are assigned only through this service-only function.
+ UPDATE public.profiles SET organization_id=p_org,email=p_email,full_name=p_name,role=CASE WHEN p_admin THEN 'admin'::user_role ELSE 'staff'::user_role END,
+ property_ids=p_properties,property_id=p_properties[1],rights=p_rights WHERE id=p_user AND (organization_id IS NULL OR organization_id=p_org);
+ INSERT INTO public.organization_members(organization_id,user_id,role) VALUES(p_org,p_user,CASE WHEN p_admin THEN 'admin' ELSE 'member' END)
+ ON CONFLICT(user_id) DO UPDATE SET role=CASE WHEN organization_members.role='owner' THEN 'owner' ELSE excluded.role END,is_active=true;
+END $$;
+REVOKE ALL ON FUNCTION public.provision_workspace_user(uuid,uuid,text,text,boolean,uuid[],text[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.provision_workspace_user(uuid,uuid,text,text,boolean,uuid[],text[]) TO service_role;
+
+-- Private attachment storage, when installed in Supabase. Access is mediated by verified API routes.
+DO $$ BEGIN
+ IF to_regclass('storage.buckets') IS NOT NULL THEN
+  INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+  VALUES('case-attachments','case-attachments',false,5242880,ARRAY['image/jpeg','image/png','application/pdf','text/plain']) ON CONFLICT(id) DO NOTHING;
+ END IF;
+END $$;
+COMMIT;
+
+-- 13. TRANSACTIONAL CASE HISTORY, FOLLOW-UPS, AND RELIABLE BACKGROUND WORK
+BEGIN;
+CREATE OR REPLACE FUNCTION public.case_workflow() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE minutes integer; invitation public.guest_invitations; changes jsonb := '{}'; raw_token text; follow_id uuid; endpoint record; auto_follow boolean;
+BEGIN
+ IF TG_OP='INSERT' THEN
+  IF NEW.invitation_id IS NOT NULL THEN
+   SELECT * INTO invitation FROM public.guest_invitations WHERE id=NEW.invitation_id FOR UPDATE;
+   IF NOT FOUND OR invitation.property_id<>NEW.property_id OR invitation.organization_id<>NEW.organization_id OR invitation.status<>'pending' OR invitation.expires_at<=now() THEN RAISE EXCEPTION 'Invitation is invalid, expired, or already used'; END IF;
+   UPDATE public.guest_invitations SET status='completed',completed_at=now(),feedback_rating=NEW.rating WHERE id=invitation.id;
+  END IF;
+  IF NEW.status<>'resolved' AND NEW.sla_deadline IS NULL THEN
+   SELECT response_minutes INTO minutes FROM public.sla_policies WHERE property_id=NEW.property_id AND department=NEW.department::text;
+   IF minutes IS NULL THEN SELECT (settings->>CASE WHEN NEW.rating<=2 THEN 'slaCriticalMinutes' ELSE 'slaStandardMinutes' END)::integer INTO minutes FROM public.organization_settings WHERE organization_id=NEW.organization_id; END IF;
+   NEW.sla_deadline:=now()+make_interval(mins=>COALESCE(minutes,CASE WHEN NEW.rating<=2 THEN 15 ELSE 120 END));
+  END IF;
+  IF NEW.rating<=2 THEN NEW.priority:='high'; END IF;
+ ELSE
+  IF OLD.status='resolved' AND NEW.status<>'resolved' THEN
+   NEW.resolved_at:=NULL;
+   SELECT response_minutes INTO minutes FROM public.sla_policies WHERE property_id=NEW.property_id AND department=NEW.department::text;
+   IF minutes IS NULL THEN SELECT (settings->>CASE WHEN NEW.rating<=2 THEN 'slaCriticalMinutes' ELSE 'slaStandardMinutes' END)::integer INTO minutes FROM public.organization_settings WHERE organization_id=NEW.organization_id; END IF;
+   NEW.sla_deadline:=now()+make_interval(mins=>COALESCE(minutes,CASE WHEN NEW.rating<=2 THEN 15 ELSE 120 END));
+  END IF;
+  IF auth.uid() IS NOT NULL AND NEW.first_response_at IS NULL AND (NEW.assigned_to IS DISTINCT FROM OLD.assigned_to OR NEW.status IS DISTINCT FROM OLD.status OR NEW.resolution_notes IS DISTINCT FROM OLD.resolution_notes) THEN NEW.first_response_at:=now(); END IF;
+  IF NEW.status='resolved' AND OLD.status<>'resolved' THEN NEW.resolved_at:=now(); END IF;
+ END IF;
+ NEW.updated_at:=now();
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS case_workflow_before ON public.feedback;
+CREATE TRIGGER case_workflow_before BEFORE INSERT OR UPDATE ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.case_workflow();
+
+CREATE OR REPLACE FUNCTION public.case_history() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE changes jsonb; raw_token text; follow_id uuid; endpoint record; auto_follow boolean;
+BEGIN
+ IF TG_OP='INSERT' THEN
+  changes:=jsonb_build_object('status',NEW.status,'priority',NEW.priority);
+  IF NEW.invitation_id IS NOT NULL THEN UPDATE public.guest_invitations SET feedback_id=NEW.id WHERE id=NEW.invitation_id; END IF;
+ ELSE
+  changes:=(SELECT COALESCE(jsonb_object_agg(n.key,jsonb_build_object('from',o.value,'to',n.value)),'{}')
+   FROM jsonb_each(to_jsonb(NEW)) n JOIN jsonb_each(to_jsonb(OLD)) o ON o.key=n.key
+   WHERE n.value IS DISTINCT FROM o.value AND n.key IN ('status','assigned_to','priority','sla_deadline','resolution_notes','category'));
+ END IF;
+ IF changes<>'{}' THEN
+  INSERT INTO public.feedback_activity(organization_id,feedback_id,actor_id,action,changes)
+   VALUES(NEW.organization_id,NEW.id,auth.uid(),CASE WHEN TG_OP='INSERT' THEN 'created' ELSE 'updated' END,changes);
+  FOR endpoint IN SELECT * FROM public.webhook_endpoints WHERE organization_id=NEW.organization_id AND is_active LOOP
+   INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload) VALUES(NEW.organization_id,'webhook',
+    'webhook:'||endpoint.id||':'||NEW.id||':'||NEW.updated_at,
+    jsonb_build_object('endpointId',endpoint.id,'event','feedback.'||CASE WHEN TG_OP='INSERT' THEN 'created' ELSE 'updated' END,'feedbackId',NEW.id,'changes',changes)) ON CONFLICT(dedup_key) DO NOTHING;
+  END LOOP;
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS case_history_after ON public.feedback;
+CREATE TRIGGER case_history_after AFTER INSERT OR UPDATE ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.case_history();
+
+CREATE OR REPLACE FUNCTION public.schedule_workspace_work(p_org uuid DEFAULT NULL) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE item record; recipient text; count_jobs integer:=0; schedule record; run_id uuid;
+BEGIN
+ FOR item IN SELECT * FROM public.feedback WHERE status<>'resolved' AND sla_deadline<now() AND (p_org IS NULL OR organization_id=p_org) FOR UPDATE SKIP LOCKED LOOP
+  SELECT escalation_email INTO recipient FROM public.sla_policies WHERE property_id=item.property_id AND department=item.department::text;
+  IF recipient IS NULL THEN SELECT settings->>'alertEmail' INTO recipient FROM public.organization_settings WHERE organization_id=item.organization_id; END IF;
+  INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload) VALUES(item.organization_id,'sla','sla:'||item.id||':'||item.sla_deadline,
+   jsonb_build_object('feedbackId',item.id,'recipient',recipient,'department',item.department,'deadline',item.sla_deadline)) ON CONFLICT(dedup_key) DO NOTHING;
+  UPDATE public.feedback SET status='escalated' WHERE id=item.id AND status<>'escalated';
+  recipient:=NULL; count_jobs:=count_jobs+1;
+ END LOOP;
+ FOR schedule IN SELECT s.* FROM public.report_schedules s JOIN public.organization_members m ON m.user_id=s.created_by AND m.organization_id=s.organization_id
+  WHERE s.is_active AND s.next_run_at<=now() AND m.is_active AND m.role IN ('owner','admin') AND (p_org IS NULL OR s.organization_id=p_org) FOR UPDATE OF s SKIP LOCKED LOOP
+  INSERT INTO public.report_runs(organization_id,schedule_id,scheduled_for) VALUES(schedule.organization_id,schedule.id,schedule.next_run_at)
+   ON CONFLICT(schedule_id,scheduled_for) DO NOTHING RETURNING id INTO run_id;
+  IF run_id IS NOT NULL THEN
+   INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload) VALUES(schedule.organization_id,'report','report:'||run_id,
+    jsonb_build_object('runId',run_id,'propertyId',schedule.property_id,'periodDays',schedule.period_days,'recipient',schedule.recipient_email,'scheduledFor',schedule.next_run_at));
+   count_jobs:=count_jobs+1;
+  END IF;
+  UPDATE public.report_schedules SET next_run_at=now()+CASE schedule.frequency WHEN 'daily' THEN interval '1 day' WHEN 'weekly' THEN interval '7 days' ELSE interval '1 month' END WHERE id=schedule.id;
+ END LOOP;
+ RETURN count_jobs;
+END $$;
+CREATE OR REPLACE FUNCTION public.claim_workspace_jobs(p_org uuid DEFAULT NULL, p_limit integer DEFAULT 10) RETURNS SETOF public.notification_outbox LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ UPDATE public.notification_outbox SET status='failed',last_error='Worker lease expired after the final attempt',lease_token=NULL,locked_until=NULL WHERE status='sending' AND locked_until<now() AND attempts>=max_attempts AND (p_org IS NULL OR organization_id=p_org);
+ RETURN QUERY UPDATE public.notification_outbox q SET status='sending',attempts=q.attempts+1,locked_until=now()+interval '2 minutes',lease_token=gen_random_uuid()
+ WHERE q.id IN (SELECT id FROM public.notification_outbox WHERE ((status='queued' AND available_at<=now()) OR (status='sending' AND locked_until<now()))
+ AND attempts<max_attempts AND (p_org IS NULL OR organization_id=p_org) ORDER BY available_at LIMIT LEAST(GREATEST(p_limit,1),25) FOR UPDATE SKIP LOCKED) RETURNING q.*;
+END $$;
+CREATE OR REPLACE FUNCTION public.finish_workspace_job(p_id uuid,p_lease uuid,p_status text,p_detail text DEFAULT NULL) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE job public.notification_outbox;
+BEGIN
+ IF p_status NOT IN ('delivered','retry','failed','blocked') THEN RAISE EXCEPTION 'Invalid delivery state'; END IF;
+ SELECT * INTO job FROM public.notification_outbox WHERE id=p_id AND lease_token=p_lease AND status='sending' FOR UPDATE;
+ IF NOT FOUND THEN RETURN false; END IF;
+ INSERT INTO public.notification_deliveries(organization_id,outbox_id,attempt,status,detail) VALUES(job.organization_id,job.id,job.attempts,p_status,left(p_detail,500)) ON CONFLICT(outbox_id,attempt) DO NOTHING;
+ UPDATE public.notification_outbox SET status=CASE WHEN p_status='retry' AND attempts<max_attempts THEN 'queued' WHEN p_status='retry' THEN 'failed' ELSE p_status END,
+ available_at=now()+make_interval(secs=>LEAST(3600,30*(2^attempts)::integer)),locked_until=NULL,lease_token=NULL,last_error=left(p_detail,500) WHERE id=p_id;
+ RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION public.schedule_workspace_work(uuid), public.claim_workspace_jobs(uuid,integer), public.finish_workspace_job(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.schedule_workspace_work(uuid), public.claim_workspace_jobs(uuid,integer), public.finish_workspace_job(uuid,uuid,text,text) TO service_role;
+COMMIT;
+
+-- 14. ATOMIC ONBOARDING AND SINGLE-USE PUBLIC RECOVERY RESPONSES
+BEGIN;
+ALTER TABLE public.properties DROP CONSTRAINT IF EXISTS properties_slug_key;
+ALTER TABLE public.properties DROP CONSTRAINT IF EXISTS properties_code_key;
+CREATE UNIQUE INDEX IF NOT EXISTS properties_company_slug ON public.properties(organization_id,slug);
+CREATE UNIQUE INDEX IF NOT EXISTS properties_company_code ON public.properties(organization_id,code);
+CREATE OR REPLACE FUNCTION public.create_company(p_user uuid,p_name text,p_slug text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE org uuid; person record;
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=p_user) THEN RAISE EXCEPTION 'Account already has a workspace'; END IF;
+ SELECT id,email,raw_user_meta_data INTO STRICT person FROM auth.users WHERE id=p_user;
+ INSERT INTO public.organizations(name,slug) VALUES(p_name,p_slug) RETURNING id INTO org;
+ PERFORM public.provision_workspace_user(p_user,org,person.email,COALESCE(person.raw_user_meta_data->>'full_name','Owner'),true,'{}',ARRAY['view_feedback','manage_complaints','manage_users','manage_properties','manage_questionnaire','manage_settings','export_reports','view_guest_pii','view_audit_log','org_role:super_admin']);
+ UPDATE public.organization_members SET role='owner' WHERE user_id=p_user;
+ INSERT INTO public.organization_settings(organization_id,settings) VALUES(org,jsonb_build_object('organizationName',p_name,'autoGuestFollowUp',true,'alertEmail',person.email));
+ RETURN org;
+END $$;
+CREATE OR REPLACE FUNCTION public.accept_team_invitation(p_user uuid,p_hash text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE invitation public.team_invitations; person record;
+BEGIN
+ SELECT * INTO invitation FROM public.team_invitations WHERE token_hash=p_hash FOR UPDATE;
+ IF NOT FOUND OR invitation.accepted_at IS NOT NULL OR invitation.expires_at<=now() THEN RAISE EXCEPTION 'Invitation is expired or already used'; END IF;
+ SELECT id,email,raw_user_meta_data INTO STRICT person FROM auth.users WHERE id=p_user;
+ IF lower(person.email)<>lower(invitation.email) THEN RAISE EXCEPTION 'Sign in with the invited email address'; END IF;
+ PERFORM public.provision_workspace_user(p_user,invitation.organization_id,person.email,COALESCE(person.raw_user_meta_data->>'full_name','Team member'),false,invitation.property_ids,invitation.rights);
+ UPDATE public.team_invitations SET accepted_at=now() WHERE id=invitation.id;
+ RETURN invitation.organization_id;
+END $$;
+CREATE OR REPLACE FUNCTION public.respond_recovery(p_hash text,p_rating integer,p_nps integer,p_comment text) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ IF p_rating NOT BETWEEN 1 AND 5 OR (p_nps IS NOT NULL AND p_nps NOT BETWEEN 0 AND 10) OR length(COALESCE(p_comment,''))>2000 THEN RAISE EXCEPTION 'Invalid response'; END IF;
+ UPDATE public.recovery_followups SET rating=p_rating,recommendation_score=p_nps,comment=p_comment,responded_at=now() WHERE token_hash=p_hash AND responded_at IS NULL AND expires_at>now();
+ RETURN FOUND;
+END $$;
+REVOKE ALL ON FUNCTION public.create_company(uuid,text,text),public.accept_team_invitation(uuid,text),public.respond_recovery(text,integer,integer,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.create_company(uuid,text,text),public.accept_team_invitation(uuid,text),public.respond_recovery(text,integer,integer,text) TO service_role;
+-- Boundaries for relationships that do not use a property or feedback foreign key.
+CREATE OR REPLACE FUNCTION public.check_workspace_actor() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE field text; target uuid;
+BEGIN
+ FOREACH field IN ARRAY ARRAY['author_id','uploaded_by','created_by','invited_by'] LOOP
+  IF to_jsonb(NEW)->>field IS NOT NULL THEN
+   target:=(to_jsonb(NEW)->>field)::uuid;
+   IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=target AND organization_id=NEW.organization_id) THEN RAISE EXCEPTION 'Actor belongs to another company'; END IF;
+  END IF;
+ END LOOP;
+ RETURN NEW;
+END $$;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['feedback_comments','feedback_attachments','report_schedules','team_invitations','api_keys'] LOOP
+  EXECUTE format('DROP TRIGGER IF EXISTS workspace_actor_trigger ON public.%I',t);
+  EXECUTE format('CREATE TRIGGER workspace_actor_trigger BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.check_workspace_actor()',t);
+ END LOOP;
+END $$;
+COMMIT;
+
+
+-- 15. ATOMIC GUEST SUBMISSION AND CONTROLLED RETRIES
+BEGIN;
+CREATE OR REPLACE FUNCTION public.submit_guest_feedback(p_feedback jsonb,p_answers jsonb DEFAULT '[]') RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE row public.feedback; answer jsonb;
+BEGIN
+ INSERT INTO public.feedback(organization_id,property_id,invitation_id,recommendation_score,guest_name,guest_email,guest_phone,room_number,department,rating,comment,wants_contact,contact_preference,status,tone,resolved_at,resolution_notes)
+ VALUES((p_feedback->>'organization_id')::uuid,(p_feedback->>'property_id')::uuid,(p_feedback->>'invitation_id')::uuid,(p_feedback->>'recommendation_score')::smallint,
+ p_feedback->>'guest_name',p_feedback->>'guest_email',p_feedback->>'guest_phone',p_feedback->>'room_number',(p_feedback->>'department')::department_type,(p_feedback->>'rating')::smallint,p_feedback->>'comment',
+ COALESCE((p_feedback->>'wants_contact')::boolean,false),p_feedback->>'contact_preference',(p_feedback->>'status')::feedback_status,(p_feedback->>'tone')::feedback_tone,(p_feedback->>'resolved_at')::timestamptz,p_feedback->>'resolution_notes') RETURNING * INTO row;
+ FOR answer IN SELECT * FROM jsonb_array_elements(p_answers) LOOP
+  INSERT INTO public.feedback_answers(organization_id,feedback_id,question_id,question_text,answer_value)
+  VALUES(row.organization_id,row.id,(answer->>'questionId')::uuid,answer->>'questionText',answer->>'answerValue');
+ END LOOP;
+ RETURN to_jsonb(row);
+END $$;
+CREATE OR REPLACE FUNCTION public.retry_workspace_job(p_id uuid,p_org uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE row public.notification_outbox;
+BEGIN
+ UPDATE public.notification_outbox SET status='queued',max_attempts=attempts+5,last_error=NULL,available_at=now(),locked_until=NULL,lease_token=NULL
+ WHERE id=p_id AND organization_id=p_org AND status IN ('failed','blocked') RETURNING * INTO row;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Delivery is not eligible for retry'; END IF;
+ RETURN jsonb_build_object('id',row.id,'status',row.status);
+END $$;
+REVOKE ALL ON FUNCTION public.submit_guest_feedback(jsonb,jsonb),public.retry_workspace_job(uuid,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_guest_feedback(jsonb,jsonb),public.retry_workspace_job(uuid,uuid) TO service_role;
+COMMIT;
+
+-- 16. INVITATION OUTBOX TRANSACTION AND PARENT LIFECYCLES
+BEGIN;
+CREATE OR REPLACE FUNCTION public.create_guest_invitation(p_invitation jsonb,p_token text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE row public.guest_invitations;
+BEGIN
+ INSERT INTO public.guest_invitations(organization_id,property_id,token_hash,token_encrypted,guest_name,guest_email,guest_phone,room_number,channel,notes)
+ VALUES((p_invitation->>'organization_id')::uuid,(p_invitation->>'property_id')::uuid,encode(digest(p_token,'sha256'),'hex'),p_invitation->>'token_encrypted',p_invitation->>'guest_name',p_invitation->>'guest_email',p_invitation->>'guest_phone',p_invitation->>'room_number',p_invitation->>'channel',p_invitation->>'notes') RETURNING * INTO row;
+ IF row.channel<>'direct_link' THEN
+  INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload) VALUES(row.organization_id,'invitation','invitation:'||row.id,
+   jsonb_build_object('recipient',CASE WHEN row.channel='email' THEN row.guest_email ELSE row.guest_phone END,'channel',row.channel,'token',p_token,'propertyId',row.property_id));
+ END IF;
+ RETURN to_jsonb(row);
+END $$;
+REVOKE ALL ON FUNCTION public.create_guest_invitation(jsonb,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.create_guest_invitation(jsonb,text) TO service_role;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['feedback_comments','feedback_activity','feedback_attachments','recovery_followups'] LOOP
+  EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',t,t||'_feedback_id_fkey');
+  EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY(feedback_id) REFERENCES public.feedback(id) ON DELETE CASCADE',t,t||'_feedback_id_fkey');
+ END LOOP;
+END $$;
+ALTER TABLE public.guest_invitations DROP CONSTRAINT IF EXISTS guest_invitations_feedback_id_fkey;
+ALTER TABLE public.guest_invitations ADD CONSTRAINT guest_invitations_feedback_id_fkey FOREIGN KEY(feedback_id) REFERENCES public.feedback(id) ON DELETE SET NULL;
+ALTER TABLE public.feedback DROP CONSTRAINT IF EXISTS feedback_invitation_id_fkey;
+ALTER TABLE public.feedback ADD CONSTRAINT feedback_invitation_id_fkey FOREIGN KEY(invitation_id) REFERENCES public.guest_invitations(id) ON DELETE SET NULL;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='attachment_path_scope' AND conrelid='public.feedback_attachments'::regclass) THEN
+  ALTER TABLE public.feedback_attachments ADD CONSTRAINT attachment_path_scope CHECK(object_path LIKE organization_id::text||'/'||feedback_id::text||'/%');
+ END IF;
+END $$;
+COMMIT;
+
+-- 17. PRIVATE ATTACHMENT CLEANUP AFTER CASE DELETION
+BEGIN;
+ALTER TABLE public.notification_outbox DROP CONSTRAINT IF EXISTS notification_outbox_kind_check;
+ALTER TABLE public.notification_outbox ADD CONSTRAINT notification_outbox_kind_check CHECK(kind IN ('sla','followup','invitation','team_invitation','report','webhook','asset_cleanup'));
+CREATE OR REPLACE FUNCTION public.queue_attachment_cleanup() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload)
+ VALUES(OLD.organization_id,'asset_cleanup','asset:'||OLD.id,jsonb_build_object('objectPath',OLD.object_path)) ON CONFLICT(dedup_key) DO NOTHING;
+ RETURN OLD;
+END $$;
+DROP TRIGGER IF EXISTS attachment_cleanup ON public.feedback_attachments;
+CREATE TRIGGER attachment_cleanup AFTER DELETE ON public.feedback_attachments FOR EACH ROW EXECUTE FUNCTION public.queue_attachment_cleanup();
+COMMIT;
+
+
+-- 18. PRIVATE GUEST CONTACTS AND AUDITED DISCLOSURE
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.feedback_contacts (
+ feedback_id uuid PRIMARY KEY REFERENCES public.feedback(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+ organization_id uuid NOT NULL REFERENCES public.organizations(id), email text, phone text
+);
+ALTER TABLE public.feedback_contacts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.feedback_contacts FROM anon,authenticated;
+GRANT SELECT ON public.feedback_contacts TO authenticated;
+GRANT ALL ON public.feedback_contacts TO service_role;
+DROP POLICY IF EXISTS contact_read ON public.feedback_contacts;
+CREATE POLICY contact_read ON public.feedback_contacts FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('view_guest_pii') AND EXISTS(SELECT 1 FROM public.feedback f WHERE f.id=feedback_id));
+INSERT INTO public.feedback_contacts(feedback_id,organization_id,email,phone)
+ SELECT id,organization_id,guest_email,guest_phone FROM public.feedback WHERE guest_email IS NOT NULL OR guest_phone IS NOT NULL
+ ON CONFLICT(feedback_id) DO UPDATE SET email=COALESCE(excluded.email,feedback_contacts.email),phone=COALESCE(excluded.phone,feedback_contacts.phone);
+UPDATE public.feedback SET guest_email=NULL,guest_phone=NULL WHERE guest_email IS NOT NULL OR guest_phone IS NOT NULL;
+CREATE OR REPLACE FUNCTION public.capture_private_contacts() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ IF NEW.guest_email IS NOT NULL OR NEW.guest_phone IS NOT NULL THEN
+  INSERT INTO public.feedback_contacts(feedback_id,organization_id,email,phone) VALUES(NEW.id,NEW.organization_id,NEW.guest_email,NEW.guest_phone)
+  ON CONFLICT(feedback_id) DO UPDATE SET email=COALESCE(excluded.email,feedback_contacts.email),phone=COALESCE(excluded.phone,feedback_contacts.phone);
+  NEW.guest_email:=NULL;NEW.guest_phone:=NULL;
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS zz_capture_private_contacts ON public.feedback;
+CREATE TRIGGER zz_capture_private_contacts BEFORE INSERT OR UPDATE ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.capture_private_contacts();
+CREATE OR REPLACE FUNCTION public.queue_private_recovery() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE recipient text; enabled boolean; raw_token text; follow_id uuid;
+BEGIN
+ IF NEW.status='resolved' AND OLD.status<>'resolved' THEN
+  SELECT email INTO recipient FROM public.feedback_contacts WHERE feedback_id=NEW.id;
+  SELECT COALESCE((settings->>'autoGuestFollowUp')::boolean,true) INTO enabled FROM public.organization_settings WHERE organization_id=NEW.organization_id;
+  IF recipient IS NOT NULL AND COALESCE(enabled,true) THEN
+   raw_token:=encode(gen_random_bytes(32),'hex');
+   INSERT INTO public.recovery_followups(organization_id,feedback_id,token_hash,resolution_cycle)
+    VALUES(NEW.organization_id,NEW.id,encode(digest(raw_token,'sha256'),'hex'),NEW.resolved_at) ON CONFLICT(feedback_id,resolution_cycle) DO NOTHING RETURNING id INTO follow_id;
+   IF follow_id IS NOT NULL THEN INSERT INTO public.notification_outbox(organization_id,kind,dedup_key,payload)
+    VALUES(NEW.organization_id,'followup','followup:'||follow_id,jsonb_build_object('recipient',recipient,'token',raw_token,'followupId',follow_id)); END IF;
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS recovery_after ON public.feedback;
+CREATE TRIGGER recovery_after AFTER UPDATE ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.queue_private_recovery();
+COMMIT;
+
+-- 19. PROPERTY DELETION KEEPS ASSIGNMENTS AND CHILD RECORDS CONSISTENT
+BEGIN;
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['sla_policies','guest_invitations','report_schedules'] LOOP
+  EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',t,t||'_property_id_fkey');
+  EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY(property_id) REFERENCES public.properties(id) ON DELETE CASCADE',t,t||'_property_id_fkey');
+ END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION public.cleanup_property_assignments() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ UPDATE public.profiles SET property_ids=array_remove(property_ids,OLD.id),property_id=CASE WHEN property_id=OLD.id THEN NULL ELSE property_id END
+ WHERE organization_id=OLD.organization_id AND (OLD.id=ANY(property_ids) OR property_id=OLD.id);
+ UPDATE public.team_invitations SET property_ids=array_remove(property_ids,OLD.id) WHERE organization_id=OLD.organization_id AND OLD.id=ANY(property_ids);
+ RETURN OLD;
+END $$;
+DROP TRIGGER IF EXISTS cleanup_assignments ON public.properties;
+CREATE TRIGGER cleanup_assignments BEFORE DELETE ON public.properties FOR EACH ROW EXECUTE FUNCTION public.cleanup_property_assignments();
+COMMIT;
+

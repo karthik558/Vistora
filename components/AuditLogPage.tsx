@@ -118,7 +118,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
       "Target Resource",
       "Forensic Details",
       "Origin IP",
-      "SHA-256 Ledger Hash",
+      "Event digest (SHA-256)",
       "Compliance Classification",
       "Severity Status",
     ];
@@ -140,10 +140,10 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
     ]);
 
     const headerNotice = [
-      `"# VISTORA ENTERPRISE COMPLIANCE & IMMUTABLE AUDIT REPORT"`,
+      `"# VISTORA AUDIT REPORT"`,
       `"# Generated At: ${timestampStr}"`,
-      `"# Certified Compliance: GDPR Article 30 (Records of Processing Activities) & SOC 2 Type II"`,
-      `"# Cryptographic Ledger Verification: SHA-256 Hash Chain Verified"`,
+      `"# Workspace activity export"`,
+      `"# Event digests are included where available"`,
       "",
     ].join("\r\n");
 
@@ -157,7 +157,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `vistora-certified-audit-log-${timestampStr.slice(0, 10)}.csv`;
+    link.download = `vistora-audit-log-${timestampStr.slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -192,12 +192,12 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
                 }}
               >
                 <ShieldCheck size={11} />
-                <span>GDPR Article 30 Compliant</span>
+                <span>Workspace activity</span>
               </span>
             </div>
             <h1>Workspace audit log</h1>
             <p className="subheading">
-              Cryptographically verified, immutable record of staff PII views, data exports, SLA resolution workflows, and privilege escalations.
+              Persisted history of staff access, data exports, service recovery and workspace changes.
             </p>
           </div>
           <div className="page-heading-actions">
@@ -208,7 +208,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
               <Download size={14} />
-              <span>Export Certified CSV</span>
+              <span>Export CSV</span>
             </button>
           </div>
         </div>
@@ -233,12 +233,12 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
             <div className="metric-change">Duty manager interventions logged</div>
           </div>
           <div className="metric-card">
-            <span className="metric-label">Ledger Integrity</span>
+            <span className="metric-label">Event digests</span>
             <div className="metric-value" style={{ color: "var(--sage)", display: "flex", alignItems: "center", gap: "6px" }}>
               <Fingerprint size={20} />
-              <span>Verified</span>
+              <span>Stored</span>
             </div>
-            <div className="metric-change">SHA-256 cryptographic chain valid</div>
+            <div className="metric-change">SHA-256 digests stored with events</div>
           </div>
         </section>
 
@@ -537,11 +537,11 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
               <div style={{ display: "grid", gap: "14px", fontSize: "12px", marginBottom: "22px" }}>
                 <div style={{ padding: "12px 14px", background: "var(--canvas-alt)", borderRadius: "6px", border: "1px solid var(--line)" }}>
                   <div style={{ fontSize: "10px", textTransform: "uppercase", color: "var(--muted)", fontWeight: 600, letterSpacing: "0.06em", marginBottom: "4px" }}>
-                    SHA-256 Ledger Block Signature
+                    Event digest (SHA-256)
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                     <code style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", wordBreak: "break-all", color: "var(--ink)" }}>
-                      {selectedLog.hash || "a4f91b72e90c812d7c5a31ef90b83210"}
+                      {selectedLog.hash || "Not available"}
                     </code>
                     <button
                       type="button"

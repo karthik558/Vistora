@@ -1,3 +1,4 @@
+import { serviceDb, workspaceContext } from "../platform/db";
 import { createServerSupabaseClient } from "../supabase/server";
 import {
   PropertyRow,
@@ -24,8 +25,8 @@ export const isSupabaseLive = Boolean(
   !supabaseUrl.includes("placeholder")
 );
 
-function getSupabase() {
-  const client = createServerSupabaseClient();
+async function getSupabase() {
+  const client = await createServerSupabaseClient();
   if (!client) {
     throw new Error("Supabase client is not configured. Please check .env.local");
   }
@@ -135,6 +136,12 @@ export function toViewModel(row: FeedbackRow): FeedbackViewModel {
     resolutionNotes: row.resolution_notes,
     createdAt: row.created_at,
     propertyId: row.property_id,
+    recommendationScore: row.recommendation_score ?? null,
+    priority: row.priority || "normal",
+    deadline: row.sla_deadline,
+    firstResponseAt: row.first_response_at ?? null,
+    resolvedAt: row.resolved_at,
+    category: row.category || "general",
   };
 }
 
@@ -144,7 +151,7 @@ export function toViewModel(row: FeedbackRow): FeedbackViewModel {
 
 export async function fetchProperties(): Promise<PropertyRow[]> {
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const { data, error } = await supabase.from("properties").select("*").order("name");
     if (error) {
       console.error("[Supabase Error] fetchProperties failed:", error);
@@ -157,7 +164,7 @@ export async function fetchProperties(): Promise<PropertyRow[]> {
 
 export async function fetchStayByToken(publicToken: string): Promise<GuestStayDetails | null> {
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = serviceDb();
     const { data, error } = await supabase
       .from("stays")
       .select("*, properties(name), guests(full_name, vip_tier)")
@@ -190,7 +197,7 @@ export async function fetchFeedbackList(options?: {
   search?: string;
 }): Promise<FeedbackViewModel[]> {
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
 
     if (options?.propertyId && options.propertyId !== "all") {
@@ -245,9 +252,9 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
   }
 
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = serviceDb();
 
-    // Look up default property if not provided
+    // Public submission has already validated the selected property and invitation.
     let propertyId = payload.propertyId;
     if (!propertyId) {
       const { data: prop } = await supabase.from("properties").select("id").limit(1).single();
@@ -256,6 +263,9 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
 
     const newRecord = {
       property_id: propertyId,
+      organization_id: payload.organizationId,
+      invitation_id: payload.invitationId || null,
+      recommendation_score: payload.recommendationScore ?? null,
       guest_name: payload.guestName || "Guest",
       guest_email: payload.guestEmail || null,
       guest_phone: payload.guestPhone || null,
@@ -267,36 +277,14 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
       contact_preference: payload.contactPreference || (payload.guestPhone ? "phone" : "email"),
       status,
       tone,
-      sla_deadline: rating <= 2 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null,
-      assigned_to: rating <= 2 ? "Duty Manager" : null,
+      sla_deadline: null,
+      assigned_to: null,
       resolution_notes: status === "resolved" ? "Auto-acknowledged." : null,
       resolved_at: status === "resolved" ? new Date().toISOString() : null,
     };
 
-    const { data, error } = await supabase.from("feedback").insert(newRecord).select().single();
-    if (error) {
-      console.error("[Supabase Error] createFeedback failed:", error);
-      throw new Error(`Failed to save feedback to Supabase: ${error.message}`);
-    }
-
-    // Try saving answers to feedback_answers table if available
-    if (payload.answers && payload.answers.length > 0 && data?.id) {
-      try {
-        const answerRows = payload.answers
-          .filter((a) => a.answerValue && a.answerValue.trim())
-          .map((a) => ({
-            feedback_id: data.id,
-            question_text: a.questionText,
-            answer_value: a.answerValue,
-          }));
-        if (answerRows.length > 0) {
-          await supabase.from("feedback_answers").insert(answerRows);
-        }
-      } catch (err) {
-        console.warn("Could not insert to feedback_answers table:", err);
-      }
-    }
-
+    const {data,error}=await supabase.rpc("submit_guest_feedback",{p_feedback:newRecord,p_answers:payload.answers||[]});
+    if(error)throw new Error("Failed to save guest feedback: "+error.message);
     return toViewModel(data);
   }
 
@@ -329,7 +317,7 @@ export async function createFeedback(payload: SubmitFeedbackPayload): Promise<Fe
 
 export async function updateFeedbackProperty(id: string, propertyId: string): Promise<boolean> {
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const { error } = await supabase
       .from("feedback")
       .update({ property_id: propertyId, updated_at: new Date().toISOString() })
@@ -363,7 +351,7 @@ export async function updateFeedbackStatus(
       : "positive";
 
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const updatePayload: any = {
       status: newStatus,
       tone,
@@ -425,16 +413,14 @@ export async function getDashboardData(
 ): Promise<DashboardData> {
   const cacheKey = `${propertyId}:${allowedPropertyIds ? [...allowedPropertyIds].sort().join(",") : "all"}`;
   const now = Date.now();
-  const cached = dashboardCache.get(cacheKey);
-  if (cached && (now - cached.timestamp) < DASHBOARD_CACHE_TTL_MS) {
-    return cached.data;
-  }
+  const cached = undefined;
+  // Results are scoped by the caller JWT; do not reuse data across sessions.
 
   let feedbackRows: FeedbackRow[] = [];
   let propertiesList: PropertyRow[] = [];
 
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
 
     // 1. Fetch properties concurrently
     const propPromise = supabase.from("properties").select("*").order("name");
@@ -597,7 +583,7 @@ export async function getDashboardData(
     source: isSupabaseLive ? "supabase" : "local",
   };
 
-  dashboardCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  // No process-global cache of tenant records.
   return result;
 }
 
@@ -605,7 +591,7 @@ export async function deleteFeedback(ids: string[]): Promise<{ count: number }> 
   if (!ids || ids.length === 0) return { count: 0 };
 
   if (isSupabaseLive) {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const { error } = await supabase
       .from("feedback")
       .delete()

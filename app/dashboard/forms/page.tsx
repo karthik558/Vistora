@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { serverUser } from "../../../lib/platform/server-session";
 import OperationsPage from "../../../components/OperationsPage";
 import { getDashboardData } from "../../../lib/services/guestExperienceService";
 import { WorkspaceUser } from "../../../components/Dashboard";
@@ -6,12 +6,7 @@ import { WorkspaceUser } from "../../../components/Dashboard";
 export const dynamic = "force-dynamic";
 
 export default async function FormsPage() {
-  let initialUser: WorkspaceUser | null = null;
-  try {
-    const cookieStore = await cookies();
-    const userCookie = cookieStore.get("vistora-user")?.value;
-    if (userCookie) initialUser = JSON.parse(userCookie);
-  } catch {}
+  const initialUser = await serverUser();
 
   const isGlobal = !initialUser || initialUser.role === "admin";
   const allowedPropertyIds = isGlobal

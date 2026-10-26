@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { serverUser } from "../../lib/platform/server-session";
 import { redirect } from "next/navigation";
 import LoginForm from "../../components/LoginForm";
 import type { Metadata } from "next";
@@ -11,16 +11,6 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const cookieStore = await cookies();
-  const userCookie = cookieStore.get("vistora-user")?.value;
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(userCookie));
-      if (parsed?.email) {
-        redirect("/dashboard");
-      }
-    } catch {}
-  }
-
+  if(await serverUser())redirect("/dashboard");
   return <LoginForm />;
 }

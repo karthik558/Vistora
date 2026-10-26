@@ -14,15 +14,17 @@ const PUBLIC_PATHS = [
   "/api/questions",
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request.headers);
 
   // 1. RATE LIMITING FOR APIS
   if (pathname.startsWith("/api/")) {
+    const origin=request.headers.get("origin");
+    if(!["GET","HEAD","OPTIONS"].includes(request.method)&&origin&&(origin==="null"||new URL(origin).host!==(request.headers.get("host")||request.nextUrl.host)))return NextResponse.json({success:false,error:"Cross-origin requests are not allowed."},{status:403});
     let tier: "auth" | "submission" | "api" = "api";
 
-    if (pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/users/password")) {
+    if (pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/auth/signup") || pathname.startsWith("/api/users/password") || pathname.startsWith("/api/onboarding")) {
       tier = "auth";
     } else if (pathname.startsWith("/api/feedback") || (pathname.startsWith("/api/questions") && request.method === "POST")) {
       tier = "submission";
@@ -51,60 +53,37 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 2. DASHBOARD AUTHENTICATION & ROLE-BASED ACCESS CONTROL
-  if (pathname.startsWith("/dashboard")) {
-    const userCookie = request.cookies.get("vistora-user")?.value;
-    const sbToken = request.cookies.get("sb-access-token")?.value;
-
-    // Check if user has an active session
-    if (!userCookie && !sbToken) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(loginUrl);
+  // Refresh only authenticated browser sessions. Display cookies never authorize access.
+  const headers = new Headers(request.headers);
+  headers.set("x-vistora-path",pathname);
+  let refreshed: any = null;
+  const token=request.cookies.get("sb-access-token")?.value;
+  const refresh=request.cookies.get("sb-refresh-token")?.value;
+  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/api/")) && (token || refresh)) {
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL;
+    const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY;
+    if(url&&key) {
+      // Expiry is only a refresh hint. The API and server layout verify identity.
+      let valid=false;
+      try{valid=!!token&&JSON.parse(atob(token.split(".")[1])).exp>Date.now()/1000+60;}catch{}
+      if(!valid&&refresh) {
+        const res=await fetch(url+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{apikey:key,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:refresh})}).catch(()=>null);
+        if(res?.ok) {
+          refreshed=await res.json();
+          request.cookies.set("sb-access-token",refreshed.access_token);
+          request.cookies.set("sb-refresh-token",refreshed.refresh_token);
+          headers.set("cookie",request.cookies.toString());
+        }
+      }
+      if(pathname.startsWith("/dashboard")&&!valid&&!refreshed) return NextResponse.redirect(new URL("/login",request.url));
     }
-
-    // Role-based & permissions-based route protection
-    if (userCookie) {
-      try {
-        const parsed = JSON.parse(userCookie);
-        const isAdmin = parsed?.role === "admin";
-        const rights: string[] = Array.isArray(parsed?.rights) ? parsed.rights : [];
-        const hasAccess = (rightId: string) => isAdmin || rights.includes(rightId);
-
-        if (pathname.startsWith("/dashboard/users") && !hasAccess("manage_users")) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        if (pathname.startsWith("/dashboard/properties") && !hasAccess("manage_properties")) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        if (pathname.startsWith("/dashboard/reports") && !hasAccess("export_reports")) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        if (
-          (pathname.startsWith("/dashboard/questionnaire") ||
-            pathname.startsWith("/dashboard/forms") ||
-            pathname.startsWith("/dashboard/qr-codes")) &&
-          !hasAccess("manage_questionnaire")
-        ) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        if (pathname.startsWith("/dashboard/complaints") && !hasAccess("manage_complaints")) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        if (
-          (pathname.startsWith("/dashboard/feedback") ||
-            pathname.startsWith("/dashboard/directory") ||
-            pathname.startsWith("/dashboard/analytics")) &&
-          !hasAccess("view_feedback")
-        ) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-      } catch {}
-    }
+  } else if(pathname.startsWith("/dashboard")) return NextResponse.redirect(new URL("/login",request.url));
+  const response=NextResponse.next({request:{headers}});
+  if(refreshed) {
+    const options={httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax" as const,path:"/"};
+    response.cookies.set("sb-access-token",refreshed.access_token,{...options,maxAge:refreshed.expires_in});
+    response.cookies.set("sb-refresh-token",refreshed.refresh_token,{...options,maxAge:2592000});
   }
-
-  // 3. APPLY SECURITY HEADERS TO ALL RESPONSES
-  const response = NextResponse.next();
 
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");

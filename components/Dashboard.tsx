@@ -41,6 +41,7 @@ import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterD
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
+import CasePanel from "./CasePanel";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
@@ -70,6 +71,7 @@ export interface NavItemConfig {
 }
 
 const nav: readonly NavItemConfig[] = [
+  { label: "Workspace", href: "/dashboard/workspace", group: "Operations & audit", icon: Building2 },
   { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
@@ -281,14 +283,14 @@ export function AppShell({
 
   const visibleNav = nav.filter((item) => {
     // Super Admin holds unconditional full platform capabilities
-    if (isSuperAdmin) return true;
+    if (isSuperAdmin || currentUser?.role==="admin") return true;
 
     // Strict organizational role restrictions:
     if (isAnalyst) {
-      return ["Dashboard", "Analytics", "All feedback"].includes(item.label);
+      return ["Dashboard", "Analytics", "All feedback", "Workspace"].includes(item.label);
     }
     if (isReport) {
-      return ["Dashboard", "Reports"].includes(item.label);
+      return ["Dashboard", "Reports", "Workspace"].includes(item.label);
     }
 
     // Settings is strictly for super admin or explicit manage_settings capability
@@ -777,9 +779,9 @@ export default function Dashboard({
 
   // Feedback records to display in the bottom table (filtered by NPS category if selected)
   const tableFeedback = filteredFeedback.filter((item) => {
-    if (npsFilter === "promoters") return item.rating === 5;
-    if (npsFilter === "passives") return item.rating === 4;
-    if (npsFilter === "detractors") return item.rating <= 3;
+    if (npsFilter === "promoters") return item.recommendationScore != null && item.recommendationScore >= 9;
+    if (npsFilter === "passives") return item.recommendationScore != null && item.recommendationScore >= 7 && item.recommendationScore <= 8;
+    if (npsFilter === "detractors") return item.recommendationScore != null && item.recommendationScore <= 6;
     return true;
   });
 
@@ -810,10 +812,11 @@ export default function Dashboard({
   });
 
   // Real Net Promoter Score (NPS) dynamically calculated from original verified feedback records
-  const npsPromoters = filteredFeedback.filter((r) => r.rating === 5).length;
-  const npsPassives = filteredFeedback.filter((r) => r.rating === 4).length;
-  const npsDetractors = filteredFeedback.filter((r) => r.rating <= 3).length;
-  const npsTotal = filteredFeedback.length;
+  const npsResponses = filteredFeedback.filter(r=>r.recommendationScore!=null);
+  const npsPromoters = npsResponses.filter((r) => r.recommendationScore! >= 9).length;
+  const npsPassives = npsResponses.filter((r) => r.recommendationScore! >= 7 && r.recommendationScore! <= 8).length;
+  const npsDetractors = npsResponses.filter((r) => r.recommendationScore! <= 6).length;
+  const npsTotal = npsResponses.length;
 
   const npsPromoterPct = npsTotal > 0 ? Math.round((npsPromoters / npsTotal) * 100) : 0;
   const npsPassivePct = npsTotal > 0 ? Math.round((npsPassives / npsTotal) * 100) : 0;
@@ -1048,7 +1051,7 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                <p className="nps-overall-rating">Overall guest rating <strong>{npsTotal ? `${averageRatingVal} / 5` : "—"}</strong><small>Based on the current property and date filters. Loyalty score uses the 5-star rating as a proxy.</small></p>
+                <p className="nps-overall-rating">Overall guest rating <strong>{filteredFeedback.length ? `${averageRatingVal} / 5` : "—"}</strong><small>NPS uses separate 0–10 recommendation answers. Historical five-star ratings remain satisfaction scores.</small></p>
 
                 {/* Interactive Segmented Progress Bar */}
                 <div
@@ -1076,7 +1079,7 @@ export default function Dashboard({
                       e.stopPropagation();
                       setNpsFilter(npsFilter === "promoters" ? "all" : "promoters");
                     }}
-                    title={`Promoters (5★): ${npsPromoters} reviews (${npsPromoterPct}%)`}
+                    title={`Promoters (9–10): ${npsPromoters} reviews (${npsPromoterPct}%)`}
                   />
                   <div
                     style={{
@@ -1090,7 +1093,7 @@ export default function Dashboard({
                       e.stopPropagation();
                       setNpsFilter(npsFilter === "passives" ? "all" : "passives");
                     }}
-                    title={`Passives (4★): ${npsPassives} reviews (${npsPassivePct}%)`}
+                    title={`Passives (7–8): ${npsPassives} reviews (${npsPassivePct}%)`}
                   />
                   <div
                     style={{
@@ -1104,7 +1107,7 @@ export default function Dashboard({
                       e.stopPropagation();
                       setNpsFilter(npsFilter === "detractors" ? "all" : "detractors");
                     }}
-                    title={`Detractors (1-3★): ${npsDetractors} reviews (${npsDetractorPct}%)`}
+                    title={`Detractors (0–6): ${npsDetractors} reviews (${npsDetractorPct}%)`}
                   />
                 </div>
 
@@ -1124,7 +1127,7 @@ export default function Dashboard({
                     }}
                   >
                     <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Promoters (5★)
+                      Promoters (9–10)
                     </span>
                     <strong style={{ fontSize: "13px", color: "var(--sage)", fontFamily: "var(--font-dm-mono)" }}>
                       {npsPromoters} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsPromoterPct}%)</small>
@@ -1145,7 +1148,7 @@ export default function Dashboard({
                     }}
                   >
                     <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Passives (4★)
+                      Passives (7–8)
                     </span>
                     <strong style={{ fontSize: "13px", color: "var(--warm)", fontFamily: "var(--font-dm-mono)" }}>
                       {npsPassives} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsPassivePct}%)</small>
@@ -1166,7 +1169,7 @@ export default function Dashboard({
                     }}
                   >
                     <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Detractors (1-3★)
+                      Detractors (0–6)
                     </span>
                     <strong style={{ fontSize: "13px", color: "var(--red)", fontFamily: "var(--font-dm-mono)" }}>
                       {npsDetractors} <small style={{ fontWeight: 400, color: "var(--muted)", fontSize: "10px" }}>({npsDetractorPct}%)</small>
@@ -1391,7 +1394,7 @@ export function FeedbackTable({
   const [revealedPii, setRevealedPii] = useState<Record<string, boolean>>({});
 
   function maskEmail(email?: string | null): string {
-    if (!email) return "guest.***@luxurystay.com";
+    if (!email) return "Not provided";
     const parts = email.split("@");
     if (parts.length !== 2) return "***@***.com";
     const name = parts[0];
@@ -1401,25 +1404,21 @@ export function FeedbackTable({
   }
 
   function maskPhone(phone?: string | null): string {
-    if (!phone) return "+1 (555) ***-8902";
+    if (!phone) return "Not provided";
     if (phone.length <= 4) return "+***-****";
     return phone.slice(0, phone.length - 4).replace(/\d/g, "*") + phone.slice(-4);
   }
 
-  const handleRevealPii = (item: FeedbackViewModel) => {
-    setRevealedPii((prev) => ({ ...prev, [item.id]: true }));
-    fetch("/api/audit-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "Guest PII Revealed (GDPR Article 15)",
-        category: "pii_access",
-        resource: `Guest Feedback #${item.id} (${item.name} · Room ${item.roomNumber})`,
-        details: `Operator unmasked guest contact details (Phone & Email) for service recovery compliance.`,
-        status: "warning",
-        complianceTag: "GDPR Consent Audit",
-      }),
-    }).catch(() => {});
+  const handleRevealPii = async (item: FeedbackViewModel) => {
+    try {
+      const response=await fetch("/api/cases/"+item.id+"/contact",{cache:"no-store"});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||"Contact access denied.");
+      const updated={...item,guestEmail:result.email,guestPhone:result.phone};
+      setSelected(updated);
+      setRecords(previous=>previous.map(row=>row.id===item.id?updated:row));
+      setRevealedPii(previous=>({...previous,[item.id]:true}));
+    }catch(error){setRowError((error as Error).message);}
   };
 
   const exportFeedbackCsv = () => {
@@ -2134,7 +2133,7 @@ export function FeedbackTable({
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <Lock size={12} style={{ color: "var(--sage-deep)" }} />
                     <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Guest Contact (GDPR Protected)
+                      Guest contact details
                     </span>
                   </div>
                   {!revealedPii[selected.id] && (
@@ -2145,7 +2144,7 @@ export function FeedbackTable({
                       style={{ padding: "3px 8px", fontSize: "10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                     >
                       <Eye size={11} />
-                      <span>Reveal PII (Audit Logged)</span>
+                      <span>Reveal contact · Audited</span>
                     </button>
                   )}
                 </div>
@@ -2155,16 +2154,16 @@ export function FeedbackTable({
                     <span style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>Email Address</span>
                     <strong style={{ fontFamily: "var(--font-dm-mono)", color: "var(--ink)", fontWeight: 500 }}>
                       {revealedPii[selected.id]
-                        ? selected.guestEmail || `${selected.name.toLowerCase().replace(/\s+/g, ".")}@luxuryguest.com`
-                        : maskEmail(selected.guestEmail || `${selected.name.toLowerCase().replace(/\s+/g, ".")}@luxuryguest.com`)}
+                        ? selected.guestEmail || "Not provided"
+                        : maskEmail(selected.guestEmail)}
                     </strong>
                   </div>
                   <div>
                     <span style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>Phone / WhatsApp</span>
                     <strong style={{ fontFamily: "var(--font-dm-mono)", color: "var(--ink)", fontWeight: 500 }}>
                       {revealedPii[selected.id]
-                        ? selected.guestPhone || "+1 (555) 234-8902"
-                        : maskPhone(selected.guestPhone || "+1 (555) 234-8902")}
+                        ? selected.guestPhone || "Not provided"
+                        : maskPhone(selected.guestPhone)}
                     </strong>
                   </div>
                 </div>
@@ -2172,11 +2171,12 @@ export function FeedbackTable({
                 {revealedPii[selected.id] && (
                   <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: "1px solid var(--line)", fontSize: "10px", color: "var(--sage-deep)", display: "flex", alignItems: "center", gap: "4px" }}>
                     <ShieldCheck size={11} />
-                    <span>Unmasked for service recovery · Event cryptographically signed &amp; logged to audit ledger.</span>
+                    <span>Unmasked for service recovery · Access recorded in the audit log.</span>
                   </div>
                 )}
               </div>
 
+              {userRole !== "visitor" && <CasePanel key={selected.id} id={selected.id} />}
               {/* Resolution Section (RBAC protected) */}
               <div className="drawer-resolution-section">
                 <h3 style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 }}>
@@ -2214,7 +2214,7 @@ export function FeedbackTable({
                           { value: "needs_attention", label: "Needs attention", detail: "Open guest alert requiring action" },
                           { value: "under_review", label: "Under review", detail: "Duty manager investigating incident" },
                           { value: "resolved", label: "Resolved", detail: "Guest contact & recovery completed" },
-                          { value: "escalated", label: "Escalated", detail: "Senior leadership notification sent" },
+                          { value: "escalated", label: "Escalated", detail: "Senior leadership attention required" },
                         ]}
                       />
                     </div>

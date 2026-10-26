@@ -1,3 +1,5 @@
+import { withWorkspace } from "../../../../lib/platform/http";
+import { workspaceDb, workspaceUser, PlatformError } from "../../../../lib/platform/db";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -7,13 +9,14 @@ const supabaseServiceKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.SUPABASE_ANON_KEY!;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
+    if (!workspaceUser().isOrganizationAdmin) throw new PlatformError("Administrator access required.",403);
     const { email, userId, newPassword } = await request.json();
 
-    if (!newPassword || newPassword.trim().length < 6) {
+    if (typeof newPassword!=="string" || newPassword.length < 10) {
       return NextResponse.json(
-        { success: false, error: "New password must be at least 6 characters." },
+        { success: false, error: "New password must be at least 10 characters." },
         { status: 400 }
       );
     }
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 1. Fetch profile to ensure target exists
-    let profileQuery = adminClient.from("profiles").select("id, email, full_name, role, avatar_url");
+    let profileQuery = workspaceDb().from("profiles").select("id, email, full_name, role, avatar_url");
     if (userId) {
       profileQuery = profileQuery.eq("id", userId);
     } else {
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Update password in Supabase Auth (auth.users) with native bcrypt encryption
     const { error: authErr } = await adminClient.auth.admin.updateUserById(targetUserId, {
-      password: newPassword.trim(),
+      password: newPassword,
     });
 
     if (authErr) {
@@ -90,3 +93,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+export const POST=withWorkspace(POSTImpl,"manage_users");

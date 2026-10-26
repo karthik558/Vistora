@@ -39,6 +39,8 @@ export default function GuestInvitationsPage({
     () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
   const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
+  const [error,setError]=useState("");
+  const [notice,setNotice]=useState("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
@@ -80,10 +82,11 @@ export default function GuestInvitationsPage({
     try {
       const res = await fetch("/api/invitations");
       const json = await res.json();
+      if(!res.ok)throw new Error(json.error||"Cannot load invitations.");
       if (json.success && json.invitations) {
         setInvitations(json.invitations);
       }
-    } catch {
+    } catch(e) {setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -120,7 +123,9 @@ export default function GuestInvitationsPage({
       });
 
       const json = await res.json();
+      if(!res.ok||!json.success)throw new Error(json.error||"Cannot create invitation.");
       if (json.success && json.invitation) {
+        setNotice(json.message||"Invitation link created.");setError("");
         setInvitations((prev) => [json.invitation, ...prev]);
         setShowInviteModal(false);
         setGuestName("");
@@ -129,7 +134,7 @@ export default function GuestInvitationsPage({
         setRoomNumber("");
         setNotes("");
       }
-    } finally {
+    } catch(e){setError((e as Error).message);} finally {
       setSubmitting(false);
     }
   }
@@ -138,10 +143,11 @@ export default function GuestInvitationsPage({
     if (!pendingDelete) return;
     setDeletingInvite(true);
     try {
-      await fetch(`/api/invitations?id=${pendingDelete.id}`, { method: "DELETE" });
+      const r=await fetch(`/api/invitations?id=${pendingDelete.id}`, { method: "DELETE" });
+      if(!r.ok){const j=await r.json();throw new Error(j.error||"Could not remove invitation.");}
       setInvitations((prev) => prev.filter((i) => i.id !== pendingDelete.id));
       setPendingDelete(null);
-    } catch {
+    } catch(e) {setError((e as Error).message);
     } finally {
       setDeletingInvite(false);
     }
@@ -180,6 +186,7 @@ export default function GuestInvitationsPage({
   return (
     <AppShell active="Guest invitations" user={user}>
       <div className="content-wrap">
+        {error&&<p className="platform-notice" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
         <div className="page-heading">
           <div>
             <p className="eyebrow">Guest Collection Touchpoints</p>
@@ -204,7 +211,7 @@ export default function GuestInvitationsPage({
         {/* Metric Cards */}
         <section className="metric-grid">
           <div className="metric-card">
-            <span className="metric-label">Total Dispatched</span>
+            <span className="metric-label">Total invitations</span>
             <div className="metric-value">{total}</div>
             <div className="metric-change">Tracked invitation hashes</div>
           </div>
