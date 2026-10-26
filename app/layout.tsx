@@ -31,9 +31,13 @@ export const metadata: Metadata = {
   title: "Vistora | Guest Experience Operations",
   description: "A premium guest feedback and service recovery operations workspace.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-blue.ico", type: "image/x-icon" },
+      { url: "/favicon-green.ico", type: "image/x-icon" },
+    ],
     shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
+    apple: "/vistora_logo_blue.webp",
   },
 };
 
@@ -46,6 +50,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className={`${dmSans.variable} ${dmMono.variable} ${playfair.variable}`}>
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/x-icon" href="/favicon-blue.ico" />
+        <link rel="apple-touch-icon" href="/vistora_logo_blue.webp" />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function() {

@@ -248,10 +248,20 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         <div className="guest-top">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
             <Image
-              src="/logo1.webp"
+              src="/vistora_wordmark_green.webp"
               alt="Vistora"
               width={120}
-              height={32}
+              height={29}
+              className="brand-logo-light"
+              priority
+              style={{ height: "26px", width: "auto", objectFit: "contain" }}
+            />
+            <Image
+              src="/vistora_wordmark_white.webp"
+              alt="Vistora"
+              width={120}
+              height={29}
+              className="brand-logo-dark"
               priority
               style={{ height: "26px", width: "auto", objectFit: "contain" }}
             />

@@ -61,10 +61,10 @@ export default function Preloader({
         {/* Brand Logo */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
           <Image
-            src="/logo1.webp"
+            src="/vistora_wordmark_white.webp"
             alt="Vistora"
             width={160}
-            height={42}
+            height={38}
             priority
             style={{ height: "36px", width: "auto", objectFit: "contain" }}
           />

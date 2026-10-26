@@ -46,7 +46,7 @@ html[data-theme="dark"] :is(.sidebar, .route-loading-sidebar, .topbar, .panel, .
   color: var(--ink) !important;
   border-color: var(--line) !important;
 }
-html[data-theme="dark"] :is(.brand img, .topbar-mobile-logo img, .preloader-content img) {
+html[data-theme="dark"] :is(.brand img:not([src*="white"]), .topbar-mobile-logo img:not([src*="white"]), .preloader-content img:not([src*="white"])) {
   filter: brightness(0) invert(1) !important;
 }
 

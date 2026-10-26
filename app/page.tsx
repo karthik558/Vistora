@@ -23,7 +23,8 @@ export default async function HomePage() {
     <main className="landing-shell">
       <header className="landing-header">
         <Link href="/" className="landing-logo" title="Vistora Home">
-          <Image src="/logo1.webp" alt="Vistora" width={150} height={40} priority />
+          <Image src="/vistora_wordmark_green.webp" alt="Vistora" width={140} height={34} className="brand-logo-light" priority />
+          <Image src="/vistora_wordmark_white.webp" alt="Vistora" width={140} height={34} className="brand-logo-dark" priority />
         </Link>
         <div className="landing-header-actions">
           <Link href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">

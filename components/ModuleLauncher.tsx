@@ -22,7 +22,7 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
   catch(error){setError((error as Error).message);setBusy(false);}
  }
  return <main className="module-launcher">
-  <header className="module-launcher-header"><Link href="/dashboard" aria-label="Vistora modules"><Image src="/logo1.webp" alt="Vistora" width={134} height={36} priority/></Link><div><span>{user.fullName||user.email}</span><ThemeToggle/><button className="button button-ghost" onClick={logout} disabled={busy} aria-label="Sign out"><LogOut size={16}/></button></div></header>
+  <header className="module-launcher-header"><Link href="/dashboard" aria-label="Vistora modules" style={{ display: "inline-flex", alignItems: "center" }}><Image src="/vistora_wordmark_green.webp" alt="Vistora" width={134} height={32} className="brand-logo-light" priority/><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={134} height={32} className="brand-logo-dark" priority/></Link><div><span>{user.fullName||user.email}</span><ThemeToggle/><button className="button button-ghost" onClick={logout} disabled={busy} aria-label="Sign out"><LogOut size={16}/></button></div></header>
   <section className="module-launcher-content"><p className="eyebrow">YOUR WORKSPACE</p><h1>Choose your module</h1><p className="module-launcher-intro">Where would you like to work today?</p>
    {error&&<p role="alert">{error}</p>}
    <div className="module-launcher-grid">

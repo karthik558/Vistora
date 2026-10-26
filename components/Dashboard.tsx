@@ -363,16 +363,15 @@ export function AppShell({
             style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
           >
             <Image
-              src="/logo1.webp"
+              src="/vistora_wordmark_white.webp"
               alt="Vistora"
               width={130}
-              height={34}
+              height={31}
               priority
               style={{
                 height: "28px",
                 width: "auto",
                 objectFit: "contain",
-                filter: "brightness(0) invert(1)",
               }}
             />
           </Link>
@@ -404,7 +403,17 @@ export function AppShell({
             </button>
           )}
           {sidebarCollapsed && (
-            <div className="sidebar-collapsed-header">
+            <div className="sidebar-collapsed-header" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "100%", paddingBottom: "4px" }}>
+              <Link href="/dashboard" className="sidebar-collapsed-logo" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
+                <Image
+                  src="/vistora_logo_white.webp"
+                  alt="Vistora"
+                  width={24}
+                  height={24}
+                  priority
+                  style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                />
+              </Link>
               <button
                 type="button"
                 className="sidebar-favi-toggle desktop-only"
@@ -463,7 +472,6 @@ export function AppShell({
         {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           <Link href="/dashboard" className="nav-item module-switch-link" title="Switch module"><LayoutDashboard size={16}/><span className="nav-label">Switch module</span></Link>
-          <p className="sidebar-module-label">{workspaceArea==="operations"?"Hotel operations":"Feedback"}</p>
           {visibleNav.length === 0 ? (
             <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
@@ -596,16 +604,6 @@ export function AppShell({
               >
                 {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
               </button>
-              <Link href="/" className="topbar-mobile-logo" title="Vistora Home">
-                <Image
-                  src="/logo1.webp"
-                  alt="Vistora"
-                  width={95}
-                  height={24}
-                  priority
-                  style={{ height: "22px", width: "auto", objectFit: "contain" }}
-                />
-              </Link>
               <div className="breadcrumbs">
                 <span>{workspaceArea==="operations"?"Hotel operations":"Feedback"}</span>
                 <b>/</b>

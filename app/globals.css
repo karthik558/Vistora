@@ -3385,13 +3385,33 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
   border-right: 1px solid #1f3a2c !important;
 }
 
-/* Invert Vistora logo to crisp pure white on the dark sidebar in all modes */
+/* Vistora logo display and theme adaptability */
+.brand-logo-dark {
+  display: none !important;
+}
+.brand-logo-light {
+  display: inline-block !important;
+}
+html[data-theme="dark"] .brand-logo-dark,
+[data-theme="dark"] .brand-logo-dark {
+  display: inline-block !important;
+}
+html[data-theme="dark"] .brand-logo-light,
+[data-theme="dark"] .brand-logo-light {
+  display: none !important;
+}
+
 .sidebar .brand img,
 .sidebar .brand-full img,
 .sidebar a.brand img,
 .sidebar-brand-row img {
-  filter: brightness(0) invert(1) !important;
   opacity: 0.98 !important;
+}
+.sidebar .brand img:not([src*="white"]),
+.sidebar .brand-full img:not([src*="white"]),
+.sidebar a.brand img:not([src*="white"]),
+.sidebar-brand-row img:not([src*="white"]) {
+  filter: brightness(0) invert(1) !important;
 }
 
 .sidebar .nav-group-title {

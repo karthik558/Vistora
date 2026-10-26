@@ -60,7 +60,8 @@ export default function LoginForm() {
         <section className="auth-card">
           <div className="auth-brand-row">
             <Link href="/" title="Vistora Home" className="auth-logo-link">
-              <Image src="/logo1.webp" alt="Vistora" width={130} height={34} priority />
+              <Image src="/vistora_wordmark_green.webp" alt="Vistora" width={130} height={32} className="brand-logo-light" priority />
+              <Image src="/vistora_wordmark_white.webp" alt="Vistora" width={130} height={32} className="brand-logo-dark" priority />
             </Link>
           </div>
 
