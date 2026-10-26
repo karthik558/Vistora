@@ -85,8 +85,7 @@ export default async function HomePage() {
       </section>
 
       <footer className="landing-foot">
-        <span>© Vistora 2026</span>
-        <span>Guest experience, handled beautifully.</span>
+        <span>© 2026 Vistora. All rights reserved.</span>
       </footer>
     </main>
   );

@@ -30,6 +30,6 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
     {hotelAccess&&<Link href="/dashboard/hospitality" className="module-launcher-card" style={accentTokens(config.colors.property,dark)}><div className="module-card-visual"><Building2 size={36} strokeWidth={1.5}/><span>PROPERTY &amp; SERVICE</span></div><div className="module-card-copy"><h2>Hotel operations</h2><p>Guest stays, room readiness, service jobs and inspections.</p><span className="module-card-action">Open hotel operations<ArrowRight size={17}/></span></div></Link>}
    </div>
    {!feedbackAccess&&!hotelAccess&&<p className="platform-notice">No modules are assigned to your account. Contact your administrator.</p>}
-  </section><footer className="module-launcher-footer">Vistora · Your hospitality workspace</footer>
+  </section><footer className="module-launcher-footer">© 2026 Vistora. All rights reserved.</footer>
  </main>;
 }
