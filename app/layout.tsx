@@ -57,12 +57,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `(function() {
               try {
-                var p = window.location.pathname;
-                if (p === "/" || p === "/login" || p.indexOf("/guest") === 0) {
-                  document.documentElement.setAttribute("data-theme", "light");
-                  return;
-                }
-                var theme = localStorage.getItem("vistora-theme") || "light";
+                var theme = localStorage.getItem("vistora-theme") === "dark" ? "dark" : "light";
                 document.documentElement.setAttribute("data-theme", theme);
               } catch(e) {}
             })();`,

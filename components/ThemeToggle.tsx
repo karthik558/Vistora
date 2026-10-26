@@ -31,6 +31,7 @@ export default function ThemeToggle() {
     try {
       localStorage.setItem("vistora-theme", nextTheme);
     } catch {}
+    window.dispatchEvent(new Event("vistora-theme-changed"));
   };
 
   if (!mounted) {

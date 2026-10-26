@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
@@ -14,11 +14,6 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    // Public login page is strictly light mode
-    document.documentElement.setAttribute("data-theme", "light");
-  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -55,7 +50,9 @@ export default function LoginForm() {
     <main className="auth-shell">
       <div className="auth-frame">
         <section className="auth-visual" aria-label="Architectural illustration of a quiet hotel courtyard">
-          <img src="/courtyard.svg" alt="Sunlit hotel courtyard overlooking a reflecting pool" className="auth-courtyard" />
+          <div className="auth-artwork-frame">
+            <img src="/courtyard.svg" width={800} height={1100} alt="Sunlit hotel courtyard overlooking a reflecting pool" className="auth-courtyard" />
+          </div>
         </section>
 
         <section className="auth-card">

@@ -1,4 +1,12 @@
 /* Shared workspace controls use the active module palette in both themes. */
+.auth-frame{min-width:0;border-radius:0}
+.auth-visual{position:relative;min-width:0;padding:0;overflow:hidden}
+.auth-artwork-frame{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;border-radius:0}
+.auth-artwork-frame .auth-courtyard{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;object-fit:cover;object-position:right center;filter:none}
+.auth-card{min-width:0;min-height:100svh;padding-top:120px;padding-bottom:64px}
+.auth-card .auth-title,.auth-card .field-label{color:var(--ink)}
+.auth-card .auth-sub,.auth-card .auth-home-link{color:var(--muted)}
+@media(max-width:768px){.auth-visual{display:none}.auth-card{padding:120px 24px 48px}.auth-brand-row{top:24px;left:24px;right:24px}}
 .theme-toggle-btn,.landing-header-actions .theme-toggle-btn{display:inline-flex!important;align-items:center;justify-content:center;width:40px!important;height:40px!important;min-height:40px!important;flex:0 0 40px;padding:0!important;border-radius:5px!important;border:1px solid var(--line)!important;background:var(--panel)!important;color:var(--ink)!important;box-shadow:none!important;cursor:pointer;transition:background .15s,border-color .15s}
 button.theme-toggle-btn:hover{background:var(--canvas-alt)!important;border-color:var(--line-strong)!important}
 .theme-toggle-btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}

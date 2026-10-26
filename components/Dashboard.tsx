@@ -284,7 +284,6 @@ export function AppShell({
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("vistora-user");
-        document.documentElement.setAttribute("data-theme", "light");
       } catch { }
     }
     router.replace("/login");
