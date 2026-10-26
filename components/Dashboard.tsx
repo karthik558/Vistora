@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import DashboardPageHeading from "./DashboardPageHeading";
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -843,15 +844,11 @@ export default function Dashboard({
           </div>
         ) : (
           <>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">Feedback overview</p>
-                <h1>{firstName ? `Good morning, ${firstName}` : "Operations Dashboard"}</h1>
-                <p className="subheading">
-                  A clear view of the guest moments that need attention today.
-                </p>
-              </div>
-              <div className="page-heading-actions">
+            <DashboardPageHeading
+              eyebrow="Feedback overview"
+              title={firstName ? `Good morning, ${firstName}` : "Operations Dashboard"}
+              description="A clear view of the guest moments that need attention today."
+            >
                 <PropertyFilter
                   properties={
                     userAllowedPropIds !== null
@@ -870,8 +867,7 @@ export default function Dashboard({
                     Create report <span>↗</span>
                   </Link>
                 )}
-              </div>
-            </div>
+            </DashboardPageHeading>
 
         {userDeptScope && (
           <div

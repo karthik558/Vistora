@@ -6,6 +6,11 @@ html[data-theme="dark"] :is(.app-shell,.module-launcher-card){
  --module-accent:var(--palette-dark-module-accent);--sage:var(--palette-dark-sage);--sage-deep:var(--palette-dark-sage-deep);--sage-hover:var(--palette-dark-sage-hover);--sage-soft:var(--palette-dark-sage-soft);
 }
 html:not([data-theme="dark"]) .app-shell{--muted:#5b6570;--muted-light:#5e6872}
+/* Dashboard headings retain the same typography and controls in every module. */
+.app-shell .page-heading .eyebrow{font-size:9px;line-height:1.55;margin:0 0 8px}
+.app-shell .page-heading .subheading{font-size:12px;line-height:1.6;margin:0}
+.app-shell .page-heading-actions>.button{min-height:40px;height:40px;padding:0 13px;gap:8px;white-space:nowrap}
+@media(max-width:700px){.app-shell .page-heading-actions>.button{min-height:42px;height:auto;white-space:normal;padding:10px 13px}}
 .app-shell :is(.field-label,legend){color:var(--ink)}
 .app-shell .field-label span{color:var(--muted)}
 .app-shell :is(.drawer-backdrop,.modal-backdrop-luxury){background:rgba(0,0,0,.56)!important}

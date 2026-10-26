@@ -3,6 +3,7 @@ import {FormEvent,useEffect,useState,useRef} from "react";
 import {AppShell,WorkspaceUser} from "./Dashboard";
 import CasePanel from "./CasePanel";
 import WorkspaceSelect from "./WorkspaceSelect";
+import DashboardPageHeading from "./DashboardPageHeading";
 import {csvCell} from "../lib/platform/reports";
 import {Check,Copy,RefreshCw,X} from "lucide-react";
 const departments=["Front Desk","Housekeeping","Food & Beverage","Concierge","Facilities & Room","Spa & Wellness","Valet & Transfers"];
@@ -25,7 +26,7 @@ export default function WorkspacePage({user,initialTab="Overview"}:{user:Workspa
  const csv=()=>{const rows=[["Property","Responses","Average rating","NPS","Open cases"],...data.report.properties.map((p:any)=>[data.properties.find((x:any)=>x.id===p.name)?.name||p.name,p.responses,p.averageRating,p.nps,p.open])];const blob=new Blob([rows.map(r=>r.map(csvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="vistora-report.csv";a.click();URL.revokeObjectURL(url);};
  const tabs=reportOnly?["Reports"]:["Overview",...(data?.cases?["Cases"]:[]),...(data?.report?["Reports"]:[]),...(data?.isAdmin?["Automation","Team","Branding","Integrations"]:[])];
  return <AppShell active={initialTab==="Reports"?"Reports":"Workspace"} user={user}><div className="content-wrap platform-page">
- <header className="platform-heading"><div><p className="eyebrow">{reportOnly?"Management reporting":"Administration"}</p><h1>{data?.organization?.name||"Workspace"}</h1></div><button className="button button-ghost" onClick={()=>load().catch(e=>setError(e.message))} aria-label="Refresh workspace"><RefreshCw size={16}/> Refresh</button></header>
+ <DashboardPageHeading eyebrow={reportOnly?"Management reporting":"Administration"} title={data?.organization?.name||"Workspace"} description={reportOnly?"Review performance and export reports across your properties.":"Manage your company workspace, team and connected services."}><button className="button button-ghost compact" onClick={()=>load().catch(e=>setError(e.message))} aria-label="Refresh workspace"><RefreshCw size={16}/> Refresh</button></DashboardPageHeading>
  <nav className="platform-tabs" aria-label="Workspace sections">{tabs.map(t=><button key={t} aria-current={tab===t?"page":undefined} onClick={()=>setTab(t)}>{t}</button>)}</nav>
  {error&&<div className="platform-notice" role="alert">{error}</div>}{message&&<p role="status">{message}</p>}
  {secret&&<section className="platform-card"><h2>Save this securely</h2><p>This secret or invitation link is shown once.</p><code className="platform-secret">{secret}</code><div className="platform-actions"><button className="button button-dark" onClick={()=>navigator.clipboard.writeText(secret).then(()=>setMessage("Copied.")).catch(()=>setError("Copy the value above manually."))}><Copy size={15}/>Copy</button><button className="button button-ghost" onClick={()=>setSecret("")}>Dismiss</button></div></section>}

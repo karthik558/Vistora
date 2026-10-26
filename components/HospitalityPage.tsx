@@ -5,6 +5,8 @@ import {useSearchParams} from "next/navigation";
 import {AppShell,WorkspaceUser} from "./Dashboard";
 import WorkspaceSelect from "./WorkspaceSelect";
 import WorkspaceDateField from "./WorkspaceDateField";
+import DashboardPageHeading from "./DashboardPageHeading";
+import PropertyFilter from "./PropertyFilter";
 import {useAppearance} from "./AppearanceProvider";
 import {hospitalityConfig,money,ModuleName} from "../lib/hospitality/config";
 import {BedDouble,Users,ClipboardList,ClipboardCheck,Wallet,RefreshCw,ArrowUpRight} from "lucide-react";
@@ -94,6 +96,15 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  }
  const config=hospitalityConfig(data?.config||appearance.config);
  const canManage=user.isOrganizationAdmin===true;
+ const firstName=user.fullName?.split(" ")[0]||user.email?.split("@")[0]||"";
+ const descriptions:Record<Tab,string>={
+  Overview:"A clear view of the guest stays and hotel operations that need attention today.",
+  Guests:"Manage guest profiles, preferences and stays across your properties.",
+  Rooms:"Track room readiness and availability across your properties.",
+  "Service jobs":"Coordinate guest requests and service work across your properties.",
+  Inspections:"Review room checks and follow up on readiness issues.",
+  "Cost controls":"Review operating costs, approvals and monthly budgets."
+ };
  const module:ModuleName=tab==="Guests"?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
  const enabled=tab==="Overview"||config.modules[module as keyof typeof config.modules]!==false;
  const propertySelect=(name="property_id")=><WorkspaceSelect label="Property" name={name} defaultValue={property==="all"?"":property} placeholder="Choose property" options={(data?.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}/>;
@@ -112,12 +123,16 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {title:"Pending cost decisions",value:data?.metrics.pendingCosts,icon:Wallet,section:"Cost controls",color:"operations"}
  ];
  return <AppShell active={tab} user={user} module={module}><div className="content-wrap platform-page hotel-page">
- <header className="platform-heading"><div><p className="eyebrow">Hotel operations · {canManage?"Admin":"Read only"}</p><h1>{tab==="Overview"?"Hospitality operations":tab}</h1></div><div className="platform-actions">{canManage&&<Link className="button button-ghost" href="/dashboard/settings?workspace=operations">Configure modules</Link>}<button className="button button-ghost" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button></div></header>
+ <DashboardPageHeading eyebrow={tab==="Overview"?"Hospitality overview":"Hotel operations"} title={tab==="Overview"?(firstName?`Good morning, ${firstName}`:"Hospitality operations"):tab} description={descriptions[tab]}>
+  <PropertyFilter properties={data?.properties||[]} selectedId={property} onChange={setProperty} manageHref="/dashboard/properties?workspace=operations"/>
+  <button className="button button-ghost compact" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button>
+  {canManage&&<Link className="button button-dark compact" href="/dashboard/settings?workspace=operations">Configure modules <span>↗</span></Link>}
+ </DashboardPageHeading>
  <nav className="platform-tabs" aria-label="Hotel modules">{tabs.filter(t=>canManage||t!=="Cost controls").map(t=><button key={t} aria-current={t===tab?"page":undefined} onClick={()=>setTab(t)}>{t}</button>)}</nav>
  {!canManage&&<p className="platform-notice">Read-only access to your assigned properties. Operational changes and financial records are administrator-only.</p>}
  {error&&<p role="alert" className="platform-notice">{error}</p>}{message&&<p role="status" className="hotel-success">{message}</p>}
  {loading&&!data&&<p role="status">Loading hotel operations…</p>}
- {data&&<><div className="hotel-filter"><label>Property<WorkspaceSelect label="Filter hotel property" value={property} onChange={setProperty} options={[{value:"all",label:"All properties"},...data.properties.map((p:any)=>({value:p.id,label:p.name}))]}/></label>{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<WorkspaceDateField label="Ledger month" mode="month" value={month} onChange={value=>{if(value)setMonth(value);}} required/></label>}</div>
+ {data&&<>{(tab==="Guests"||tab==="Cost controls")&&<div className="hotel-filter">{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<WorkspaceDateField label="Ledger month" mode="month" value={month} onChange={value=>{if(value)setMonth(value);}} required/></label>}</div>}
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard/settings?workspace=operations">Open Settings</Link>}</section>:<>
  {tab==="Service jobs"&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
  {tab==="Overview"&&<><section className="hotel-overview">{cards.filter(c=>canManage||c.value!==null).map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} className="hotel-overview-card"><c.icon size={17}/><span>{c.title}</span><strong>{c.value}</strong><ArrowUpRight size={14}/></button>)}</section><section className="platform-card"><h2>Connected operations</h2><div className="hotel-workflow"><span>Reserve a room</span><span>Check in</span><span>Dispatch service</span><span>Inspect readiness</span><span>Review costs</span></div><p>Room readiness, guest stays, service work and cost decisions are recorded in the same company workspace.</p></section><section className="platform-card"><h2>Recent activity</h2>{!data.activity.length&&<p>{canManage?"No operational changes recorded yet.":"Activity history is available to administrators."}</p>}{data.activity.map((a:any)=><div className="platform-row" key={a.id}><span>{label(a.entity_type)} · {a.action}<small>{a.entity_id.slice(0,8)} · {a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Former administrator":"System"}</small></span><time>{format(a.created_at)}</time></div>)}</section></>}

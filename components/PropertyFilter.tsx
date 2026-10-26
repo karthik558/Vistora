@@ -9,10 +9,12 @@ export default function PropertyFilter({
   properties,
   selectedId,
   onChange,
+  manageHref = "/dashboard/properties",
 }: {
-  properties: PropertyRow[];
+  properties: (Pick<PropertyRow, "id" | "name"> & Partial<Pick<PropertyRow, "location" | "total_rooms">>)[];
   selectedId: string | "all";
   onChange: (id: string | "all") => void;
+  manageHref?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,9 +99,11 @@ export default function PropertyFilter({
                 >
                   <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
                     <span className="prop-name">{prop.name}</span>
-                    <small className="prop-detail">
-                      {prop.location} · {prop.total_rooms || 0} rooms
-                    </small>
+                    {(prop.location || prop.total_rooms != null) && (
+                      <small className="prop-detail">
+                        {[prop.location, prop.total_rooms != null ? `${prop.total_rooms} rooms` : null].filter(Boolean).join(" · ")}
+                      </small>
+                    )}
                   </div>
                   {selectedId === prop.id && <Check size={14} className="prop-check" />}
                 </button>
@@ -108,7 +112,7 @@ export default function PropertyFilter({
 
             <div style={{ borderTop: "1px solid var(--line)", padding: "6px 8px", background: "var(--canvas-alt)" }}>
               <a
-                href="/dashboard/properties"
+                href={manageHref}
                 style={{
                   display: "flex",
                   alignItems: "center",
