@@ -60,6 +60,7 @@ export interface WorkspaceUser {
   propertyId?: string | null;
   propertyIds?: string[];
   rights?: string[];
+  isOrganizationAdmin?: boolean;
 }
 
 export interface NavItemConfig {
@@ -68,10 +69,10 @@ export interface NavItemConfig {
   group: string;
   icon: any;
   requiredRight?: string;
+  adminOnly?: boolean;
 }
 
 const nav: readonly NavItemConfig[] = [
-  { label: "Workspace", href: "/dashboard/workspace", group: "Operations & audit", icon: Building2 },
   { label: "Dashboard", href: "/dashboard", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
@@ -86,6 +87,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
   { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
   { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet, requiredRight: "export_reports" },
+  { label: "Workspace", href: "/dashboard/workspace", group: "Settings", icon: Building2, adminOnly: true },
 ];
 
 function getUserInitials(name?: string, email?: string): string {
@@ -282,6 +284,7 @@ export function AppShell({
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
   const visibleNav = nav.filter((item) => {
+    if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
     // Super Admin holds unconditional full platform capabilities
     if (isSuperAdmin || currentUser?.role==="admin") return true;
 

@@ -6,6 +6,7 @@ import {managementReport,reportRows} from "../../../lib/platform/reports";
 import {logAuditEvent} from "../../../lib/services/auditLogService";
 function admin(){if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Workspace administrator required.",403);}
 export const GET=withWorkspace(async(request:NextRequest)=>{
+ admin();
  const db=workspaceDb(),user=workspaceUser();
  const properties=checked(await db.from("properties").select("id,name").order("name"));
  const views=checked(await db.from("saved_views").select("*").order("created_at",{ascending:false}));
@@ -31,6 +32,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json(result,{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
+ admin();
  const b=await request.json(),db=workspaceDb(),user=workspaceUser(),org=user.organizationId;
  let result:any={};
  if(b.action==="save_view") {
@@ -80,6 +82,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json({success:true,result});
 });
 export const DELETE=withWorkspace(async(request:NextRequest)=>{
+ admin();
  const b=await request.json(),db=workspaceDb();
  const tables:Record<string,string>={view:"saved_views",schedule:"report_schedules",sla:"sla_policies",team:"team_invitations"};
  if(b.kind!=="view")admin();

@@ -61,3 +61,20 @@ test("Worker records blocked providers, cancels resolved alerts, and queues retr
   assert.equal((await runWorker("org"))[0].status,"queued");assert.equal(finished.p_status,"retry");
  }finally{db.serviceDb=originalDb;email.sendEmail=originalSend;for(const key of Object.keys(process.env))if(!(key in env))delete process.env[key];Object.assign(process.env,env);}
 });
+test("Workspace API rejects non-admins even with operational rights; report permission remains separate",async()=>{
+ const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server");
+ const workspace=require("../app/api/platform/route.ts"),reports=require("../app/api/reports/workspace/route.ts");
+ const originalSession=db.sessionDb;
+ const user={id:"member",organizationId:"company",isOrganizationAdmin:false,accessToken:"verified",rights:["view_feedback","manage_complaints","manage_settings","manage_users","export_reports"],role:"staff"};
+ const client={from(){throw new Error("Unauthorized request reached the database");}};
+ db.sessionDb=()=>client;
+ try{
+  for(const method of ["GET","POST","DELETE"]){
+   const request=new NextRequest("http://localhost/api/platform",{method,...(method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"save_view",kind:"view"})})});
+   const response=await db.workspaceContext.run({user,client},()=>workspace[method](request));
+   assert.equal(response.status,403,method+" must require company administrator membership");
+  }
+  const response=await db.workspaceContext.run({user:{...user,rights:[]},client},()=>reports.GET(new NextRequest("http://localhost/api/reports/workspace")));
+  assert.equal(response.status,403,"Report data still requires export_reports");
+ }finally{db.sessionDb=originalSession;}
+});
