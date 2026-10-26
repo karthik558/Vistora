@@ -16,7 +16,7 @@ export interface UserRight {
   description: string;
 }
 
-export const SYSTEM_RIGHTS: UserRight[] = [
+const SYSTEM_RIGHTS: UserRight[] = [
   { id: "view_feedback", name: "View Guest Feedback", description: "Read reviews, ratings, and guest sentiment" },
   { id: "view_guest_pii", name: "View Unmasked Guest PII (GDPR)", description: "Reveal guest phone numbers and email addresses (audit logged)" },
   { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
@@ -29,7 +29,7 @@ export const SYSTEM_RIGHTS: UserRight[] = [
   { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members and assign permissions" },
 ];
 
-export const HOTEL_DEPARTMENTS = [
+const HOTEL_DEPARTMENTS = [
   "All Departments",
   "Food & Beverage",
   "Housekeeping",
@@ -40,13 +40,13 @@ export const HOTEL_DEPARTMENTS = [
   "Valet & Transfers",
 ] as const;
 
-export function getUserDepartment(user: WorkspaceUserItem): string {
+function getUserDepartment(user: WorkspaceUserItem): string {
   const match = (user.rights || []).find((r) => r.startsWith("dept_scope:"));
   if (match) return match.replace("dept_scope:", "").trim();
   return "All Departments";
 }
 
-export function canUserViewPii(user: WorkspaceUserItem): boolean {
+function canUserViewPii(user: WorkspaceUserItem): boolean {
   const org = getUserOrgRole(user);
   if (org === "super_admin" || (user.rights || []).includes("org_role:super_admin")) return true;
   return (user.rights || []).includes("view_guest_pii");
@@ -61,7 +61,7 @@ export interface OrganizationalRoleDef {
   defaultRights: string[];
 }
 
-export const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
+const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
   {
     id: "super_admin",
     name: "Super Admin",
@@ -145,7 +145,7 @@ export const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
   },
 ];
 
-export const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
+const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
   super_admin: SYSTEM_RIGHTS.map((r) => r.id),
   admin: [
     "view_feedback",
@@ -182,7 +182,7 @@ interface WorkspaceUserItem {
   created_at?: string;
 }
 
-export function getUserOrgRole(user: WorkspaceUserItem): string {
+function getUserOrgRole(user: WorkspaceUserItem): string {
   if (user.orgRole) return user.orgRole;
   const match = (user.rights || []).find((r) => r.startsWith("org_role:"));
   if (match) return match.replace("org_role:", "");
@@ -675,19 +675,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     <span
                                       className="status"
                                       style={{
-                                        background:
-                                          isSuperAdmin
-                                            ? "var(--sage-deep)"
-                                            : isHotelAdmin
-                                            ? "var(--sage)"
-                                            : orgRole === "general_manager" || orgRole === "executive"
-                                            ? "#1e293b"
-                                            : orgRole === "analyst" || orgRole === "report"
-                                            ? "#4338ca"
-                                            : orgRole === "feedback"
-                                            ? "#0f766e"
-                                            : "var(--line)",
-                                        color: isSuperAdmin || isHotelAdmin || orgRole !== "front_office_staff" ? "#fff" : "var(--ink)",
+                                        background: "var(--sage-soft)",
+                                        color: "var(--sage-deep)",
                                         fontFamily: "var(--font-dm-mono)",
                                         fontSize: "9px",
                                         letterSpacing: "0.06em",
@@ -774,7 +763,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                       borderRadius: "3px",
                                       fontSize: "11px",
                                       fontWeight: 500,
-                                      border: "1px solid #d4e2d6",
+                                      border: "1px solid var(--line-strong)",
                                     }}
                                   >
                                     <Building2 size={11} strokeWidth={1.75} />
@@ -792,7 +781,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     borderRadius: "3px",
                                     fontSize: "11px",
                                     fontWeight: 500,
-                                    border: "1px solid #d4e2d6",
+                                    border: "1px solid var(--line-strong)",
                                   }}
                                   title={properties.filter((p) => user.property_ids?.includes(p.id)).map((p) => p.name).join(", ")}
                                 >
@@ -989,6 +978,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           Organizational Role & Rights
                         </label>
                         <CustomSelect
+                          floating
                           value={addRole}
                           onChange={(val) => {
                             const newRole = val as string;
@@ -1025,6 +1015,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             Department Operational Scope (RBAC Boundary)
                           </label>
                           <CustomSelect
+                          floating
                             value={addDepartment}
                             onChange={(val) => setAddDepartment(val as string)}
                             header="Assign Department Boundary"
@@ -1082,7 +1073,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             {properties.map((p) => {
                               const checked = addPropertyIds.includes(p.id);
                               return (
-                                <label
+                                <label className="member-property-choice"
                                   key={p.id}
                                   style={{
                                     display: "flex",
@@ -1090,8 +1081,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     gap: "10px",
                                     padding: "6px 8px",
                                     borderRadius: "4px",
-                                    background: checked ? "var(--sage-soft)" : "#ffffff",
-                                    border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
+                                    background: checked ? "var(--sage-soft)" : "var(--panel)",
+                                    border: checked ? "1px solid var(--sage)" : "1px solid var(--line)",
                                     fontSize: "12px",
                                     cursor: "pointer",
                                     transition: "all 0.15s ease",
@@ -1149,7 +1140,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           style={{
                             padding: "14px 16px",
                             background: "var(--sage-soft)",
-                            border: "1px solid #d4e2d6",
+                            border: "1px solid var(--line-strong)",
                             borderRadius: "6px",
                             display: "flex",
                             flexDirection: "column",
@@ -1174,8 +1165,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             <div
                               style={{
                                 padding: "10px 12px",
-                                background: "rgba(99, 102, 241, 0.08)",
-                                border: "1px solid rgba(99, 102, 241, 0.25)",
+                                background: "var(--sage-soft)",
+                                border: "1px solid var(--sage)",
                                 borderRadius: "6px",
                                 marginBottom: "12px",
                                 fontSize: "11px",
@@ -1185,7 +1176,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 gap: "8px",
                               }}
                             >
-                              <Shield size={14} style={{ color: "var(--blue)", flexShrink: 0 }} />
+                              <Shield size={14} style={{ color: "var(--module-accent)", flexShrink: 0 }} />
                               <span>
                                 {addRole === "analyst"
                                   ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
@@ -1252,7 +1243,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         setAddRights(addRights.filter((id) => id !== right.id));
                                       }
                                     }}
-                                    style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
                                   />
                                   <div>
                                     <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
@@ -1340,6 +1331,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           Organizational Role & Rights
                         </label>
                         <CustomSelect
+                          floating
                           value={editRole}
                           onChange={(val) => {
                             const newRole = val as string;
@@ -1372,6 +1364,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             Department Operational Scope (RBAC Boundary)
                           </label>
                           <CustomSelect
+                          floating
                             value={editDepartment}
                             onChange={(val) => setEditDepartment(val as string)}
                             header="Assign Department Boundary"
@@ -1429,7 +1422,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             {properties.map((p) => {
                               const checked = editPropertyIds.includes(p.id);
                               return (
-                                <label
+                                <label className="member-property-choice"
                                   key={p.id}
                                   style={{
                                     display: "flex",
@@ -1437,8 +1430,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     gap: "10px",
                                     padding: "6px 8px",
                                     borderRadius: "4px",
-                                    background: checked ? "var(--sage-soft)" : "#ffffff",
-                                    border: checked ? "1px solid #c7dcc9" : "1px solid var(--line)",
+                                    background: checked ? "var(--sage-soft)" : "var(--panel)",
+                                    border: checked ? "1px solid var(--sage)" : "1px solid var(--line)",
                                     fontSize: "12px",
                                     cursor: "pointer",
                                     transition: "all 0.15s ease",
@@ -1483,7 +1476,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           style={{
                             padding: "14px 16px",
                             background: "var(--sage-soft)",
-                            border: "1px solid #d4e2d6",
+                            border: "1px solid var(--line-strong)",
                             borderRadius: "6px",
                             display: "flex",
                             flexDirection: "column",
@@ -1508,8 +1501,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             <div
                               style={{
                                 padding: "10px 12px",
-                                background: "rgba(99, 102, 241, 0.08)",
-                                border: "1px solid rgba(99, 102, 241, 0.25)",
+                                background: "var(--sage-soft)",
+                                border: "1px solid var(--sage)",
                                 borderRadius: "6px",
                                 marginBottom: "12px",
                                 fontSize: "11px",
@@ -1519,7 +1512,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 gap: "8px",
                               }}
                             >
-                              <Shield size={14} style={{ color: "var(--blue)", flexShrink: 0 }} />
+                              <Shield size={14} style={{ color: "var(--module-accent)", flexShrink: 0 }} />
                               <span>
                                 {editRole === "analyst"
                                   ? "Data Analyst: Streamlined access to feedback trend metrics, rating distributions, and department performance dashboards."
@@ -1586,7 +1579,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                         setEditRights(editRights.filter((id) => id !== right.id));
                                       }
                                     }}
-                                    style={{ marginTop: "2px", accentColor: "#0b100f" }}
+                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
                                   />
                                   <div>
                                     <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
@@ -1749,7 +1742,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                       </div>
 
                       {/* User access selection */}
-                      <div style={{ marginBottom: "20px", borderTop: "1px solid #edf1ed", paddingTop: "14px" }}>
+                      <div style={{ marginBottom: "20px", borderTop: "1px solid var(--line)", paddingTop: "14px" }}>
                         <label className="field-label" style={{ marginBottom: "6px" }}>
                           Give access to specific users:
                         </label>
@@ -1768,7 +1761,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                   gap: "8px",
                                   padding: "6px 8px",
                                   borderRadius: "3px",
-                                  background: isChecked ? "#f4f7f4" : "transparent",
+                                  background: isChecked ? "var(--sage-soft)" : "transparent",
                                   cursor: "pointer",
                                   fontSize: "12px",
                                 }}

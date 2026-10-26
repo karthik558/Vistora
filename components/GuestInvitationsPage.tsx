@@ -241,8 +241,8 @@ export default function GuestInvitationsPage({
         {/* Filter bar */}
         <div className="panel" style={{ padding: "16px 20px", marginBottom: "20px" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: "260px" }}>
-              <div style={{ position: "relative", minWidth: "220px", flex: 1 }}>
+            <div className="invitation-filters" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: "260px" }}>
+              <div className="invitation-search" style={{ position: "relative", minWidth: "220px", flex: 1 }}>
                 <Search
                   size={15}
                   style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }}
@@ -268,7 +268,7 @@ export default function GuestInvitationsPage({
                       fontSize: "11px",
                       fontWeight: 600,
                       background: statusFilter === s ? "var(--ink)" : "var(--panel)",
-                      color: statusFilter === s ? "#fff" : "var(--muted)",
+                      color: statusFilter === s ? "var(--panel)" : "var(--muted)",
                       border: "none",
                       cursor: "pointer",
                       textTransform: "capitalize",

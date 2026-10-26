@@ -366,7 +366,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px", marginBottom: "32px" }}>
+            <div className="property-cards">
               {loading ? (
                 [0, 1, 2].map((slot) => (
                   <div key={slot} className="panel loading-card" aria-hidden={slot > 0 ? true : undefined}>
@@ -417,7 +417,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                               onClick={() => handleToggleActive(prop.id, isActive)}
                               style={{
                                 border: "1px solid",
-                                borderColor: isActive ? "#bbf7d0" : "#fecaca",
+                                borderColor: isActive ? "var(--sage)" : "var(--red)",
                                 cursor: "pointer",
                                 padding: "2px 8px",
                                 borderRadius: "6px",
@@ -427,8 +427,8 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "5px",
-                                background: isActive ? "#f0fdf4" : "#fef2f2",
-                                color: isActive ? "#15803d" : "var(--red)",
+                                background: isActive ? "var(--sage-soft)" : "var(--red-soft)",
+                                color: isActive ? "var(--sage-deep)" : "var(--red)",
                                 fontWeight: 600,
                                 transition: "all 0.15s ease",
                               }}
@@ -443,7 +443,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                                   width: "6px",
                                   height: "6px",
                                   borderRadius: "50%",
-                                  background: isActive ? "#22c55e" : "#ef4444",
+                                  background: isActive ? "var(--sage)" : "var(--red)",
                                 }}
                               />
                               {isActive ? "ACTIVE" : "DISABLED"}
@@ -477,7 +477,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                           </div>
                         )}
 
-                        <div style={{ borderTop: "1px solid #edf1ed", paddingTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div style={{ borderTop: "1px solid var(--line)", paddingTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
                           <Users size={13} strokeWidth={1.75} style={{ color: "var(--muted)" }} />
                           <span style={{ fontSize: "11px", color: "var(--ink-light)" }}>
                             {assignedCount === 0 ? (
@@ -489,7 +489,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #edf1ed", paddingTop: "12px", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--line)", paddingTop: "12px", gap: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <button
                             type="button"
@@ -513,7 +513,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                           type="button"
                           onClick={() => setPendingDelete({ id: prop.id, name: prop.name })}
                           className="button button-outline compact"
-                          style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "#eddcd9" }}
+                          style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "var(--red)" }}
                           title="Delete property"
                         >
                           <Trash2 size={12} strokeWidth={1.75} />
@@ -658,7 +658,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                 </div>
 
                 {/* USER ACCESS ASSIGNMENT */}
-                <div style={{ marginBottom: "20px", borderTop: "1px solid #edf1ed", paddingTop: "14px" }}>
+                <div style={{ marginBottom: "20px", borderTop: "1px solid var(--line)", paddingTop: "14px" }}>
                   <label className="field-label" style={{ marginBottom: "6px" }}>
                     Give access to specific users:
                   </label>
@@ -681,7 +681,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                               gap: "8px",
                               padding: "6px 8px",
                               borderRadius: "3px",
-                              background: isChecked ? "#f4f7f4" : "transparent",
+                              background: isChecked ? "var(--sage-soft)" : "transparent",
                               cursor: "pointer",
                               fontSize: "12px",
                             }}

@@ -67,12 +67,17 @@ export function contrastRatio(a:string,b:string){
  const luminance=(hex:string)=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((n,x,i)=>n+x*[.2126,.7152,.0722][i],0);
  const first=luminance(a),second=luminance(b);return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);
 }
-function legible(hex:string,dark:boolean,target:number){
- const background=dark?"#1c1f24":"#ffffff",toward=dark?"#ffffff":"#000000";
- for(let weight=0;weight<=1;weight+=.05){const next=mix(hex,toward,weight);if(contrastRatio(next,background)>=target)return next;}
+function legible(hex:string,dark:boolean,target:number,backgrounds=[dark?"#1c1f24":"#ffffff"]){
+ const toward=dark?"#ffffff":"#000000";
+ for(let weight=0;weight<=1;weight+=.05){const next=mix(hex,toward,weight);if(backgrounds.every(background=>contrastRatio(next,background)>=target))return next;}
  return toward;
 }
 export function accentTokens(hex:string,dark:boolean):Record<string,string> {
  const accent=legible(dark?mix(hex,"#ffffff",.35):hex,dark,3);
- return {"--module-accent":legible(accent,dark,4.5),"--sage":accent,"--sage-deep":legible(accent,dark,4.5),"--sage-hover":legible(accent,dark,4.5),"--sage-soft":mix(dark?"#1c1f24":"#ffffff",hex,dark?.24:.10)};
+ const soft=mix(dark?"#1c1f24":"#ffffff",hex,dark?.24:.10),text=legible(accent,dark,4.5,[dark?"#1c1f24":"#ffffff",dark?"#262a31":"#eef2ec",soft]);
+ return {"--module-accent":text,"--sage":accent,"--sage-deep":text,"--sage-hover":text,"--sage-soft":soft};
+}
+// Both variants are present during SSR; CSS chooses the document theme without a light-mode flash.
+export function themedAccentTokens(hex:string):Record<string,string>{
+ return Object.fromEntries((["light","dark"] as const).flatMap(theme=>Object.entries(accentTokens(hex,theme==="dark")).map(([key,value])=>["--palette-"+theme+"-"+key.slice(2),value])));
 }

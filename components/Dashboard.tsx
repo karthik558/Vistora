@@ -43,7 +43,7 @@ import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
 import ThemeToggle from "./ThemeToggle";
 import {useAppearance} from "./AppearanceProvider";
-import {accentTokens,moduleForPath,workspaceForPath,sidebarTokens,ModuleName} from "../lib/hospitality/config";
+import {themedAccentTokens,moduleForPath,workspaceForPath,sidebarTokens,ModuleName} from "../lib/hospitality/config";
 import {hasModuleAccess} from "../lib/auth/modules";
 import CasePanel from "./CasePanel";
 import { ConfirmDrawer } from "./ConfirmDrawer";
@@ -189,7 +189,8 @@ export function AppShell({
   const searchParams=useSearchParams();
   const appearance=useAppearance();
   const workspaceArea=workspaceForPath(pathname||"",searchParams.get("workspace"));
-  const activeModule=workspaceArea==="feedback"?"feedback":moduleOverride||moduleForPath(pathname||'/dashboard');
+  const sectionModule=moduleForPath(pathname||'/dashboard');
+  const activeModule=workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
   const scopedHref=(href:string)=>workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
@@ -335,7 +336,7 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={workspaceArea} style={{...accentTokens(appearance.config.colors[activeModule],appearance.dark),...sidebarTokens(appearance.config.colors[workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
         {mobileNavOpen && (
@@ -1994,7 +1995,7 @@ export function FeedbackTable({
               </div>
 
               {/* Property Assignment Section (Admin can change property) */}
-              <div style={{ margin: "14px 0", padding: "12px 14px", background: "var(--canvas)", border: "1px solid #e1e7e1", borderRadius: "6px" }}>
+              <div className="feedback-property-assignment" style={{ margin: "14px 0", padding: "12px 14px", background: "var(--canvas)", border: "1px solid var(--line)", borderRadius: "6px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     Property Location

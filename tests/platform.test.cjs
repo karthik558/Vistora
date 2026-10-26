@@ -20,7 +20,7 @@ test("Explicit module grants can revoke feedback while preserving existing users
  assert.deepEqual(effectiveModuleRights(hotelOnly,true),hotelOnly);
  assert.equal(hasModuleAccess({rights:["module_access:configured"]},"feedback"),false);
 });
-const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
+const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,themedAccentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
 test("Module routing preserves the hotel workspace on shared pages and distinguishes sidebar palettes",()=>{
  assert.equal(workspaceForPath("/dashboard/hospitality"),"operations");
  assert.equal(workspaceForPath("/dashboard/properties"),"operations");
@@ -43,8 +43,14 @@ test("Hotel configuration validates colors and budget precision without floating
 });
 test("Custom section colors retain readable variants in light and dark mode",()=>{
  for(const hex of ["#ffffff","#000000","#00ff00","#243d6a"])for(const dark of [false,true]){
-  const tokens=accentTokens(hex,dark);assert.ok(contrastRatio(tokens["--sage-deep"],dark?"#1c1f24":"#ffffff")>=4.5);
+  const tokens=accentTokens(hex,dark);assert.ok(contrastRatio(tokens["--sage-deep"],dark?"#1c1f24":"#ffffff")>=4.5);assert.ok(contrastRatio(tokens["--module-accent"],tokens["--sage-soft"])>=4.5);assert.ok(contrastRatio(tokens["--module-accent"],dark?"#262a31":"#eef2ec")>=4.5);
  }
+});
+test("Server-rendered module palettes expose light and dark variants without waiting for client theme state",()=>{
+ const palette=themedAccentTokens("#243d6a");
+ assert.equal(palette["--palette-dark-sage-deep"],accentTokens("#243d6a",true)["--sage-deep"]);
+ assert.equal(palette["--palette-light-sage-deep"],accentTokens("#243d6a",false)["--sage-deep"]);
+ assert.notEqual(palette["--palette-dark-sage-deep"],palette["--palette-light-sage-deep"]);
 });
 const base={property_id:"one",department:"Front Desk",rating:5,recommendation_score:null,status:"under_review",assigned_to:null,category:"general",created_at:"2026-10-20T00:00:00Z",first_response_at:null,resolved_at:null,sla_deadline:null};
 test("CSV escapes quotes and neutralizes spreadsheet formulas",()=>{assert.equal(csvCell('=HYPERLINK("https://example.com")'),'"\'=HYPERLINK(""https://example.com"")"');assert.equal(csvCell(-100),'"-100"');});

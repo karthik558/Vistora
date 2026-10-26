@@ -276,8 +276,8 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
                       fontSize: "10px",
                       padding: "1px 6px",
                       borderRadius: "6px",
-                      background: isSelected ? "var(--sage)" : "var(--canvas-alt)",
-                      color: isSelected ? "#ffffff" : "var(--ink)",
+                      background: isSelected ? "var(--sage-deep)" : "var(--canvas-alt)",
+                      color: isSelected ? "var(--panel)" : "var(--ink)",
                       fontFamily: "var(--font-dm-mono)",
                     }}
                   >
@@ -320,7 +320,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
                       fontSize: "11px",
                       fontWeight: 600,
                       background: statusFilter === s ? "var(--ink)" : "var(--panel)",
-                      color: statusFilter === s ? "#fff" : "var(--muted)",
+                      color: statusFilter === s ? "var(--panel)" : "var(--muted)",
                       border: "none",
                       cursor: "pointer",
                       textTransform: "capitalize",

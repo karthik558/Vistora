@@ -111,7 +111,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {title:"Open service jobs",value:data?.metrics.openJobs,icon:ClipboardList,section:"Service jobs",color:"operations"},
   {title:"Pending cost decisions",value:data?.metrics.pendingCosts,icon:Wallet,section:"Cost controls",color:"operations"}
  ];
- return <AppShell active={tab} user={user} module={module}><div className="platform-page hotel-page">
+ return <AppShell active={tab} user={user} module={module}><div className="content-wrap platform-page hotel-page">
  <header className="platform-heading"><div><p className="eyebrow">Hotel operations · {canManage?"Admin":"Read only"}</p><h1>{tab==="Overview"?"Hospitality operations":tab}</h1></div><div className="platform-actions">{canManage&&<Link className="button button-ghost" href="/dashboard/settings?workspace=operations">Configure modules</Link>}<button className="button button-ghost" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button></div></header>
  <nav className="platform-tabs" aria-label="Hotel modules">{tabs.filter(t=>canManage||t!=="Cost controls").map(t=><button key={t} aria-current={t===tab?"page":undefined} onClick={()=>setTab(t)}>{t}</button>)}</nav>
  {!canManage&&<p className="platform-notice">Read-only access to your assigned properties. Operational changes and financial records are administrator-only.</p>}

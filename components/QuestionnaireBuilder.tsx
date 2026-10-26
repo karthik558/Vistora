@@ -490,8 +490,8 @@ export default function QuestionnaireBuilder() {
               width: "38px",
               height: "38px",
               borderRadius: "8px",
-              background: "var(--sage-deep)",
-              color: "#fff",
+              background: "var(--sage-soft)",
+              color: "var(--sage-deep)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -943,8 +943,8 @@ export default function QuestionnaireBuilder() {
                   {Object.keys(translationsMap).length > 0 && (
                     <span
                       style={{
-                        background: "var(--sage)",
-                        color: "#fff",
+                        background: "var(--sage-soft)",
+                        color: "var(--sage-deep)",
                         borderRadius: "6px",
                         fontSize: "9px",
                         padding: "1px 6px",
@@ -1134,8 +1134,8 @@ export default function QuestionnaireBuilder() {
                             style={{
                               border: "1px solid",
                               borderColor: isCurrent ? "var(--sage)" : "var(--line-strong)",
-                              background: isCurrent ? "var(--sage)" : "var(--canvas-alt)",
-                              color: isCurrent ? "#fff" : "var(--ink)",
+                              background: isCurrent ? "var(--sage-soft)" : "var(--canvas-alt)",
+                              color: isCurrent ? "var(--sage-deep)" : "var(--ink)",
                               padding: "4px 9px",
                               borderRadius: "4px",
                               fontSize: "11px",
@@ -1147,7 +1147,7 @@ export default function QuestionnaireBuilder() {
                           >
                             <span style={{ fontFamily: "var(--font-dm-mono)", fontSize: "9px", fontWeight: 700 }}>{lang.tag}</span>
                             <span>{lang.name}</span>
-                            {hasContent && <CheckCircle2 size={10} style={{ color: isCurrent ? "#fff" : "var(--sage)" }} />}
+                            {hasContent && <CheckCircle2 size={10} style={{ color: isCurrent ? "var(--sage-deep)" : "var(--sage)" }} />}
                           </button>
                         );
                       })}

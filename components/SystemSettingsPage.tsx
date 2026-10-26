@@ -137,7 +137,7 @@ export default function SystemSettingsPage({
 
   return (
     <AppShell active="Settings" user={user}>
-      <div className="content-wrap">
+      <div className="content-wrap settings-page">
         <div className="page-heading">
           <div>
             <p className="eyebrow">Enterprise Configuration</p>

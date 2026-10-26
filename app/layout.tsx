@@ -4,6 +4,7 @@ import "./globals.css";
 import "./dark-theme.css";
 import "./platform.css";
 import "./hospitality.css";
+import "./workspace-ui.css";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],

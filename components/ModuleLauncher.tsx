@@ -7,11 +7,11 @@ import {ArrowRight,Building2,MessageSquare,LogOut} from "lucide-react";
 import type {WorkspaceUser} from "./Dashboard";
 import ThemeToggle from "./ThemeToggle";
 import {useAppearance} from "./AppearanceProvider";
-import {accentTokens} from "../lib/hospitality/config";
+import {themedAccentTokens} from "../lib/hospitality/config";
 import {hasModuleAccess} from "../lib/auth/modules";
 
 export default function ModuleLauncher({user}:{user:WorkspaceUser}){
- const {config,dark}=useAppearance(),router=useRouter();
+ const {config}=useAppearance(),router=useRouter();
  const [error,setError]=useState(""),[busy,setBusy]=useState(false);
  const feedbackAccess=hasModuleAccess(user,"feedback")&&(user.isOrganizationAdmin||user.rights?.some(right=>["view_feedback","manage_complaints","manage_questionnaire","export_reports","view_audit_log"].includes(right)));
  const hotelAccess=hasModuleAccess(user,"hospitality");
@@ -26,8 +26,8 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
   <section className="module-launcher-content"><p className="eyebrow">YOUR WORKSPACE</p><h1>Choose your module</h1><p className="module-launcher-intro">Where would you like to work today?</p>
    {error&&<p role="alert">{error}</p>}
    <div className="module-launcher-grid">
-    {feedbackAccess&&<Link href={feedbackHref} className="module-launcher-card" style={accentTokens(config.colors.feedback,dark)}><div className="module-card-visual"><MessageSquare size={36} strokeWidth={1.5}/><span>GUEST EXPERIENCE</span></div><div className="module-card-copy"><h2>Feedback</h2><p>Guest feedback, ratings, analytics and service recovery.</p><span className="module-card-action">Open feedback<ArrowRight size={17}/></span></div></Link>}
-    {hotelAccess&&<Link href="/dashboard/hospitality" className="module-launcher-card" style={accentTokens(config.colors.property,dark)}><div className="module-card-visual"><Building2 size={36} strokeWidth={1.5}/><span>PROPERTY &amp; SERVICE</span></div><div className="module-card-copy"><h2>Hotel operations</h2><p>Guest stays, room readiness, service jobs and inspections.</p><span className="module-card-action">Open hotel operations<ArrowRight size={17}/></span></div></Link>}
+    {feedbackAccess&&<Link href={feedbackHref} className="module-launcher-card" style={themedAccentTokens(config.colors.feedback)}><div className="module-card-visual"><MessageSquare size={36} strokeWidth={1.5}/><span>GUEST EXPERIENCE</span></div><div className="module-card-copy"><h2>Feedback</h2><p>Guest feedback, ratings, analytics and service recovery.</p><span className="module-card-action">Open feedback<ArrowRight size={17}/></span></div></Link>}
+    {hotelAccess&&<Link href="/dashboard/hospitality" className="module-launcher-card" style={themedAccentTokens(config.colors.property)}><div className="module-card-visual"><Building2 size={36} strokeWidth={1.5}/><span>PROPERTY &amp; SERVICE</span></div><div className="module-card-copy"><h2>Hotel operations</h2><p>Guest stays, room readiness, service jobs and inspections.</p><span className="module-card-action">Open hotel operations<ArrowRight size={17}/></span></div></Link>}
    </div>
    {!feedbackAccess&&!hotelAccess&&<p className="platform-notice">No modules are assigned to your account. Contact your administrator.</p>}
   </section><footer className="module-launcher-footer">© 2026 Vistora. All rights reserved.</footer>

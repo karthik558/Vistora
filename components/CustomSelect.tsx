@@ -57,7 +57,7 @@ export default function CustomSelect({
       const shell=node.closest(".app-shell");
       const accents:Record<string,string>={};
       if(shell){const theme=getComputedStyle(shell);for(const key of ["--sage","--sage-deep","--sage-soft","--sage-hover","--module-accent"])accents[key]=theme.getPropertyValue(key);}
-      const width = Math.max(rect.width, 196);
+      const width = Math.min(Math.max(rect.width, 196),window.innerWidth-16);
       const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
       const openUp = window.innerHeight - rect.bottom < 220;
       setFloatingStyle({
@@ -68,6 +68,8 @@ export default function CustomSelect({
         left,
         width,
         right: "auto",
+        maxHeight:Math.max(100,Math.min(320,openUp?rect.top-16:window.innerHeight-rect.bottom-16)),
+        overflowY:"auto",
         zIndex: 1300,
       });
     }
@@ -81,6 +83,7 @@ export default function CustomSelect({
   }, [isOpen, floating]);
 
   useEffect(() => {
+    function handleKey(event:KeyboardEvent){if(event.key==="Escape"){setIsOpen(false);containerRef.current?.querySelector("button")?.focus();}}
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
       if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -88,9 +91,11 @@ export default function CustomSelect({
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown",handleKey);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown",handleKey);
     };
   }, [isOpen]);
 
@@ -132,7 +137,7 @@ export default function CustomSelect({
           fontFamily: "var(--font-dm-sans)",
           fontWeight: selectedOption ? 500 : 400,
           cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: isOpen ? "0 0 0 2px rgba(99, 127, 107, 0.16)" : "var(--shadow-xs)",
+          boxShadow: isOpen ? "0 0 0 2px var(--sage-soft)" : "var(--shadow-xs)",
           transition: "all 0.15s ease",
           textAlign: "left",
           outline: "none",
