@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import DashboardPageHeading from "./DashboardPageHeading";
+import {canOpenSettings,canOpenTeam,isAdministrationPath} from "../lib/auth/administration";
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -189,10 +190,11 @@ export function AppShell({
   const pathname = usePathname();
   const searchParams=useSearchParams();
   const appearance=useAppearance();
+  const isAdministration=isAdministrationPath(pathname||"");
   const workspaceArea=workspaceForPath(pathname||"",searchParams.get("workspace"));
   const sectionModule=moduleForPath(pathname||'/dashboard');
-  const activeModule=workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
-  const scopedHref=(href:string)=>workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
+  const activeModule=isAdministration?"administration":workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
+  const scopedHref=(href:string)=>!isAdministration&&workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
@@ -297,13 +299,14 @@ export function AppShell({
   const isReport = effectiveRole === "report";
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
-  const sharedNav=["Team & users","Settings","Workspace"];
+  const sharedNav=["Workspace"];
   const operationNav:NavItemConfig[]=[
     ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
     ...nav.filter(item=>["Properties",...sharedNav].includes(item.label)),
   ];
-  const moduleNav=workspaceArea==="operations"?operationNav:nav.filter(item=>!["Hotel operations","Properties"].includes(item.label));
+  const moduleNav=isAdministration?nav.filter(item=>["Team & users","Settings"].includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>!["Hotel operations","Properties","Team & users","Settings"].includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
+    if(isAdministration)return item.label==="Settings"?canOpenSettings(currentUser):canOpenTeam(currentUser);
     if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
     if(workspaceArea==="operations"&&item.href.startsWith("/dashboard/hospitality"))return hasModuleAccess(currentUser,"hospitality");
     // Super Admin holds unconditional full platform capabilities
@@ -337,7 +340,7 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
         {mobileNavOpen && (
@@ -473,7 +476,7 @@ export function AppShell({
 
         {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          <Link href="/dashboard" className="nav-item module-switch-link" title="Switch module"><LayoutDashboard size={16}/><span className="nav-label">Switch module</span></Link>
+          <Link href="/dashboard" className="nav-item module-switch-link" title={isAdministration?"Back to workspace":"Switch module"}><LayoutDashboard size={16}/><span className="nav-label">{isAdministration?"Back to workspace":"Switch module"}</span></Link>
           {visibleNav.length === 0 ? (
             <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
@@ -520,7 +523,7 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
-          {workspaceArea==="feedback"&&<Link
+          {!isAdministration&&workspaceArea==="feedback"&&<Link
             href="/feedback"
             className="sidebar-guest-link"
             onClick={() => setMobileNavOpen(false)}
@@ -607,7 +610,7 @@ export function AppShell({
                 {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
               </button>
               <div className="breadcrumbs">
-                <span>{workspaceArea==="operations"?"Hotel operations":"Feedback"}</span>
+                <span>{isAdministration?"Workspace administration":workspaceArea==="operations"?"Hotel operations":"Feedback"}</span>
                 <b>/</b>
                 <strong>{active}</strong>
               </div>
@@ -615,7 +618,7 @@ export function AppShell({
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <ThemeToggle />
-              {workspaceArea==="feedback"&&<NotificationCenter />}
+              {!isAdministration&&workspaceArea==="feedback"&&<NotificationCenter />}
             </div>
           </div>
         </header>
@@ -624,9 +627,9 @@ export function AppShell({
 
       {/* Mobile navigation stays inside the selected workspace. */}
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
-        {(workspaceArea==="operations"?visibleNav.slice(0,4):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
+        {(isAdministration?visibleNav:workspaceArea==="operations"?visibleNav.slice(0,4):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
-          const selected=pathname===item.href.split("?")[0]&&(workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
+          const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
           return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>

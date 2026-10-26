@@ -20,6 +20,18 @@ test("Explicit module grants can revoke feedback while preserving existing users
  assert.deepEqual(effectiveModuleRights(hotelOnly,true),hotelOnly);
  assert.equal(hasModuleAccess({rights:["module_access:configured"]},"feedback"),false);
 });
+const {canOpenTeam,canOpenSettings,isAdministrationPath}=require("../lib/auth/administration.ts");
+test("Shared administration links preserve existing rights independently of module grants",()=>{
+ for(const user of [null,{rights:[]},{rights:["module:hospitality"]},{rights:["module:feedback"]}]){
+  assert.equal(canOpenTeam(user),false);assert.equal(canOpenSettings(user),false);
+ }
+ assert.equal(canOpenTeam({rights:["manage_users"]}),true);
+ assert.equal(canOpenSettings({rights:["manage_settings"]}),false);
+ assert.equal(canOpenTeam({isOrganizationAdmin:true}),true);
+ assert.equal(canOpenSettings({isOrganizationAdmin:true}),true);
+ for(const path of ["/dashboard/users","/dashboard/settings","/dashboard/users/member"])assert.equal(isAdministrationPath(path),true);
+ for(const path of ["/dashboard/overview","/dashboard/hospitality","/dashboard/settings-other"])assert.equal(isAdministrationPath(path),false);
+});
 const {validateHospitality,DEFAULT_HOSPITALITY,moneyToMinor,accentTokens,themedAccentTokens,contrastRatio,workspaceForPath,sidebarTokens}=require("../lib/hospitality/config.ts");
 test("Module routing preserves the hotel workspace on shared pages and distinguishes sidebar palettes",()=>{
  assert.equal(workspaceForPath("/dashboard/hospitality"),"operations");

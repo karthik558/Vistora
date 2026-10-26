@@ -28,6 +28,18 @@ html[data-theme="dark"] .module-launcher-header img:not([src*="white"]){filter:b
 .module-card-copy p{font-size:13px;line-height:1.7;color:var(--muted);max-width:290px;margin:0 0 28px}
 .module-card-action{display:flex;align-items:center;justify-content:space-between;gap:15px;font-size:12px;font-weight:600;color:var(--module-accent);margin-top:auto}
 .module-launcher-footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+.launcher-administration{margin-top:28px;padding-top:24px;border-top:1px solid var(--line)}
+.launcher-administration>h2{font-size:14px;font-weight:600;margin:0 0 14px}
+.launcher-administration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.launcher-administration-card{display:flex;align-items:center;gap:14px;padding:18px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:5px;text-decoration:none;transition:background .18s,border-color .18s}
+.launcher-administration-card:hover{background:var(--canvas-alt);border-color:var(--line-strong)}
+.launcher-administration-card:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.launcher-administration-card>svg{flex-shrink:0;color:var(--muted)}
+.launcher-administration-card>svg:last-child{margin-left:auto}
+.launcher-administration-card>div{min-width:0}
+.launcher-administration-card h3{font-size:13px;font-weight:600;margin:0 0 6px}
+.launcher-administration-card p{font-size:12px;line-height:1.6;color:var(--muted);margin:0;overflow-wrap:anywhere}
+@media(max-width:600px){.launcher-administration-grid{grid-template-columns:minmax(0,1fr)}.launcher-administration-card{padding:16px}}
 @media(max-width:600px){.module-launcher-header{padding:18px 20px}.module-launcher-header>div>span{display:none}.module-launcher-content{padding:42px 20px}.module-launcher-grid{grid-template-columns:minmax(0,1fr);gap:18px}.module-card-visual{min-height:120px;padding:24px;gap:20px}.module-card-copy{padding:24px}.module-card-copy p{max-width:none}.module-launcher-content h1{letter-spacing:-.6px}}
 @media(prefers-reduced-motion:reduce){.module-launcher-card{transition:none}.module-launcher-card:hover{transform:none}}
 .app-shell[data-module] .eyebrow{color:var(--module-accent)}
