@@ -40,6 +40,7 @@ import PropertyFilter from "./PropertyFilter";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
+import ThemeToggle from "./ThemeToggle";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import {
   FeedbackTrendChart,
@@ -221,12 +222,12 @@ export function AppShell({
 
   useEffect(() => {
     // Authenticated workspace theme sync & keyboard toggle
-    if (typeof window !== "undefined") {
+    try {
       const savedTheme = localStorage.getItem("vistora-theme");
-      if (savedTheme === "dark") {
-        document.documentElement.setAttribute("data-theme", "dark");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        document.documentElement.setAttribute("data-theme", savedTheme);
       }
-    }
+    } catch { }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -586,6 +587,7 @@ export function AppShell({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <ThemeToggle />
               <NotificationCenter />
             </div>
           </div>

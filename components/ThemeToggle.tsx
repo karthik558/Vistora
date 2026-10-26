@@ -9,19 +9,19 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true);
-    const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
-    if (current === "dark" || current === "light") {
-      setTheme(current);
-    } else {
-      const saved = localStorage.getItem("vistora-theme") as "light" | "dark";
-      if (saved === "dark" || saved === "light") {
-        setTheme(saved);
-        document.documentElement.setAttribute("data-theme", saved);
-      } else {
-        setTheme("light");
-        document.documentElement.setAttribute("data-theme", "light");
-      }
-    }
+    const syncTheme = () => setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key !== "vistora-theme") return;
+      document.documentElement.setAttribute("data-theme", event.newValue === "dark" ? "dark" : "light");
+    };
+    window.addEventListener("storage", syncStorage);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", syncStorage);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -52,6 +52,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggleTheme}
       className="topbar-icon-btn theme-toggle-btn"
+      aria-pressed={theme === "dark"}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       style={{
@@ -69,7 +70,7 @@ export default function ThemeToggle() {
       }}
     >
       {theme === "dark" ? (
-        <Sun size={17} strokeWidth={1.8} style={{ color: "var(--warm)" }} />
+        <Sun size={17} strokeWidth={1.8} />
       ) : (
         <Moon size={17} strokeWidth={1.8} style={{ color: "var(--ink)" }} />
       )}
