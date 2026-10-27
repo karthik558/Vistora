@@ -10,9 +10,13 @@
     "test": "node --test tests/platform.test.cjs",
     "test:database": "node tests/workspace-database.test.mjs",
     "test:hospitality": "node tests/hospitality-database.test.mjs",
-    "test:routing": "node tests/role-mapping-database.test.mjs"
+    "test:routing": "node tests/role-mapping-database.test.mjs",
+    "test:complaints": "node tests/complaint-escalation-database.test.mjs"
   },
   "dependencies": {
+    "@fontsource/dm-mono": "5.3.0",
+    "@fontsource/dm-sans": "5.3.0",
+    "@fontsource/playfair-display": "5.3.0",
     "@supabase/supabase-js": "^2.118.0",
     "@types/qrcode": "^1.5.6",
     "framer-motion": "^14.6.0",

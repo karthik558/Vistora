@@ -11,7 +11,7 @@ SELECT create_company(outsider,'Other company','routing-other-'||outsider) FROM 
 ALTER TABLE routing_fixture ADD COLUMN org uuid;
 UPDATE routing_fixture SET org=(SELECT organization_id FROM organization_members WHERE user_id=owner);
 INSERT INTO properties(id,organization_id,name,slug,code,location,country) SELECT property,org,'Routing hotel','routing','ROUTE','Test','India' FROM routing_fixture UNION ALL SELECT other_property,org,'Second hotel','routing-2','ROUTE2','Test','India' FROM routing_fixture;
-SELECT provision_workspace_user(staff,org,'routing-staff@test.local','Duty Manager',false,ARRAY[property],ARRAY['module_access:configured','module:feedback','module:hospitality','view_feedback','manage_complaints']) FROM routing_fixture;
+SELECT provision_workspace_user(staff,org,'routing-staff@test.local','Duty Manager',false,ARRAY[property],ARRAY['module_access:configured','module:feedback','module:hospitality','manage_service_jobs','view_feedback','manage_complaints']) FROM routing_fixture;
 INSERT INTO role_mappings(organization_id,module,country,role_name,assignee_id) SELECT org,'feedback','','Company owner',owner FROM routing_fixture;
 INSERT INTO role_mappings(organization_id,module,country,department,role_name,assignee_id) SELECT org,'feedback','India','Front Desk','India head',owner FROM routing_fixture;
 INSERT INTO role_mappings(organization_id,module,property_id,department,role_name,assignee_id) SELECT org,'feedback',property,'Front Desk','Duty manager',staff FROM routing_fixture;

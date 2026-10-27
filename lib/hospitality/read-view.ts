@@ -8,6 +8,8 @@ export async function hotelReadView(request:NextRequest){
  if(access.error?.code==="PGRST202"||access.error?.code==="42883")throw new PlatformError("Module access setup is pending. Apply section 25 in supabase/schema.sql.",503);
  if(!checked(access))throw new PlatformError("Hotel operations module access required.",403);
  if(request.nextUrl.searchParams.has("stayLink"))throw new PlatformError("Feedback link access requires a company administrator.",403);
+ const readiness=await db.rpc("complaint_schema_ready");
+ if(request.nextUrl.searchParams.get("complaints")==="true"&&(readiness.error||readiness.data!==true))throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
  const property=request.nextUrl.searchParams.get("property")||"all",view=request.nextUrl.searchParams.get("jobs")||"active";
  if(!["active","closed"].includes(view))throw new PlatformError("Choose a valid job view.");
  const scoped=(query:any)=>property==="all"?query:query.eq("property_id",property);
@@ -16,7 +18,7 @@ export async function hotelReadView(request:NextRequest){
   db.from("properties").select("id,name,is_active").order("name"),
   scoped(db.from("hotel_rooms").select("*").order("room_number").limit(200)),
   scoped(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,guests(full_name)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100)),
-  scoped(db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").in("status",view==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:view==="active"}).limit(100)),
+  scoped((request.nextUrl.searchParams.get("complaints")==="true"?db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").not("issue_type","is",null):db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)")).in("status",view==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:view==="active"}).limit(100)),
   scoped(db.from("room_inspections").select("*").order("created_at",{ascending:false}).limit(100)),
   Promise.all([
    scoped(db.from("hotel_rooms").select("id",{count:"exact",head:true})),
@@ -29,5 +31,5 @@ export async function hotelReadView(request:NextRequest){
  const visibleStays=checked(stays) as any[],guestIds=[...new Set(visibleStays.map((stay:any)=>stay.guest_id))];
  const guests=user.rights.includes("view_guest_pii")&&guestIds.length?checked(await db.from("guests").select("id,full_name,email,phone,vip_tier,preferences,created_at").in("id",guestIds).order("created_at",{ascending:false}).limit(100)):[];
  const search=(request.nextUrl.searchParams.get("search")||"").trim().toLowerCase().slice(0,100);
- return NextResponse.json({success:true,canManage:false,properties:checked(properties),rooms:checked(rooms),stays:visibleStays,jobs:checked(jobs),inspections:checked(inspections),guests:guests.filter(guest=>!search||guest.full_name.toLowerCase().includes(search)),costs:[],activity:[],budget:null,team:[],feedback:[],metrics:{guests:null,pendingCosts:null,...Object.fromEntries(["rooms","inHouse","roomsNeedService","openJobs"].map((key,i)=>[key,counts[i].count]))}},{headers:{"Cache-Control":"private, no-store"}});
+ return NextResponse.json({success:true,canManage:false,complaintsReady:readiness.data===true,properties:checked(properties),rooms:checked(rooms),stays:visibleStays,jobs:checked(jobs),inspections:checked(inspections),guests:guests.filter(guest=>!search||guest.full_name.toLowerCase().includes(search)),costs:[],activity:[],budget:null,team:[],feedback:[],metrics:{guests:null,pendingCosts:null,...Object.fromEntries(["rooms","inHouse","roomsNeedService","openJobs"].map((key,i)=>[key,counts[i].count]))}},{headers:{"Cache-Control":"private, no-store"}});
 }

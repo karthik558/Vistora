@@ -7,6 +7,7 @@ export const PATCH=withWorkspace(async(request:NextRequest,{params}:{params:Prom
  const current=checked(await db.from("feedback").select("*").eq("id",id).single());
  const updates:Record<string,unknown>={};
  if(body.status!==undefined){if(!["needs_attention","under_review","escalated","resolved"].includes(body.status))throw new PlatformError("Invalid status.");updates.status=body.status;}
+ if(body.acknowledge===true)updates.first_response_at=current.first_response_at||new Date().toISOString();
  if(body.notes!==undefined)updates.resolution_notes=text(body.notes,"Resolution notes",4000,false);
  if(body.assignedTo!==undefined) {
    const name=text(body.assignedTo,"Assignee",200,false);

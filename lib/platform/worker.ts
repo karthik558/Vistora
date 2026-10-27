@@ -8,6 +8,8 @@ export async function runWorker(org?:string) {
  checked({data:true,error:(await db.rpc("schedule_workspace_work",{p_org:org||null})).error});
  const hotelSchedule=await db.rpc("schedule_hotel_work",{p_org:org||null});
  if(!hotelSchedule.error||!["42883","PGRST202"].includes(hotelSchedule.error.code))checked({data:true,error:hotelSchedule.error});
+ const escalations=await db.rpc("advance_role_escalations",{p_org:org||null});
+ if(!escalations.error||!["42883","PGRST202"].includes(escalations.error.code))checked({data:true,error:escalations.error});
  const jobs=checked(await db.rpc("claim_workspace_jobs",{p_org:org||null,p_limit:5})),results=[];
  for(const job of jobs) {
   let status="retry",detail="";
@@ -22,6 +24,20 @@ export async function runWorker(org?:string) {
   }
   try {
    const payload={...job.payload};
+   if(job.kind==="role_assignment"){
+    if(!["feedback","hospitality"].includes(payload.module)){status="failed";throw new Error("Invalid assignment channel.");}
+    const table=payload.module==="feedback"?"feedback":"service_jobs";
+    const result=await db.from(table).select(payload.module==="feedback"?"status,assigned_user_id,escalation_level,routing_cycle,property_id,department":"status,assigned_to,escalation_level,routing_cycle,property_id,department").eq("id",payload.recordId).eq("organization_id",job.organization_id).maybeSingle();
+    if(result.error)throw new Error(result.error.message);
+    const row=result.data;
+    const currentOwner=row&&("assigned_user_id" in row?row.assigned_user_id:row.assigned_to);
+    if(!row||["resolved","completed","cancelled"].includes(row.status)||currentOwner!==payload.assignedUserId||row.escalation_level!==payload.level||row.routing_cycle!==payload.cycle){status="failed";throw new Error("Assignment changed or work closed; notification cancelled.");}
+    const eligible=await db.rpc("role_member_eligible",{p_user:payload.assignedUserId,p_org:job.organization_id,p_property:row.property_id,p_module:payload.module,p_department:row.department});
+    if(!checked(eligible)){status="failed";throw new Error("Assignment owner no longer has access; notification cancelled.");}
+    const owner=checked(await db.from("profiles").select("email").eq("id",payload.assignedUserId).eq("organization_id",job.organization_id).single());
+    payload.recipient=owner.email;
+    if(process.env.APP_URL)payload.link=process.env.APP_URL.replace(/\/$/,"")+(payload.module==="feedback"?"/dashboard/complaints":"/dashboard/hospitality?section=Complaints");
+   }
    if(job.kind==="operations_alert") {
     const record=await db.from("service_jobs").select("status").eq("id",payload.jobId).eq("organization_id",job.organization_id).maybeSingle();
     if(record.error)throw new Error(record.error.message);

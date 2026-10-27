@@ -301,7 +301,7 @@ export function AppShell({
 
   const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
-    ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
+    ...["Overview","Guests","Rooms","Complaints","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {

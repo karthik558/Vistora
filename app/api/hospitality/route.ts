@@ -6,6 +6,8 @@ import {hospitalityConfig,moneyToMinor} from "../../../lib/hospitality/config";
 import {newToken} from "../../../lib/platform/secrets";
 import {logAuditEvent} from "../../../lib/services/auditLogService";
 import {hasModuleAccess} from "../../../lib/auth/modules";
+import {canManageServiceJobs} from "../../../lib/operations/access";
+import {COMPLAINT_ISSUES,OPERATIONS_DEPARTMENTS} from "../../../lib/operations/complaints";
 import {hotelReadView} from "../../../lib/hospitality/read-view";
 
 function admin(){if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Company administrator access required.",403);}
@@ -32,6 +34,8 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
   await logAuditEvent({actorName:user.fullName,actorEmail:user.email,actorRole:user.role,action:"Stay feedback link accessed",category:"pii_access",resource:stay.id});
   return NextResponse.json({success:true,path:"/feedback/"+stay.public_token},{headers:{"Cache-Control":"private, no-store"}});
  }
+ const readiness=await db.rpc("complaint_schema_ready");
+ if(request.nextUrl.searchParams.get("complaints")==="true"&&(readiness.error||readiness.data!==true))throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
  const propertyId=request.nextUrl.searchParams.get("property")||"all";
  if(propertyId!=="all")checked(await db.from("properties").select("id").eq("id",propertyId).single());
  const month=request.nextUrl.searchParams.get("month")||new Date().toISOString().slice(0,7);
@@ -56,7 +60,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
   guestsQuery,
   list(db.from("hotel_rooms").select("*").order("room_number").limit(200),propertyId),
   list(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,guests(full_name),feedback(id,rating,status)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100),propertyId),
-  list(db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").in("status",jobView==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:jobView==="active"}).limit(100),propertyId),
+  list((request.nextUrl.searchParams.get("complaints")==="true"?db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").not("issue_type","is",null):db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)")).in("status",jobView==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:jobView==="active"}).limit(100),propertyId),
   list(db.from("room_inspections").select("*").order("created_at",{ascending:false}).limit(100),propertyId),
   list(db.from("operating_costs").select("*").gte("expense_date",month+"-01").lt("expense_date",new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,10)).order("created_at",{ascending:false}).limit(100),propertyId),
   db.from("hotel_activity").select("*").order("created_at",{ascending:false}).limit(50),
@@ -66,10 +70,21 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  ]);
  const memberRows=checked(members);
  const team=memberRows.length?checked(await db.from("profiles").select("id,full_name,property_id,property_ids").in("id",memberRows.map(m=>m.user_id))):[];
- return NextResponse.json({success:true,metrics,config,properties:checked(properties),guests:checked(guests),rooms:checked(rooms),stays:checked(stays),jobs:checked(jobs),inspections:checked(inspections),costs:checked(costs),activity:checked(activity),budget:checked(budget),feedback:checked(feedback),team:team.map(p=>({...p,isAdmin:memberRows.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
+ return NextResponse.json({success:true,metrics,config,complaintsReady:readiness.data===true,properties:checked(properties),guests:checked(guests),rooms:checked(rooms),stays:checked(stays),jobs:checked(jobs),inspections:checked(inspections),costs:checked(costs),activity:checked(activity),budget:checked(budget),feedback:checked(feedback),team:team.map(p=>({...p,isAdmin:memberRows.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
- admin();const b=await request.json(),db=workspaceDb(),user=workspaceUser(),config=hospitalityConfig((await getApplicationSettings()).hospitality);
+ const b=await request.json(),db=workspaceDb(),user=workspaceUser();
+ if(b.action==="complaint"){
+  if(!canManageServiceJobs(user))throw new PlatformError("Complaint intake requires hotel operations permission.",403);
+  const ready=await db.rpc("complaint_schema_ready");if(ready.error||ready.data!==true)throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
+  const issue=COMPLAINT_ISSUES.find(i=>i.id===b.issue_type);if(!issue)throw new PlatformError("Choose a valid issue.");
+  const department=issue.id==="other"?text(b.department,"Department",80):issue.department;
+  if(!OPERATIONS_DEPARTMENTS.includes(department as any))throw new PlatformError("Choose a valid department.");
+  if(!["low","normal","high","critical"].includes(b.priority||"normal")||!["staff","front_desk","phone","guest_request"].includes(b.intake_channel||"staff"))throw new PlatformError("Invalid priority or intake channel.");
+  const id=checked(await db.rpc("submit_service_complaint",{p_complaint:{property_id:text(b.property_id,"Property",50),issue_type:issue.id,department,title:text(b.title||issue.label,"Complaint title",160),location:text(b.location,"Room / location",100),description:text(b.description,"Details",2000,false),priority:b.priority||"normal",intake_channel:b.intake_channel||"staff"}}));
+  return NextResponse.json({success:true,result:{id}},{status:201});
+ }
+ admin();const config=hospitalityConfig((await getApplicationSettings()).hospitality);
  const modules:Record<string,keyof typeof config.modules>={guest:"guests",room:"property",stay:"guests",job:"operations",inspection:"compliance",cost:"operations"};
  const module=modules[b.action];if(!module)throw new PlatformError("Unknown operation.");
  if(!config.modules[module])throw new PlatformError("This module is disabled in Settings.",403);
@@ -106,7 +121,17 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json({success:true,result},{status:201});
 });
 export const PATCH=withWorkspace(async(request:NextRequest)=>{
- admin();const b=await request.json(),db=workspaceDb(),config=hospitalityConfig((await getApplicationSettings()).hospitality);
+ const b=await request.json(),db=workspaceDb();
+ if(!workspaceUser().isOrganizationAdmin){
+  if(!canManageServiceJobs(workspaceUser())||b.action!=="job"||Object.keys(b).some(k=>!["action","id","status","acknowledge"].includes(k)))throw new PlatformError("You may only attend your assigned service jobs.",403);
+  const current=checked(await db.from("service_jobs").select("id,assigned_to,status,acknowledged_at").eq("id",text(b.id,"Job",50)).single());
+  if(current.assigned_to!==workspaceUser().id||!["open","in_progress"].includes(current.status))throw new PlatformError("This job is not assigned to you or is already closed.",403);
+  if(b.status!==undefined&&!["in_progress","completed"].includes(b.status))throw new PlatformError("Choose start or complete.");
+  if(b.status===undefined&&b.acknowledge!==true)throw new PlatformError("No attendance action supplied.");
+  const updates:Record<string,unknown>={};if(b.status)updates.status=b.status;if(b.acknowledge===true)updates.acknowledged_at=current.acknowledged_at||new Date().toISOString();
+  const result=checked(await db.from("service_jobs").update(updates).eq("id",current.id).select("id").single());return NextResponse.json({success:true,result});
+ }
+ admin();const config=hospitalityConfig((await getApplicationSettings()).hospitality);
  const modules:Record<string,keyof typeof config.modules>={guest:"guests",room:"property",stay:"guests",job:"operations",cost:"operations"};
  const module=modules[b.action];if(!module||!config.modules[module])throw new PlatformError("This module is disabled or unknown.",403);
  let table="",updates:Record<string,unknown>={};
@@ -121,6 +146,7 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
   table="service_jobs";
   if(b.status!==undefined){if(!["open","in_progress","completed","cancelled"].includes(b.status))throw new PlatformError("Invalid job status.");updates.status=b.status;}
   if(b.assigned_to!==undefined)updates.assigned_to=b.assigned_to||null;
+  if(b.acknowledge===true)updates.acknowledged_at=new Date().toISOString();
   if(!Object.keys(updates).length)throw new PlatformError("No changes supplied.");
  }else if(b.action==="cost"){
   table="operating_costs";if(!["approved","rejected"].includes(b.status))throw new PlatformError("Choose approve or reject.");updates={status:b.status};

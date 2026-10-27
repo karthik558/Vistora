@@ -229,3 +229,32 @@ test("SLA compliance uses recorded responses and deadlines, including rating 3 a
  assert.equal(result.evaluated,3);assert.equal(result.rate,33);assert.equal(result.nextDeadline,'2026-10-27T11:00:00.000Z');
  assert.equal(responseCompliance([{...row,deadline:'2026-10-27T13:00:00Z'}],now).rate,null);
 });
+test("Operational write permission requires both the hotel module and the explicit service-work right",()=>{
+ const {canManageServiceJobs}=require('../lib/operations/access.ts');
+ assert.equal(canManageServiceJobs({rights:['module:hospitality']}),false);
+ assert.equal(canManageServiceJobs({rights:['manage_service_jobs']}),false);
+ assert.equal(canManageServiceJobs({rights:['module:hospitality','manage_service_jobs']}),true);
+ assert.equal(canManageServiceJobs({isOrganizationAdmin:true,rights:[]}),true);
+});
+test("Complaint API routes issues to their catalogue department and delegates authorization to the transactional RPC",async()=>{
+ const db=require('../lib/platform/db.ts'),route=require('../app/api/hospitality/route.ts'),{NextRequest}=require('next/server');const original=db.sessionDb;let saved;
+ const client={rpc:async(name,args)=>{if(name==='complaint_schema_ready')return {data:true,error:null};assert.equal(name,'submit_service_complaint');saved=args.p_complaint;return {data:'complaint-id',error:null};},from(){throw new Error('Intake bypassed the protected RPC');}};
+ const user={id:'reporter',organizationId:'org',isOrganizationAdmin:false,rights:['module:hospitality','manage_service_jobs']};db.sessionDb=()=>client;
+ try{
+  const response=await db.workspaceContext.run({user,client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',body:JSON.stringify({action:'complaint',property_id:'hotel',issue_type:'wifi',department:'Engineering',location:'Room 101'})})));
+  assert.equal(response.status,201);assert.equal(saved.department,'IT');assert.equal(saved.issue_type,'wifi');assert.equal(saved.location,'Room 101');
+  const denied=await db.workspaceContext.run({user:{...user,rights:['module:hospitality']},client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',body:JSON.stringify({action:'complaint'})})));assert.equal(denied.status,403);
+ }finally{db.sessionDb=original;}
+});
+test("Assignment delivery resolves the current authorized owner's email and cancels stale ownership",async()=>{
+ const db=require('../lib/platform/db.ts'),email=require('../lib/platform/email.ts'),{runWorker}=require('../lib/platform/worker.ts');
+ const originalDb=db.serviceDb,originalSend=email.sendEmail,env={...process.env};let owner='junior',finished,sent,eligible=true;
+ const job={id:'assignment',organization_id:'org',kind:'role_assignment',lease_token:'lease',payload:{module:'hospitality',recordId:'case',assignedUserId:'junior',level:0,cycle:'cycle'}};
+ db.serviceDb=()=>({rpc:async(name,args)=>{if(name==='claim_workspace_jobs')return {data:[job],error:null};if(name==='role_member_eligible')return {data:eligible,error:null};if(name==='finish_workspace_job'){finished=args;return {data:true,error:null};}return {data:0,error:null};},from(table){const q={select(){return q;},eq(){return q;},maybeSingle:async()=>({data:{status:'open',assigned_to:owner,escalation_level:0,routing_cycle:'cycle',property_id:'hotel',department:'IT'},error:null}),single:async()=>({data:table==='profiles'?{email:'junior@example.test'}:{status:finished.p_status},error:null})};return q;}});
+ process.env.RESEND_API_KEY='test';process.env.MAIL_FROM='ops@example.test';email.sendEmail=async(kind,payload)=>{sent={kind,payload};return 202;};
+ try{
+  assert.equal((await runWorker('org'))[0].status,'delivered');assert.equal(sent.payload.recipient,'junior@example.test');assert.equal(sent.kind,'role_assignment');
+  sent=null;owner='senior';assert.equal((await runWorker('org'))[0].status,'failed');assert.equal(sent,null);
+  owner='junior';eligible=false;assert.equal((await runWorker('org'))[0].status,'failed');assert.equal(sent,null);
+ }finally{db.serviceDb=originalDb;email.sendEmail=originalSend;for(const key of Object.keys(process.env))if(!(key in env))delete process.env[key];Object.assign(process.env,env);}
+});

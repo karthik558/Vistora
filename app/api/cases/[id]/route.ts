@@ -3,7 +3,7 @@ import {withWorkspace,text} from "../../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,serviceDb,PlatformError} from "../../../../lib/platform/db";
 import {randomUUID} from "node:crypto";
 type Context={params:Promise<{id:string}>};
-async function caseRow(id:string){return checked(await workspaceDb().from("feedback").select("id,organization_id,property_id,status,priority,category,sla_deadline,assigned_to,resolution_notes").eq("id",id).single());}
+async function caseRow(id:string){return checked(await workspaceDb().from("feedback").select("*").eq("id",id).single());}
 export const GET=withWorkspace(async(request:NextRequest,{params}:Context)=>{
  const {id}=await params;const record=await caseRow(id),db=workspaceDb();
  const comments=checked(await db.from("feedback_comments").select("id,body,created_at,author_id,profiles!author_id(full_name)").eq("feedback_id",id).order("created_at"));
@@ -20,7 +20,7 @@ export const GET=withWorkspace(async(request:NextRequest,{params}:Context)=>{
  }
  const members=checked(await db.from("organization_members").select("user_id").eq("is_active",true));
  const team=members.length?checked(await db.from("profiles").select("id,full_name,property_id,property_ids,role").in("id",members.map(m=>m.user_id))):[];
- return NextResponse.json({success:true,record,team:team.filter(p=>p.role==="admin"||p.property_id===record.property_id||p.property_ids?.includes(record.property_id)).map(p=>p.full_name),comments,activity,attachments},{headers:{"Cache-Control":"no-store"}});
+ return NextResponse.json({success:true,record,canReassign:workspaceUser().isOrganizationAdmin||!record.routing_rule_id,team:team.filter(p=>p.role==="admin"||p.property_id===record.property_id||p.property_ids?.includes(record.property_id)).map(p=>p.full_name),comments,activity,attachments},{headers:{"Cache-Control":"no-store"}});
 },"manage_complaints");
 export const POST=withWorkspace(async(request:NextRequest,{params}:Context)=>{
  const {id}=await params,row=await caseRow(id),user=workspaceUser(),db=workspaceDb();

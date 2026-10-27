@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
+import {Star} from "lucide-react";
 import Link from "next/link";
 import { DepartmentType } from "../types/database";
 import { GuestStayDetails } from "../types/experience";
@@ -323,26 +324,24 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             )}
           </div>
 
-          {!activeQuestions.some(q=>q.question_type==="nps")&&<fieldset><legend>How likely are you to recommend us?</legend><p className="guest-helper">Optional · 0 = not at all likely, 10 = extremely likely</p><div className="nps-input">{Array.from({length:11},(_,n)=><button type="button" key={n} aria-pressed={recommendationScore===n} onClick={()=>setRecommendationScore(recommendationScore===n?null:n)}>{n}</button>)}</div></fieldset>}
+          {!activeQuestions.some(q=>q.question_type==="nps")&&<fieldset className="guest-recommendation"><legend>Would you recommend your stay? <span>Optional</span></legend><div className="nps-input" role="group" aria-label="Recommendation score, 0 to 10">{Array.from({length:11},(_,n)=><button type="button" key={n} aria-pressed={recommendationScore===n} onClick={()=>setRecommendationScore(recommendationScore===n?null:n)} aria-label={`${n} out of 10`}>{n}</button>)}</div><div className="guest-score-ends"><span>Not likely</span><span>Extremely likely</span></div></fieldset>}
           {/* Rating */}
           <fieldset>
             <legend>How would you rate your experience overall?</legend>
-            <div className="rating-grid">
+            <div className="guest-star-rating" role="group" aria-label="Overall star rating">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
                   type="button"
                   key={value}
-                  className={`rating-button ${rating === value ? "selected" : ""}`}
+                  className={`guest-star-button ${rating!==null&&value<=rating?"filled":""}`}
+                  aria-pressed={rating===value}
                   onClick={() => setRating(value)}
                   aria-label={`${value} out of 5`}
                 >
-                  {value}
-                  <small>
-                    {value === 1 ? "Needs work" : value === 2 ? "Fair" : value === 3 ? "Good" : value === 4 ? "Very good" : "Exceptional"}
-                  </small>
+                  <Star size={32} strokeWidth={1.5} aria-hidden="true"/>
                 </button>
               ))}
-            </div>
+            </div><p className="guest-star-caption" aria-live="polite">{rating?`${rating} of 5 · ${ratingWord}`:"Tap a star to rate your stay"}</p>
           </fieldset>
 
           {/* Department / Experience Area */}

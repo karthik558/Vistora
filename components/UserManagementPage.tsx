@@ -17,6 +17,7 @@ export interface UserRight {
 }
 
 const SYSTEM_RIGHTS: UserRight[] = [
+  {id:"manage_service_jobs",name:"Hotel complaints & assigned work",description:"Log complaints in assigned properties; acknowledge, start and complete jobs assigned to you"},
   { id: "view_feedback", name: "View Guest Feedback", description: "Read reviews, ratings, and guest sentiment" },
   { id: "view_guest_pii", name: "View Unmasked Guest PII (GDPR)", description: "Reveal guest phone numbers and email addresses (audit logged)" },
   { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
@@ -31,6 +32,8 @@ const SYSTEM_RIGHTS: UserRight[] = [
 
 const HOTEL_DEPARTMENTS = [
   "All Departments",
+  "IT",
+  "Engineering",
   "Food & Beverage",
   "Housekeeping",
   "Front Desk",
