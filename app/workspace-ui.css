@@ -90,3 +90,41 @@ html[data-theme="dark"] .app-shell :is(.drawer-close,.drawer-close:hover){backgr
  .app-shell .invitation-search,.app-shell .invitation-filters{min-width:0!important;width:100%}
  .app-shell :is(.form-card-actions,.filter-controls-row){flex-wrap:wrap}
 }
+
+/* Administration uses the same panel rhythm and controls as guest feedback. */
+.app-shell[data-workspace="administration"] :is(.platform-card,.platform-toolbar,.routing-intro){border-radius:14px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow-xs);padding:22px;margin-bottom:18px}
+.app-shell[data-workspace="administration"] :is(.platform-heading h2,.platform-card>h2,.routing-intro h2){font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.5;margin-bottom:5px}
+.app-shell[data-workspace="administration"] .platform-heading{align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.app-shell[data-workspace="administration"] .platform-fields{max-width:none;gap:16px;margin:18px 0 22px}
+.app-shell[data-workspace="administration"] :is(.platform-fields,.routing-stage) label{font-size:11px;font-weight:500;gap:8px;color:var(--ink-light)}
+.app-shell[data-workspace="administration"] :is(.platform-fields,.routing-stage) :is(input:not([type="hidden"]):not([type="checkbox"]),textarea){min-height:40px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:var(--panel);font-size:12px;color:var(--ink)}
+.app-shell[data-workspace="administration"] .workspace-select .custom-select-trigger{min-height:40px!important;padding:9px 12px!important;border-radius:5px!important;box-shadow:var(--shadow-xs)}
+.app-shell[data-workspace="administration"] .platform-tabs{gap:6px;margin-bottom:22px;padding-bottom:10px;scrollbar-width:none}
+.app-shell[data-workspace="administration"] .platform-tabs button{min-height:38px;padding:8px 14px;font-weight:500;border-radius:5px}
+.app-shell[data-workspace="administration"] .platform-tabs button[aria-current]{color:var(--sage-deep);background:var(--sage-soft);border-color:var(--line)}
+.app-shell[data-workspace="administration"] .routing-stage{background:var(--canvas);border-radius:8px;padding:20px}
+.app-shell[data-workspace="administration"] .routing-rule{border-radius:8px;background:var(--panel)}
+.app-shell[data-workspace="administration"] .routing-flow span{border-radius:5px;background:var(--canvas);font-weight:500}
+.app-shell[data-workspace="administration"] .routing-intro>div:first-child{max-width:650px}
+.app-shell[data-workspace="administration"] .routing-intro h2{margin-top:10px}
+
+/* Mobile navigation is a drawer; the desktop collapse preference never sizes it. */
+@media(max-width:768px){
+ html,body,body *{scrollbar-width:none}
+ html::-webkit-scrollbar,body::-webkit-scrollbar,.app-shell ::-webkit-scrollbar,.custom-select-popover::-webkit-scrollbar{display:none;width:0;height:0}
+ .app-shell :is(.sidebar,.sidebar-nav,.main-content,.platform-tabs,.table-shell,.platform-table,.table-wrap,.detail-drawer,.workspace-modal),.custom-select-popover{scrollbar-width:none;-ms-overflow-style:none}
+ .app-shell .sidebar{width:280px!important;max-width:86vw;height:100dvh;visibility:hidden;pointer-events:none;overscroll-behavior:contain;transition:transform .28s cubic-bezier(.16,1,.3,1),visibility 0s .28s}
+ .app-shell .sidebar.mobile-open{visibility:visible;pointer-events:auto;transform:translateX(0);transition-delay:0s,0s}
+ .app-shell .sidebar .sidebar-favi-toggle,.app-shell .sidebar .sidebar-collapsed-header{display:none!important}
+ .app-shell .sidebar .sidebar-brand-row{justify-content:space-between;padding:0 4px 20px}
+ .app-shell .sidebar .brand-full{display:flex!important}
+ .app-shell .sidebar .sidebar-close-btn{display:inline-flex!important;flex:0 0 36px;width:36px!important;height:36px!important}
+ .app-shell .main-content{width:100%;margin-left:0;min-width:0}
+ .app-shell .sidebar-mobile-backdrop{touch-action:none}
+ .app-shell[data-workspace="administration"] :is(.platform-card,.platform-toolbar,.routing-intro){padding:18px 16px;border-radius:12px}
+ .app-shell[data-workspace="administration"] .routing-stage{padding:16px}
+ .app-shell[data-workspace="administration"] .routing-rule-chain{gap:12px}
+ .app-shell[data-workspace="administration"] .platform-actions{flex-wrap:wrap;gap:8px}
+ .app-shell .mobile-bottom-navbar{display:flex;overflow-x:auto;scrollbar-width:none;height:calc(60px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
+ .app-shell .mobile-bottom-navbar .mobile-nav-tab{min-width:52px;flex:1 0 52px}
+}

@@ -99,6 +99,8 @@ export default function CustomSelect({
     };
   }, [isOpen]);
 
+  useEffect(()=>{if(disabled)setIsOpen(false);},[disabled]);
+
   const selectedOption = options.find((opt) => opt.value === value);
 
   return (

@@ -1074,7 +1074,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               background: "var(--canvas)",
                             }}
                           >
-                            <label>Choose properties by country<select className="member-country-select" aria-label="Add member country properties" defaultValue="" onChange={e=>{if(e.target.value)setAddPropertyIds(properties.filter(p=>p.country===e.target.value).map(p=>p.id));}}><option value="">Choose country</option>{Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=><option key={country} value={country}>{country}</option>)}</select><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
+                            <label>Choose properties by country<CustomSelect ariaLabel="Add member country properties" value="" placeholder="Choose country" floating onChange={country=>setAddPropertyIds(properties.filter(p=>p.country===country).map(p=>p.id))} options={Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=>({value:country,label:country}))}/><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
                             {properties.map((p) => {
                               const checked = addPropertyIds.includes(p.id);
                               return (
@@ -1424,7 +1424,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               background: "var(--canvas)",
                             }}
                           >
-                            <label>Choose properties by country<select className="member-country-select" aria-label="Edit member country properties" defaultValue="" onChange={e=>{if(e.target.value)setEditPropertyIds(properties.filter(p=>p.country===e.target.value).map(p=>p.id));}}><option value="">Choose country</option>{Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=><option key={country} value={country}>{country}</option>)}</select><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
+                            <label>Choose properties by country<CustomSelect ariaLabel="Edit member country properties" value="" placeholder="Choose country" floating onChange={country=>setEditPropertyIds(properties.filter(p=>p.country===country).map(p=>p.id))} options={Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=>({value:country,label:country}))}/><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
                             {properties.map((p) => {
                               const checked = editPropertyIds.includes(p.id);
                               return (

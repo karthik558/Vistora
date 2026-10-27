@@ -4,7 +4,7 @@ import Image from "next/image";
 import DashboardPageHeading from "./DashboardPageHeading";
 import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,isAdministrationPath} from "../lib/auth/administration";
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
@@ -201,6 +201,42 @@ export function AppShell({
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile,setIsMobile]=useState(false);
+  const sidebarRef=useRef<HTMLElement>(null);
+  const mainRef=useRef<HTMLElement>(null);
+  const closeNavigationRef=useRef<HTMLButtonElement>(null);
+  const desktopSidebarCollapsed=sidebarCollapsed&&!isMobile;
+  const navigationKey=pathname+"?"+searchParams.toString();
+
+  useEffect(()=>{
+    const viewport=window.matchMedia("(max-width: 768px)");
+    const update=()=>{setIsMobile(viewport.matches);if(!viewport.matches)setMobileNavOpen(false);};
+    update();viewport.addEventListener("change",update);
+    return()=>viewport.removeEventListener("change",update);
+  },[]);
+  useEffect(()=>{setMobileNavOpen(false);},[navigationKey]);
+  useEffect(()=>{
+    if(sidebarRef.current)sidebarRef.current.inert=isMobile&&!mobileNavOpen;
+    if(mainRef.current)mainRef.current.inert=isMobile&&mobileNavOpen;
+  },[isMobile,mobileNavOpen]);
+  useEffect(()=>{
+    if(!isMobile||!mobileNavOpen)return;
+    const previousOverflow=document.body.style.overflow;
+    const opener=document.activeElement as HTMLElement|null;
+    document.body.style.overflow="hidden";
+    const focusFrame=requestAnimationFrame(()=>closeNavigationRef.current?.focus());
+    const escape=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();setMobileNavOpen(false);}};
+    document.addEventListener("keydown",escape);
+    return()=>{cancelAnimationFrame(focusFrame);document.body.style.overflow=previousOverflow;if(mainRef.current)mainRef.current.inert=false;document.removeEventListener("keydown",escape);if(opener?.isConnected&&opener.getClientRects().length)opener.focus();};
+  },[isMobile,mobileNavOpen]);
+  function trapNavigationFocus(event:React.KeyboardEvent<HTMLElement>){
+    if(!isMobile||!mobileNavOpen||event.key!=="Tab")return;
+    const targets=Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),[tabindex="0"]')||[]).filter(node=>node.getClientRects().length);
+    const first=targets[0],last=targets[targets.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  }
+
 
   useEffect(() => {
     try {
@@ -212,6 +248,7 @@ export function AppShell({
   }, []);
 
   const toggleSidebar = () => {
+    if(window.matchMedia("(max-width: 768px)").matches)return;
     setSidebarCollapsed((prev) => {
       const next = !prev;
       try {
@@ -339,24 +376,11 @@ export function AppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
-      {/* Mobile Drawer Backdrop */}
-      <AnimatePresence>
-        {mobileNavOpen && (
-          <motion.div
-            key="mobile-nav-backdrop"
-            className="sidebar-mobile-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            onClick={() => setMobileNavOpen(false)}
-            aria-hidden="true"
-          />
-        )}
-      </AnimatePresence>
+    <div className={`app-shell ${desktopSidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
+      {/* Remove the backdrop immediately on close so it cannot intercept a quick reopen. */}
+      {isMobile&&mobileNavOpen&&<div className="sidebar-mobile-backdrop" onClick={()=>setMobileNavOpen(false)} aria-hidden="true"/>}
 
-      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
+      <aside ref={sidebarRef} id="workspace-sidebar" aria-label="Workspace sidebar" onKeyDown={trapNavigationFocus} className={`sidebar ${desktopSidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
         {/* Vistora Sidebar Header with Single Desktop Collapse Toggle */}
         <div className="sidebar-brand-row">
           <Link
@@ -379,7 +403,7 @@ export function AppShell({
               }}
             />
           </Link>
-          {!sidebarCollapsed && (
+          {!isMobile&&!desktopSidebarCollapsed && (
             <button
               type="button"
               className="sidebar-favi-toggle desktop-only"
@@ -406,7 +430,7 @@ export function AppShell({
               <PanelLeftClose size={18} strokeWidth={1.75} />
             </button>
           )}
-          {sidebarCollapsed && (
+          {!isMobile&&desktopSidebarCollapsed && (
             <div className="sidebar-collapsed-header" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "100%", paddingBottom: "4px" }}>
               <Link href="/dashboard" className="sidebar-collapsed-logo" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
                 <Image
@@ -445,10 +469,11 @@ export function AppShell({
               </button>
             </div>
           )}
-          {mobileNavOpen && (
+          {isMobile&&mobileNavOpen && (
             <button
               type="button"
               className="sidebar-close-btn"
+              ref={closeNavigationRef}
               onClick={() => setMobileNavOpen(false)}
               aria-label="Close navigation"
               style={{
@@ -595,7 +620,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <main className="main-content">
+      <main ref={mainRef} className="main-content">
         {/* Topbar: clean breadcrumbs, mobile hamburger toggle, responsive logo, ThemeToggle, NotificationCenter */}
         <header className="topbar">
           <div className="topbar-inner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
@@ -604,6 +629,8 @@ export function AppShell({
                 type="button"
                 className="mobile-menu-btn"
                 onClick={() => setMobileNavOpen(!mobileNavOpen)}
+                aria-controls="workspace-sidebar"
+                aria-expanded={mobileNavOpen}
                 aria-label={mobileNavOpen ? "Close menu" : "Open navigation menu"}
               >
                 {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
@@ -631,7 +658,7 @@ export function AppShell({
           const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
           return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
-        <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
+        <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
       </nav>
     </div>
   );

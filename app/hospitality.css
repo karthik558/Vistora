@@ -130,6 +130,7 @@ html[data-theme="dark"] .module-launcher-header img:not([src*="white"]){filter:b
 .custom-datepicker-popover .calendar-day:hover:not(:disabled),html[data-theme="dark"] .custom-datepicker-popover .calendar-day:hover:not(:disabled){background:var(--sage-soft)!important;color:var(--module-accent)!important}
 .custom-datepicker-popover .calendar-day.day-in-range{background:var(--sage-soft);color:var(--module-accent)}
 :root{--scroll-thumb:#8a9690}.app-shell{--scroll-thumb:var(--module-accent)}
+@media(min-width:769px){
 html,body,body *{scrollbar-width:thin!important;scrollbar-color:var(--scroll-thumb,#8a9690) transparent!important}
 html::-webkit-scrollbar,body::-webkit-scrollbar,body *::-webkit-scrollbar{width:5px;height:5px}
 html::-webkit-scrollbar-track,body::-webkit-scrollbar-track,body *::-webkit-scrollbar-track{background:transparent}
@@ -137,6 +138,7 @@ html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb,body *::-webkit-scro
 html::-webkit-scrollbar-corner,body::-webkit-scrollbar-corner,body *::-webkit-scrollbar-corner{background:transparent}
 .app-shell .sidebar{--scroll-thumb:var(--workspace-sidebar-marker)}
 .app-shell .sidebar::-webkit-scrollbar-thumb{background:var(--workspace-sidebar-marker)}
+}
 @media(max-width:600px){.module-launcher-content{padding:32px 20px}.module-launcher-card{min-height:145px;padding:20px}.module-access-fields>div{grid-template-columns:minmax(0,1fr)}}
 .launcher-administration-grid{gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel)}
 .launcher-administration-card{padding:18px;border:0;border-radius:0;min-height:98px;gap:12px}
