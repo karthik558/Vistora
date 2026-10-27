@@ -108,6 +108,36 @@ html[data-theme="dark"] .app-shell :is(.drawer-close,.drawer-close:hover){backgr
 .app-shell[data-workspace="administration"] .routing-intro>div:first-child{max-width:650px}
 .app-shell[data-workspace="administration"] .routing-intro h2{margin-top:10px}
 
+/* Final visual polish: keep the workspace calm, legible, and consistent across modules. */
+.app-shell .topbar{
+  background:color-mix(in srgb,var(--panel) 92%,transparent);
+  border-bottom-color:var(--line);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--line) 55%,transparent);
+}
+.app-shell .content-wrap{padding-top:30px;padding-bottom:56px}
+.app-shell .page-heading{margin-bottom:26px}
+.app-shell .page-heading h1{letter-spacing:-.045em}
+.app-shell :is(.panel,.table-panel,.metric-card,.platform-card,.form-card,.report-card,.directory-card){
+  transition:border-color var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast)
+}
+.app-shell :is(.panel,.table-panel,.metric-card,.platform-card,.form-card,.report-card):hover{
+  border-color:color-mix(in srgb,var(--line-strong) 72%,var(--module-accent));
+}
+.app-shell :is(.table-wrap,.table-shell,.platform-table){border-radius:8px}
+.app-shell :is(.table-wrap,.table-shell) table thead th{font-family:var(--font-dm-mono);font-size:10px;letter-spacing:.045em;text-transform:uppercase}
+.app-shell .nav-item{min-height:38px}
+.app-shell .nav-item:focus-visible,.app-shell .sidebar-guest-link:focus-visible{outline:2px solid var(--module-accent);outline-offset:2px}
+.app-shell .mobile-bottom-navbar{border-top:1px solid var(--line);box-shadow:0 -8px 24px color-mix(in srgb,var(--ink) 7%,transparent)}
+
+@media(max-width:768px){
+  .app-shell .content-wrap{padding-top:22px;padding-bottom:38px}
+  .app-shell .page-heading{margin-bottom:20px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .app-shell *, .landing-shell *{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+}
+
 /* Mobile navigation is a drawer; the desktop collapse preference never sizes it. */
 @media(max-width:768px){
  html,body,body *{scrollbar-width:none}

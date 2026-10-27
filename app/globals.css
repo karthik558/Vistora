@@ -3209,6 +3209,29 @@ th { background: var(--canvas); color: var(--muted); border-color: var(--line); 
   .landing-header-actions .button { min-height: 36px; padding-inline: 11px; }.landing-header-actions .topbar-icon-btn { width: 36px !important; height: 36px !important; }.landing-shell .landing-hero h1 { font-size: 44px; }.landing-copy { font-size: 14px; }.landing-actions { align-items: stretch; }.landing-primary { width: 100%; }.landing-assurance { justify-content: center; }.landing-graph-head { align-items: flex-start; }.live-pill { font-size: 0; padding: 9px; }.landing-graph-steps { gap: 3px; }.landing-insight-row { display: none; }.metric-grid { grid-template-columns: 1fr; }
 }
 
+/* Landing page finishing pass: stronger hierarchy, quieter chrome, and better small-screen balance. */
+.landing-shell{min-height:100svh}
+.landing-header{position:relative;z-index:2}
+.landing-logo:focus-visible,.landing-header-actions a:focus-visible{outline:2px solid var(--sage);outline-offset:5px;border-radius:6px}
+.landing-hero-copy{position:relative}
+.landing-shell .landing-hero .eyebrow::before{content:"";width:24px;height:1px;background:var(--sage);opacity:.7}
+.landing-shell .landing-hero h1{max-width:760px;text-wrap:balance}
+.landing-copy{color:var(--muted);text-wrap:pretty}
+.landing-primary{min-width:172px}
+.landing-graph-card{box-shadow:0 24px 60px -24px color-mix(in srgb,var(--ink) 24%,transparent)}
+.landing-graph-card:hover{border-color:color-mix(in srgb,var(--sage) 42%,var(--line));box-shadow:0 28px 68px -24px color-mix(in srgb,var(--ink) 28%,transparent)}
+.landing-modules article{transition:transform var(--transition-fast),border-color var(--transition-fast)}
+.landing-modules article:hover{transform:translateY(-2px);border-color:var(--sage)}
+.landing-foot{margin-top:clamp(28px,6vh,72px);padding-top:20px}
+
+@media(max-width:768px){
+  .landing-shell .landing-hero .eyebrow{margin-bottom:18px}
+  .landing-shell .landing-hero h1{text-wrap:pretty}
+  .landing-modules article:hover{transform:none}
+}
+
+@media(prefers-reduced-motion:reduce){.landing-shell *{transition:none!important;animation:none!important}}
+
 /* Restrained workspace surfaces and consistent responsive controls. */
 :root {
   --sage: #647d70;
