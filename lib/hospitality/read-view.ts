@@ -20,7 +20,7 @@ export async function hotelReadView(request:NextRequest){
   scoped(db.from("room_inspections").select("*").order("created_at",{ascending:false}).limit(100)),
   Promise.all([
    scoped(db.from("hotel_rooms").select("id",{count:"exact",head:true})),
-   scoped(db.from("stays").select("id",{count:"exact",head:true}).eq("status","active")),
+   scoped(db.from("stays").select("id",{count:"exact",head:true}).eq("status","active").not("room_id","is",null)),
    scoped(db.from("hotel_rooms").select("id",{count:"exact",head:true}).in("status",["dirty","out_of_service"])),
    scoped(db.from("service_jobs").select("id",{count:"exact",head:true}).in("status",["open","in_progress"]))
   ])

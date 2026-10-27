@@ -44,3 +44,5 @@ dialog.platform-dialog::backdrop{background:#0008}.case-panel form+form{margin-t
 
 @media(min-width:701px) and (max-width:1100px){.platform-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.platform-page h2{font-size:15px}.platform-page .button,.workspace-select .custom-select-trigger{min-height:40px!important}.platform-page input:not([type="checkbox"]):not([type="hidden"]){min-height:40px}.platform-toolbar{padding:14px}.platform-scopes{gap:6px 16px}}
+
+.role-mapping select,.member-country-select{width:100%;min-width:0;min-height:36px;border:1px solid var(--line-strong);border-radius:4px;padding:7px 10px;background:var(--canvas);color:var(--ink);font:inherit;font-size:12px}

@@ -16,6 +16,7 @@ export const PATCH=withWorkspace(async(request:NextRequest,{params}:{params:Prom
     if(!profiles.some(p=>members.some(m=>m.user_id===p.id&&(["owner","admin"].includes(m.role)||p.property_id===current.property_id||p.property_ids?.includes(current.property_id)))))throw new PlatformError("Choose an active member with access to this property.");
    }
    updates.assigned_to=name||null;
+   if(Object.prototype.hasOwnProperty.call(current,"assigned_user_id"))updates.assigned_user_id=null;
  }
  if(body.priority!==undefined){if(!["low","normal","high","critical"].includes(body.priority))throw new PlatformError("Invalid priority.");updates.priority=body.priority;}
  if(body.category!==undefined)updates.category=text(body.category,"Category",60);

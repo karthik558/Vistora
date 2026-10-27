@@ -190,6 +190,7 @@ function getUserOrgRole(user: WorkspaceUserItem): string {
 }
 
 interface PropertyOption {
+  country?: string;
   id: string;
   name: string;
   code: string;
@@ -1070,6 +1071,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               background: "var(--canvas)",
                             }}
                           >
+                            <label>Choose properties by country<select className="member-country-select" aria-label="Add member country properties" defaultValue="" onChange={e=>{if(e.target.value)setAddPropertyIds(properties.filter(p=>p.country===e.target.value).map(p=>p.id));}}><option value="">Choose country</option>{Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=><option key={country} value={country}>{country}</option>)}</select><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
                             {properties.map((p) => {
                               const checked = addPropertyIds.includes(p.id);
                               return (
@@ -1419,6 +1421,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               background: "var(--canvas)",
                             }}
                           >
+                            <label>Choose properties by country<select className="member-country-select" aria-label="Edit member country properties" defaultValue="" onChange={e=>{if(e.target.value)setEditPropertyIds(properties.filter(p=>p.country===e.target.value).map(p=>p.id));}}><option value="">Choose country</option>{Array.from(new Set(properties.map(p=>p.country).filter((c):c is string=>!!c))).sort().map(country=><option key={country} value={country}>{country}</option>)}</select><small>Replaces the selection with this country's current properties. Save the member to apply access.</small></label>
                             {properties.map((p) => {
                               const checked = editPropertyIds.includes(p.id);
                               return (

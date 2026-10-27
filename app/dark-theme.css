@@ -35,7 +35,7 @@ html[data-theme="dark"] {
   --shadow-glow: none;
 }
 
-html[data-theme="dark"] :is(body, .app-shell, .main-content, .content-wrap, .preloader-overlay) {
+html[data-theme="dark"] :is(body, .app-shell, .main-content, .content-wrap) {
   background: var(--canvas);
   color: var(--ink);
 }
@@ -46,7 +46,7 @@ html[data-theme="dark"] :is(.sidebar, .route-loading-sidebar, .topbar, .panel, .
   color: var(--ink) !important;
   border-color: var(--line) !important;
 }
-html[data-theme="dark"] :is(.brand img:not([src*="white"]), .topbar-mobile-logo img:not([src*="white"]), .preloader-content img:not([src*="white"])) {
+html[data-theme="dark"] :is(.brand img:not([src*="white"]), .topbar-mobile-logo img:not([src*="white"])) {
   filter: brightness(0) invert(1) !important;
 }
 
@@ -81,7 +81,7 @@ html[data-theme="dark"] :is(.mobile-bottom-navbar, .topbar-icon-btn, .mobile-men
 html[data-theme="dark"] .mobile-nav-tab { color: var(--muted) !important; }
 html[data-theme="dark"] .mobile-nav-tab.active { color: var(--ink) !important; }
 html[data-theme="dark"] :is(.breadcrumbs span, .breadcrumbs b, .eyebrow, .subheading,
-  .metric-label, .metric-change, .metric-value small, .panel-heading p, .preloader-sub,
+  .metric-label, .metric-change, .metric-value small, .panel-heading p,
   .drawer-chip-label, .drawer-meta, .table-no-comment, .rating-total, .chart-legend) { color: var(--muted) !important; }
 html[data-theme="dark"] :is(.page-heading h1, .panel-heading h2, .panel-heading h3,
   .metric-value, .metric-grid .metric-card:nth-child(2) .metric-value,

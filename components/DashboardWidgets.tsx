@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {responseCompliance} from "../lib/feedback/sla";
 import {
   TrendingUp,
   Clock,
@@ -296,13 +297,13 @@ export function CollectionSourceBreakdown({ totalFeedbackCount }: { totalFeedbac
 // 3. DEPARTMENT PERFORMANCE MATRIX COMPONENT
 export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: FeedbackViewModel[] }) {
   const departments = [
-    { name: "Front Desk", targetSla: "10 min" },
-    { name: "Housekeeping", targetSla: "15 min" },
-    { name: "Food & Beverage", targetSla: "12 min" },
-    { name: "Concierge", targetSla: "8 min" },
-    { name: "Spa & Wellness", targetSla: "15 min" },
-    { name: "Facilities & Room", targetSla: "20 min" },
-    { name: "Valet & Transfers", targetSla: "5 min" },
+    { name: "Front Desk" },
+    { name: "Housekeeping" },
+    { name: "Food & Beverage" },
+    { name: "Concierge" },
+    { name: "Spa & Wellness" },
+    { name: "Facilities & Room" },
+    { name: "Valet & Transfers" },
   ];
 
   return (
@@ -310,7 +311,7 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
       <div className="panel-heading">
         <div>
           <h2>Department performance &amp; SLA compliance</h2>
-          <p>Operational CSAT benchmarks across hotel functional divisions</p>
+          <p>Guest ratings and recorded response deadlines by department</p>
         </div>
         <Link className="panel-action" href="/dashboard/analytics">
           Full Analytics ↗
@@ -324,8 +325,8 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
               <th>Department Touchpoint</th>
               <th>Volume</th>
               <th>Average CSAT</th>
-              <th>Target SLA</th>
-              <th>SLA Recovery Rate</th>
+              <th>Next open deadline · UTC</th>
+              <th>On-time responses</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -335,8 +336,8 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
               const count = deptFeedback.length;
               const totalRating = deptFeedback.reduce((acc, cur) => acc + cur.rating, 0);
               const avg = count > 0 ? (totalRating / count).toFixed(2) : null;
-              const complaints = deptFeedback.filter((f) => f.rating <= 2).length;
-              const complianceRate = count > 0 ? Math.round(((count - complaints) / count) * 100) : null;
+              const sla = responseCompliance(deptFeedback);
+              const complianceRate = sla.rate;
 
               const isExcellence = avg !== null && Number(avg) >= 4.5;
               const isWarning = avg !== null && Number(avg) < 3.5;
@@ -361,7 +362,7 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
                   </td>
                   <td>
                     <span style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
-                      {dept.targetSla}
+                      {sla.nextDeadline?sla.nextDeadline.slice(0,16).replace("T"," "):"—"}
                     </span>
                   </td>
                   <td>
@@ -376,7 +377,7 @@ export function DepartmentPerformanceMatrix({ feedback = [] }: { feedback: Feedb
                           }}
                         />
                       </div>
-                      <span style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", fontWeight: 600 }}>
+                      <span title={`${sla.evaluated} attention cases with a response or an elapsed deadline. Pending cases are excluded.`} style={{ fontSize: "11px", fontFamily: "var(--font-dm-mono)", fontWeight: 600 }}>
                         {complianceRate === null ? "—" : `${complianceRate}%`}
                       </span>
                     </div>

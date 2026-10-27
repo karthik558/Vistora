@@ -51,6 +51,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     is_required?: boolean;
     department?:string|null;
   }>>([]);
+  const [questionsProperty,setQuestionsProperty]=useState("");
+  const [questionsError,setQuestionsError]=useState("");
+  const [questionsRetry,setQuestionsRetry]=useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -133,12 +136,15 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   }, [publicToken]);
 
   useEffect(()=>{
-    setQuestions([]);setAnswers({});
+    setQuestions([]);setAnswers({});setQuestionsProperty("");setQuestionsError("");
     if(!selectedPropertyId)return;
     const controller=new AbortController();
-    fetch("/api/questions?public=true&propertyId="+encodeURIComponent(selectedPropertyId),{signal:controller.signal}).then(r=>r.json()).then(j=>{if(j.success)setQuestions(j.questions);}).catch(()=>{});
+    fetch("/api/questions?public=true&propertyId="+encodeURIComponent(selectedPropertyId),{signal:controller.signal})
+      .then(async response=>{const body=await response.json();if(!response.ok||!body.success||!Array.isArray(body.questions))throw new Error("Could not load the feedback questions. Please retry.");return body;})
+      .then(body=>{if(!controller.signal.aborted){setQuestions(body.questions);setQuestionsProperty(selectedPropertyId);}})
+      .catch(error=>{if(!controller.signal.aborted)setQuestionsError(error.message||"Could not load feedback questions.");});
     return ()=>controller.abort();
-  },[selectedPropertyId]);
+  },[selectedPropertyId,questionsRetry]);
 
   const activeQuestions=questions.filter(q=>!q.department||q.department===department);
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -150,6 +156,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       return;
     }
     if (!rating) return;
+    if(questionsProperty!==selectedPropertyId){setPropertyError(questionsError||"Please wait for the feedback questions to load.");return;}
     if(activeQuestions.some(q=>q.is_required&&!answers[q.id]?.trim())){setPropertyError("Please answer the required questions.");return;}
     if(isDemoMode){setSubmitted(true);return;}
 
@@ -197,7 +204,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const progressStep = !selectedPropertyId ? 1 : !rating ? 2 : 3;
   const ratingWord = rating === 1 ? "Needs work" : rating === 2 ? "Fair" : rating === 3 ? "Good" : rating === 4 ? "Very good" : rating === 5 ? "Exceptional" : "";
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
-  const managerFollowUp = rating !== null && (rating <= 2 || wantsContact);
+  const managerFollowUp = rating !== null && (rating <= 3 || wantsContact);
 
   if (loading) {
     return (
@@ -518,9 +525,11 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             </div>
           )}
 
+          {questionsError&&<p role="alert">{questionsError} <button type="button" className="button button-ghost" onClick={()=>setQuestionsRetry(n=>n+1)}>Retry questions</button></p>}
+          {selectedPropertyId&&questionsProperty!==selectedPropertyId&&!questionsError&&<p role="status">Loading feedback questions…</p>}
           <button
             className="button button-dark submit-button"
-            disabled={!rating || !selectedPropertyId || submitting}
+            disabled={!rating || !selectedPropertyId || submitting || questionsProperty!==selectedPropertyId}
           >
             {submitting ? "Submitting..." : "Send feedback"} <span>→</span>
           </button>

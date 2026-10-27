@@ -183,3 +183,49 @@ test("Member access cannot be saved before the module database policies are inst
   }
  }finally{db.sessionDb=original;}
 });
+test("Role mapping API denies every operation to non-admin staff",async()=>{
+ const db=require('../lib/platform/db.ts'),route=require('../app/api/role-mappings/route.ts'),{NextRequest}=require('next/server');
+ const original=db.sessionDb,client={from(){throw new Error('Unauthorized database access');}};
+ db.sessionDb=()=>client;
+ const user={id:'staff',organizationId:'org',isOrganizationAdmin:false,rights:['manage_users','manage_settings'],accessToken:'verified'};
+ try{for(const method of ['GET','POST','PATCH','DELETE']){
+  const response=await db.workspaceContext.run({user,client},()=>route[method](new NextRequest('http://localhost/api/role-mappings',{method,...(method==='GET'?{}:{body:'{}'})})));
+  assert.equal(response.status,403);
+ }}finally{db.sessionDb=original;}
+});
+test("Role mapping returns a specific migration notice when the connected database is not upgraded",async()=>{
+ const db=require('../lib/platform/db.ts'),route=require('../app/api/role-mappings/route.ts'),{NextRequest}=require('next/server');
+ const original=db.sessionDb;
+ const client={from(table){const q={select(){return q;},eq(){return q;},order(){return q;},then(resolve){resolve(table==='role_mappings'?{error:{code:'PGRST205'}}:{data:[],error:null});}};return q;}};
+ db.sessionDb=()=>client;
+ try{const response=await db.workspaceContext.run({user:{isOrganizationAdmin:true,organizationId:'org'},client},()=>route.GET(new NextRequest('http://localhost/api/role-mappings')));assert.equal(response.status,503);assert.match((await response.json()).error,/20261027_role_mapping.sql/);}finally{db.sessionDb=original;}
+});
+test("Public feedback rejects invalid scores and missing required answers before submission",async()=>{
+ const db=require('../lib/platform/db.ts'),route=require('../app/api/feedback/route.ts'),{NextRequest}=require('next/server');
+ const original=db.serviceDb;
+ const client={from(table){const q={select(){return q;},eq(){return q;},or(){return q;},maybeSingle:async()=>({data:{id:'hotel',organization_id:'org'},error:null}),then(resolve){resolve({data:[{id:'required',question_type:'text',question_text:'Required QA',is_required:true}],error:null});}};return q;}};
+ db.serviceDb=()=>client;
+ try{
+  for(const rating of [0,6,2.5,'3']){const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',body:JSON.stringify({propertyId:'hotel',department:'Front Desk',rating})}));assert.equal(response.status,400);assert.match((await response.json()).error,/Rating/);}
+  const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',body:JSON.stringify({propertyId:'hotel',department:'Front Desk',rating:3})}));assert.equal(response.status,400);assert.match((await response.json()).error,/required questions/);
+ }finally{db.serviceDb=original;}
+});
+test("Role mapping edits are scoped to the session company and reject duplicate scopes",async()=>{
+ const db=require('../lib/platform/db.ts'),route=require('../app/api/role-mappings/route.ts'),{NextRequest}=require('next/server');
+ const original=db.sessionDb;let row,filters=[],duplicate=false;
+ const client={from(){const q={update(value){row=value;return q;},insert(value){row=value;return q;},eq(key,value){filters.push([key,value]);return q;},select(){return q;},single:async()=>duplicate?{data:null,error:{code:'23505'}}:{data:{id:'rule'},error:null}};return q;}};
+ db.sessionDb=()=>client;
+ const user={isOrganizationAdmin:true,organizationId:'company'};
+ const request=method=>new NextRequest('http://localhost/api/role-mappings',{method,body:JSON.stringify({id:'rule',organization_id:'other-company',module:'feedback',country:'India',role_name:'Duty manager',assignee_id:'member',max_rating:3})});
+ try{
+  const response=await db.workspaceContext.run({user,client},()=>route.PATCH(request('PATCH')));assert.equal(response.status,200);assert.equal(row.organization_id,'company');assert.deepEqual(filters,[['id','rule'],['organization_id','company']]);
+  duplicate=true;const conflict=await db.workspaceContext.run({user,client},()=>route.POST(request('POST')));assert.equal(conflict.status,409);
+ }finally{db.sessionDb=original;}
+});
+test("SLA compliance uses recorded responses and deadlines, including rating 3 and overdue resolved cases",()=>{
+ const {responseCompliance}=require('../lib/feedback/sla.ts'),now=Date.parse('2026-10-27T12:00:00Z');
+ const row={rating:3,status:'needs_attention',deadline:'2026-10-27T11:00:00Z',firstResponseAt:null};
+ const result=responseCompliance([row,{...row,firstResponseAt:'2026-10-27T10:59:00Z'},{...row,status:'resolved',firstResponseAt:'2026-10-27T11:01:00Z'},{...row,deadline:'2026-10-27T13:00:00Z'},{...row,rating:5},{...row,deadline:null}],now);
+ assert.equal(result.evaluated,3);assert.equal(result.rate,33);assert.equal(result.nextDeadline,'2026-10-27T11:00:00.000Z');
+ assert.equal(responseCompliance([{...row,deadline:'2026-10-27T13:00:00Z'}],now).rate,null);
+});

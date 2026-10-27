@@ -39,6 +39,7 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
      {canOpenWorkspace(user)&&<Link href="/dashboard/workspace" className="launcher-administration-card"><LayoutGrid size={21} strokeWidth={1.75}/><div><h3>Workspace</h3><p>Company overview, automation and integrations.</p></div><ArrowRight size={16}/></Link>}
      {canOpenProperties(user)&&<Link href="/dashboard/properties" className="launcher-administration-card"><Building2 size={21} strokeWidth={1.75}/><div><h3>Properties</h3><p>Manage locations and property assignments.</p></div><ArrowRight size={16}/></Link>}
      {canOpenTeam(user)&&<Link href="/dashboard/users" className="launcher-administration-card"><Users size={21} strokeWidth={1.75}/><div><h3>Team &amp; users</h3><p>Members, module access and property permissions.</p></div><ArrowRight size={16}/></Link>}
+     {user.isOrganizationAdmin&&<Link href="/dashboard/role-mapping" className="launcher-administration-card"><Users size={21}/><div><h3>Department &amp; role mapping</h3><p>Automatic owners by property, country and department.</p></div><ArrowRight size={16}/></Link>}
      {canOpenSettings(user)&&<Link href="/dashboard/settings" className="launcher-administration-card"><Settings size={21} strokeWidth={1.75}/><div><h3>Settings</h3><p>Company preferences, branding and module configuration.</p></div><ArrowRight size={16}/></Link>}
     </div>
    </section>}

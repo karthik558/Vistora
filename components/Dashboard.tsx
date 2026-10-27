@@ -79,6 +79,7 @@ export interface NavItemConfig {
 }
 
 const nav: readonly NavItemConfig[] = [
+  {label:"Role mapping",href:"/dashboard/role-mapping",group:"Settings",icon:Users,adminOnly:true},
   { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
@@ -298,13 +299,13 @@ export function AppShell({
   const isReport = effectiveRole === "report";
   const userRights = new Set(Array.isArray(currentUser?.rights) ? currentUser.rights : []);
 
-  const sharedNav=["Team & users","Settings","Workspace","Properties"];
+  const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
     ...["Overview","Guests","Rooms","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
-    if(isAdministration)return item.label==="Settings"?canOpenSettings(currentUser):item.label==="Workspace"?canOpenWorkspace(currentUser):item.label==="Properties"?canOpenProperties(currentUser):canOpenTeam(currentUser);
+    if(isAdministration)return item.label==="Settings"?canOpenSettings(currentUser):["Workspace","Role mapping"].includes(item.label)?canOpenWorkspace(currentUser):item.label==="Properties"?canOpenProperties(currentUser):canOpenTeam(currentUser);
     if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
     if(workspaceArea==="operations"&&item.href.startsWith("/dashboard/hospitality"))return hasModuleAccess(currentUser,"hospitality");
     // Super Admin holds unconditional full platform capabilities

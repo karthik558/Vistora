@@ -7,10 +7,8 @@
 /coverage
 
 # Next.js
-/.next/
-/.next-dev/
-/.next-preview/
 /out/
+/.next*/
 
 # Production
 /build

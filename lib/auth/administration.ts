@@ -19,5 +19,5 @@ export function canOpenProperties(user: AdministrationUser): boolean {
 }
 
 export function isAdministrationPath(path: string): boolean {
-  return /^\/dashboard\/(users|settings|properties|workspace)(\/|$)/.test(path);
+  return /^\/dashboard\/(users|settings|properties|workspace|role-mapping)(\/|$)/.test(path);
 }

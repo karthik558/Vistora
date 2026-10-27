@@ -235,7 +235,7 @@ export async function fetchFeedbackList(options?: {
 export async function createFeedback(payload: SubmitFeedbackPayload): Promise<FeedbackViewModel> {
   const rating = Number(payload.rating);
   const tone: FeedbackTone = rating <= 2 ? "urgent" : rating === 3 ? "review" : "positive";
-  const status: FeedbackStatus = rating <= 2 ? "needs_attention" : rating === 3 ? "under_review" : "resolved";
+  const status: FeedbackStatus = rating <= 3 ? "needs_attention" : "resolved";
 
   // Assemble questionnaire answers into formatted comment if present
   let finalComment = payload.comment?.trim() || "";

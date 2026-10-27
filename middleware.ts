@@ -2,30 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { checkRateLimit, getClientIp } from "./lib/security/rateLimiter";
 
-// Paths exempt from authentication checks
-const PUBLIC_PATHS = [
-  "/login",
-  "/feedback",
-  "/favicon.ico",
-  "/favicon-blue.ico",
-  "/favicon-green.ico",
-  "/logo1.webp",
-  "/vistora_blue.webp",
-  "/vistora_green.webp",
-  "/vistora_white.webp",
-  "/vistora_logo_blue.webp",
-  "/vistora_logo_green.webp",
-  "/vistora_logo_white.webp",
-  "/vistora_wordmark_blue.webp",
-  "/vistora_wordmark_green.webp",
-  "/vistora_wordmark_white.webp",
-  "/courtyard.svg",
-  "/_next",
-  "/api/auth/login",
-  "/api/feedback",
-  "/api/questions",
-];
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request.headers);

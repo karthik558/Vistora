@@ -41,7 +41,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  const counts=await Promise.all([
   db.from("guests").select("id",{count:"exact",head:true}),
   list(db.from("hotel_rooms").select("id",{count:"exact",head:true}),propertyId),
-  list(db.from("stays").select("id",{count:"exact",head:true}).eq("status","active"),propertyId),
+  list(db.from("stays").select("id",{count:"exact",head:true}).eq("status","active").not("room_id","is",null),propertyId),
   list(db.from("hotel_rooms").select("id",{count:"exact",head:true}).in("status",["dirty","out_of_service"]),propertyId),
   list(db.from("service_jobs").select("id",{count:"exact",head:true}).in("status",["open","in_progress"]),propertyId),
   list(db.from("operating_costs").select("id",{count:"exact",head:true}).eq("status","pending"),propertyId)
