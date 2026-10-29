@@ -468,47 +468,46 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  </>}
 
  {tab==="Guests"&&<>
-  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"10px",marginBottom:"16px"}}>
-   <div style={{display:"flex",gap:"4px",background:"var(--line-soft, #f1f5f9)",padding:"3px",borderRadius:"6px",border:"1px solid var(--line)"}}>
+  <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
+   <nav className="platform-tabs" aria-label="Guest views" style={{borderBottom:"none",marginBottom:0,paddingBottom:0}}>
     <button
      type="button"
+     aria-current={guestTab==="in_house"?"page":undefined}
      onClick={()=>setGuestTab("in_house")}
-     className={`button ${guestTab==="in_house"?"button-dark":"button-ghost"} compact`}
-     style={{fontSize:"12px",padding:"4px 10px"}}
     >
      In-House Guests ({activeStays.length})
     </button>
     <button
      type="button"
+     aria-current={guestTab==="reserved"?"page":undefined}
      onClick={()=>setGuestTab("reserved")}
-     className={`button ${guestTab==="reserved"?"button-dark":"button-ghost"} compact`}
-     style={{fontSize:"12px",padding:"4px 10px"}}
     >
      Upcoming Reservations ({reservedStays.length})
     </button>
     <button
      type="button"
+     aria-current={guestTab==="history"?"page":undefined}
      onClick={()=>setGuestTab("history")}
-     className={`button ${guestTab==="history"?"button-dark":"button-ghost"} compact`}
-     style={{fontSize:"12px",padding:"4px 10px"}}
     >
      Past / Checked-Out ({historyStays.length})
     </button>
     <button
      type="button"
+     aria-current={guestTab==="profiles"?"page":undefined}
      onClick={()=>setGuestTab("profiles")}
-     className={`button ${guestTab==="profiles"?"button-dark":"button-ghost"} compact`}
-     style={{fontSize:"12px",padding:"4px 10px"}}
     >
      Directory ({data.guests?.length||0})
     </button>
-   </div>
-   {canManage&&<div style={{display:"flex",gap:"8px"}}>
-    <button className="button button-dark compact" onClick={()=>setShowReserveModal(true)} style={{display:"inline-flex",alignItems:"center",gap:"5px"}}>
-     <Calendar size={13}/>
-     <span>+ Reserve / Check-In</span>
-    </button>
-   </div>}
+   </nav>
+   {canManage&&<button
+    type="button"
+    className="button button-outline compact"
+    onClick={()=>setShowReserveModal(true)}
+    style={{display:"inline-flex",alignItems:"center",gap:"5px",marginBottom:"2px"}}
+   >
+    <Calendar size={13}/>
+    <span>+ Reserve / Check-In</span>
+   </button>}
   </div>
 
   {/* IN-HOUSE GUESTS: Active stays only */}
@@ -522,7 +521,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {activeStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in. Checked-out guests have been cleared from this view.</p>
-      {canManage&&<button className="button button-dark compact" onClick={()=>setShowReserveModal(true)}>Check in a guest</button>}
+      {canManage&&<button className="button button-outline compact" onClick={()=>setShowReserveModal(true)}>Check in a guest</button>}
      </div>
     ):(
      <div className="platform-table">
@@ -553,7 +552,11 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
           </td>
           <td>
            <span>{s.check_in_date} → {s.check_out_date}</span>
-           <small style={{display:"block",color:"var(--sage-deep)",fontWeight:600}}>Checked in · Active</small>
+           <small style={{display:"block",marginTop:"3px"}}>
+            <span className="hotel-status inspected" style={{fontSize:"10px",padding:"2px 6px",display:"inline-flex",alignItems:"center",gap:"3px"}}>
+             <Check size={10}/> Checked in
+            </span>
+           </small>
           </td>
           <td className="hotel-wrap" style={{fontSize:"11px",color:"var(--muted)"}}>
            {s.guests?.preferences||"—"}
@@ -569,7 +572,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
            <div className="platform-actions" style={{justifyContent:"flex-end",gap:"6px"}}>
             <button
              type="button"
-             className="button button-dark compact"
+             className="button button-outline compact"
              disabled={busy}
              onClick={()=>save({action:"stay",id:s.id,status:"checked_out"},"PATCH")}
              title="Check out guest now (moves stay to history and marks room dirty for cleaning)"
@@ -580,19 +583,20 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
             </button>
             <button
              type="button"
-             className="button button-outline compact"
+             className="button button-ghost compact"
              onClick={()=>openFeedbackForStay(s)}
              title="Take guest feedback directly from here"
              style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
             >
              <ExternalLink size={12}/>
-             <span>Take feedback ↗</span>
+             <span>Feedback ↗</span>
             </button>
             <button
              type="button"
              className="button button-ghost compact"
              onClick={()=>showStayQr(s)}
              title="View feedback QR / check code"
+             style={{padding:"4px 6px"}}
             >
              <QrCode size={13}/>
             </button>
@@ -641,11 +645,23 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
           <td>{s.guest_count} guest{s.guest_count===1?"":"s"}</td>
           <td style={{textAlign:"right"}}>
            {canManage&&<div className="platform-actions" style={{justifyContent:"flex-end",gap:"6px"}}>
-            <button className="button button-dark compact" disabled={busy} onClick={()=>save({action:"stay",id:s.id,status:"active"},"PATCH")}>
-             Check in
+            <button
+             type="button"
+             className="button button-outline compact"
+             disabled={busy}
+             onClick={()=>save({action:"stay",id:s.id,status:"active"},"PATCH")}
+             style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
+            >
+             <Check size={12}/>
+             <span>Check in</span>
             </button>
-            <button className="button button-ghost compact" disabled={busy} onClick={()=>save({action:"stay",id:s.id,status:"cancelled"},"PATCH")}>
-             Cancel stay
+            <button
+             type="button"
+             className="button button-ghost compact"
+             disabled={busy}
+             onClick={()=>save({action:"stay",id:s.id,status:"cancelled"},"PATCH")}
+            >
+             Cancel
             </button>
            </div>}
           </td>
@@ -686,7 +702,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
           <td><strong>{s.guests?.full_name||"Guest"}</strong></td>
           <td>{nameOf(s.property_id)}<small>Room {s.room_number}</small></td>
           <td>{s.check_in_date} → {s.check_out_date}</td>
-          <td><span style={{padding:"2px 6px",borderRadius:"3px",background:"var(--line-soft, #f1f5f9)",fontSize:"11px"}}>{label(s.status)}</span></td>
+          <td><span className="hotel-status">{label(s.status)}</span></td>
           <td>{s.feedback?.length>0?s.feedback.map((f:any)=>f.rating+"/5 · "+label(f.status)).join(", "):"—"}</td>
          </tr>
         ))}
@@ -716,7 +732,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
         <th>Contact</th>
         <th>Tier</th>
         <th>Preferences</th>
-        <th>Action</th>
+        <th style={{textAlign:"right"}}>Action</th>
        </tr>
       </thead>
       <tbody>
@@ -726,7 +742,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
          <td>{g.email||"—"}<small>{g.phone||""}</small></td>
          <td>{g.vip_tier}</td>
          <td className="hotel-wrap">{g.preferences||"—"}</td>
-         <td>{canManage&&<button className="button button-ghost compact" onClick={()=>{setGuest(g);window.scrollTo({top:0,behavior:"smooth"});}}>Edit guest</button>}</td>
+         <td style={{textAlign:"right"}}>{canManage&&<button className="button button-outline compact" onClick={()=>{setGuest(g);window.scrollTo({top:0,behavior:"smooth"});}}>Edit</button>}</td>
         </tr>
        ))}
       </tbody>
