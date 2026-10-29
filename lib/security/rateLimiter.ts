@@ -68,6 +68,16 @@ export function checkRateLimit(
   ip: string,
   tier: "auth" | "submission" | "api" | "default" = "api"
 ): RateLimitResult {
+  const isDev = process.env.NODE_ENV !== "production";
+  if (isDev && (ip === "127.0.0.1" || ip === "::1" || ip === "localhost")) {
+    return {
+      success: true,
+      limit: 10000,
+      remaining: 9999,
+      reset: Math.ceil((Date.now() + 60000) / 1000),
+    };
+  }
+
   const now = Date.now();
   performGarbageCollection(now);
 

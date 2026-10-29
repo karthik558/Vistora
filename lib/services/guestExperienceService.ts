@@ -410,8 +410,10 @@ export async function getDashboardData(
 ): Promise<DashboardData> {
   const cacheKey = `${propertyId}:${allowedPropertyIds ? [...allowedPropertyIds].sort().join(",") : "all"}`;
   const now = Date.now();
-  const cached = undefined;
-  // Results are scoped by the caller JWT; do not reuse data across sessions.
+  const cached = dashboardCache.get(cacheKey);
+  if (cached && (now - cached.timestamp < 15_000)) {
+    return cached.data;
+  }
 
   let feedbackRows: FeedbackRow[] = [];
   let propertiesList: PropertyRow[] = [];
@@ -551,7 +553,7 @@ export async function getDashboardData(
     source: isSupabaseLive ? "supabase" : "local",
   };
 
-  // No process-global cache of tenant records.
+  dashboardCache.set(cacheKey, { data: result, timestamp: now });
   return result;
 }
 

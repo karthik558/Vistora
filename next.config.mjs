@@ -2,6 +2,9 @@
 const nextConfig = (phase) => ({
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "framer-motion", "@tanstack/react-query"],
+  },
   // Automatically map standard SUPABASE_URL and SUPABASE_ANON_KEY to NEXT_PUBLIC_ client variables
   env: {
     NEXT_PUBLIC_SUPABASE_URL:

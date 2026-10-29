@@ -529,7 +529,7 @@ export function AppShell({
                 <Link
                   key={item.href}
                   href={scopedHref(item.href)}
-                  prefetch={true}
+                  prefetch={false}
                   className={`nav-item ${isActive ? "active" : ""}`}
                   onMouseEnter={() => router.prefetch(scopedHref(item.href))}
                   onFocus={() => router.prefetch(scopedHref(item.href))}
@@ -664,7 +664,7 @@ export function AppShell({
         {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
           const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
-          return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
+          return <Link key={item.href} href={scopedHref(item.href)} prefetch={false} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
       </nav>

@@ -161,8 +161,11 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  useEffect(()=>{setTabState(tabs.includes(section as Tab)&&(user.isOrganizationAdmin||section!=="Cost controls")?section as Tab:"Overview");},[section,user.isOrganizationAdmin]);
  function setTab(next:Tab){
   setTabState(next);
-  const params=new URLSearchParams(query.toString());params.set("section",next);
-  window.history.replaceState(null,"","/dashboard/hospitality?"+params);
+  if(typeof window!=="undefined"){
+   const params=new URLSearchParams(window.location.search);
+   params.set("section",next);
+   window.history.replaceState(null,"",window.location.pathname+"?"+params.toString());
+  }
  }
  const [data,setData]=useState<any>(null),[error,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const [property,setProperty]=useState(query.get("property")||"all"),[month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
@@ -185,7 +188,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   }catch(error){if(ticket===sequence.current)setError((error as Error).message);}
   finally{if(ticket===sequence.current)setLoading(false);}
  }
- useEffect(()=>{const timer=setTimeout(()=>load(),200);return()=>clearTimeout(timer);},[property,month,search,jobView,tab]);
+ useEffect(()=>{const timer=setTimeout(()=>load(),200);return()=>clearTimeout(timer);},[property,month,search,jobView]);
+ useEffect(()=>{if(tab==="Complaints"&&!data?.complaintsReady){load();}},[tab]);
  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden&&!busy&&!suiteTabs.includes(tab))load();},30000);return()=>clearInterval(timer);},[property,month,search,jobView,tab,busy]);
 
  async function save(body:any,method="POST"){
