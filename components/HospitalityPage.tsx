@@ -15,7 +15,8 @@ import {useAppearance} from "./AppearanceProvider";
 import {hospitalityConfig,money,ModuleName} from "../lib/hospitality/config";
 import {
  BedDouble,Users,ClipboardList,ClipboardCheck,Wallet,RefreshCw,ArrowUpRight,
- Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Sparkles,Upload,Layers
+ Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Sparkles,Upload,Layers,
+ Clock,AlertTriangle,CheckCircle2,Wrench,BarChart3,Activity
 } from "lucide-react";
 
 const format=(value:string)=>new Date(value).toLocaleString();
@@ -175,7 +176,7 @@ function JobForm({
  },[initialProperty,property]);
 
  const rooms=(data?.rooms||[]).filter((r:any)=>r.property_id===property);
- const team=(data?.team||[]).filter((p:any)=>p.isAdmin||p.property_id===property||p.property_ids?.includes(property));
+ const team=(data?.team||[]).filter((p:any)=>property?(p.property_id===property||(Array.isArray(p.property_ids)&&p.property_ids.includes(property))):true);
 
  return <form className="platform-fields" onSubmit={async e=>{
   e.preventDefault();if(!property){return;}
@@ -221,7 +222,7 @@ function JobForm({
  <label>Job type<WorkspaceSelect label="Job type" name="kind" defaultValue="guest_request" options={[{value:"guest_request",label:"Guest request"},{value:"cleaning",label:"Cleaning / Turnover"},{value:"maintenance",label:"Maintenance / Repair"},{value:"inspection",label:"Room inspection"}]}/></label>
  <label>Title<input value={title} onChange={e=>setTitle(e.target.value)} required maxLength={160} placeholder="e.g. Extra pillows, AC not cooling, Turnover clean"/></label>
  <label>Priority<WorkspaceSelect label="Job priority" name="priority" defaultValue="normal" options={stateOptions(["low","normal","high","critical"])}/></label>
- <label>Assign to<WorkspaceSelect key={property} label="Job assignee" name="assigned_to" options={[{value:"",label:"Unassigned"},...team.map((p:any)=>({value:p.id,label:p.full_name}))]}/></label>
+ <label>Assign to · optional<WorkspaceSelect key={property} label="Job assignee" name="assigned_to" options={[{value:"",label:property&&team.length===0?"Unassigned (No staff assigned to this property)":"Unassigned / Auto-dispatch"},...team.map((p:any)=>({value:p.id,label:p.full_name}))]}/></label>
  <label>Deadline · optional<WorkspaceDateField name="due_at" label="Job deadline" mode="datetime"/></label>
  <label>Link an open feedback case · optional<WorkspaceSelect label="Feedback source" value={source} onChange={id=>{setSource(id);const item=(data?.feedback||[]).find((f:any)=>f.id===id);if(item){setProperty(item.property_id);setRoom(rooms.find((r:any)=>r.property_id===item.property_id&&r.room_number===item.room_number)?.id||"");setTitle("Guest feedback · "+item.department);}}} options={[{value:"",label:"No feedback source"},...(data?.feedback||[]).filter((f:any)=>!property||f.property_id===property).map((f:any)=>({value:f.id,label:f.department+" · Room "+f.room_number+" · "+f.rating+"/5"}))]}/></label>
  <label className="hotel-wide-field">Details / Instructions<input name="description" maxLength={2000} placeholder="Provide specific requirements, location details, or special requests"/></label>
@@ -274,7 +275,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
    }else if(body.action==="stay"&&body.status==="checked_out"){
     setMessage("Guest checked out successfully. Room has been marked dirty for housekeeping turnover.");
    }else if(body.action==="job"){
-    setMessage("Service job created successfully.");
+    setMessage(method==="PATCH"?"Service job updated successfully.":"Service job created successfully.");
    }else{
     setMessage("Saved successfully.");
    }
@@ -363,8 +364,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   Inspections:"Review room checks and follow up on readiness issues.",
   "Cost controls":"Review operating costs, approvals and monthly budgets."
  };
- const module:ModuleName=tab==="Guests"?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
- const enabled=tab==="Overview"||config.modules[module as keyof typeof config.modules]!==false;
+ const sectionKey=tab==="Guests"?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
+ const enabled=tab==="Overview"||config.modules[sectionKey as keyof typeof config.modules]!==false;
  const propertySelect=(name="property_id")=><WorkspaceSelect label="Property" name={name} defaultValue={property==="all"?"":property} placeholder="Choose property" options={(data?.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}/>;
  const roomOptions=(data?.rooms||[]).map((r:any)=>({value:r.id,label:r.room_number+" · "+(data.properties.find((p:any)=>p.id===r.property_id)?.name||"")+" · "+label(r.status)}));
  const nameOf=(id:string)=>data?.properties.find((p:any)=>p.id===id)?.name||"—";
@@ -387,7 +388,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {title:"Pending cost decisions",value:data?.metrics.pendingCosts,icon:Wallet,section:"Cost controls",color:"operations"}
  ];
 
- return <AppShell active={tab} user={user} module={module}><div className="content-wrap platform-page hotel-page">
+ return <AppShell active={tab} user={user} module="operations"><div className="content-wrap platform-page hotel-page">
  <DashboardPageHeading eyebrow={tab==="Overview"?"Hospitality overview":"Hotel operations"} title={tab==="Overview"?(firstName?`Good morning, ${firstName}`:"Hospitality operations"):tab} description={descriptions[tab]}>
   <PropertyFilter properties={data?.properties||[]} selectedId={property} onChange={setProperty} manageHref="/dashboard/properties?workspace=operations"/>
   <button
@@ -433,39 +434,472 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in workspace Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard">Open workspace</Link>}</section>:<>
  {(tab==="Service jobs"||tab==="Complaints")&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
  {tab==="Complaints"&&<ComplaintBoard data={data} user={user} save={save} busy={busy}/>}
- {tab==="Overview"&&<>
-  <section className="hotel-overview">
-   {cards.filter(c=>canManage||c.value!==null).map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} className="hotel-overview-card"><c.icon size={17}/><span>{c.title}</span><strong>{c.value}</strong><ArrowUpRight size={14}/></button>)}
-  </section>
-  <section className="platform-card" style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"14px"}}>
-   <div>
-    <h2 style={{margin:"0 0 4px 0",fontSize:"15px"}}>Immediate Quick Actions</h2>
-    <p style={{margin:0,fontSize:"12px",color:"var(--muted)"}}>Check in or reserve guests, or open feedback QR codes on the spot.</p>
+ {tab==="Overview"&&(()=>{
+  const filteredRooms=(data.rooms||[]).filter((r:any)=>property==="all"||r.property_id===property);
+  const totalRooms=filteredRooms.length;
+  const activeStayRoomIds=new Set(activeStays.map((s:any)=>s.room_id).filter(Boolean));
+  const occupiedRooms=filteredRooms.filter((r:any)=>activeStayRoomIds.has(r.id)).length;
+  const inspectedRooms=filteredRooms.filter((r:any)=>!activeStayRoomIds.has(r.id)&&r.status==="inspected").length;
+  const cleanRooms=filteredRooms.filter((r:any)=>!activeStayRoomIds.has(r.id)&&r.status==="clean").length;
+  const readyRooms=inspectedRooms+cleanRooms;
+  const dirtyRooms=filteredRooms.filter((r:any)=>r.status==="dirty").length;
+  const outOfServiceRooms=filteredRooms.filter((r:any)=>r.status==="out_of_service").length;
+  const readyPct=totalRooms>0?Math.round((readyRooms/totalRooms)*100):0;
+  const occupiedPct=totalRooms>0?Math.round((occupiedRooms/totalRooms)*100):0;
+  const dirtyPct=totalRooms>0?Math.round((dirtyRooms/totalRooms)*100):0;
+  const outOfServicePct=totalRooms>0?Math.max(0,100-readyPct-occupiedPct-dirtyPct):0;
+
+  const activeJobs=(data.jobs||[]).filter((j:any)=>["open","in_progress"].includes(j.status));
+  const filteredActiveJobs=activeJobs.filter((j:any)=>property==="all"||j.property_id===property);
+  const totalActiveJobs=filteredActiveJobs.length;
+  const criticalJobs=filteredActiveJobs.filter((j:any)=>j.priority==="critical").length;
+  const highJobs=filteredActiveJobs.filter((j:any)=>j.priority==="high").length;
+  const normalJobs=filteredActiveJobs.filter((j:any)=>j.priority==="normal").length;
+  const lowJobs=filteredActiveJobs.filter((j:any)=>j.priority==="low").length;
+  const critPct=totalActiveJobs>0?(criticalJobs/totalActiveJobs)*100:0;
+  const highPct=totalActiveJobs>0?(highJobs/totalActiveJobs)*100:0;
+  const normPct=totalActiveJobs>0?(normalJobs/totalActiveJobs)*100:0;
+  const lowPct=totalActiveJobs>0?(lowJobs/totalActiveJobs)*100:0;
+  const guestReqJobs=filteredActiveJobs.filter((j:any)=>j.kind==="guest_request").length;
+  const cleanTurnoverJobs=filteredActiveJobs.filter((j:any)=>j.kind==="cleaning").length;
+
+  const formatDeadline=(dueAt?:string)=>{
+   if(!dueAt)return null;
+   const due=new Date(dueAt).getTime();
+   const diffMins=Math.round((due-Date.now())/60000);
+   const isOverdue=diffMins<0;
+   const absMins=Math.abs(diffMins);
+   let text="";
+   if(absMins<60){
+    text=`${absMins}m ${isOverdue?"overdue":"left"}`;
+   }else if(absMins<1440){
+    text=`${Math.round(absMins/60)}h ${isOverdue?"overdue":"left"}`;
+   }else{
+    text=new Date(dueAt).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+   }
+   return{isOverdue,text};
+  };
+
+  const getTicketIcon=(kind:string)=>{
+   switch(kind){
+    case "cleaning":return <Sparkles size={11}/>;
+    case "maintenance":return <Wrench size={11}/>;
+    case "inspection":return <ClipboardCheck size={11}/>;
+    default:return <Users size={11}/>;
+   }
+  };
+  const getTicketLabel=(kind:string)=>{
+   switch(kind){
+    case "cleaning":return "Housekeeping";
+    case "maintenance":return "Maintenance";
+    case "inspection":return "Inspection";
+    default:return "Guest Request";
+   }
+  };
+
+  return <>
+   <section className="hotel-overview">
+    {cards.filter(c=>canManage||c.value!==null).map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} className="hotel-overview-card"><c.icon size={17}/><span>{c.title}</span><strong>{c.value}</strong><ArrowUpRight size={14}/></button>)}
+   </section>
+
+   <div className="hotel-overview-layout">
+    {/* SIDEBAR: Operational Shortcuts & Recent Activity Feed */}
+    <aside className="hotel-overview-sidebar">
+     <section className="platform-card" style={{padding:"16px"}}>
+      <h3 style={{fontSize:"13px",fontWeight:600,margin:"0 0 3px 0",display:"flex",alignItems:"center",gap:"6px"}}>
+       <Building2 size={15}/>
+       <span>Operational Shortcuts</span>
+      </h3>
+      <p style={{fontSize:"11px",color:"var(--muted)",margin:"0 0 12px 0"}}>Rapid actions for front desk &amp; housekeeping</p>
+      <div className="hotel-tools-list">
+       <button
+        type="button"
+        className="hotel-tool-btn primary"
+        onClick={()=>setShowJobModal(true)}
+       >
+        <span>+ New Job Request</span>
+        <Plus size={14}/>
+       </button>
+       <button
+        type="button"
+        className="hotel-tool-btn"
+        onClick={()=>{setTab("Guests");setShowReserveModal(true);}}
+       >
+        <span>+ Reserve / Check-In</span>
+        <Calendar size={14}/>
+       </button>
+       <button
+        type="button"
+        className="hotel-tool-btn"
+        onClick={()=>{
+         setRoomManagerPropertyId(property!=="all"?property:"");
+         setShowRoomManagerModal(true);
+        }}
+       >
+        <span>Manage &amp; Import Rooms</span>
+        <BedDouble size={14}/>
+       </button>
+       <button
+        type="button"
+        className="hotel-tool-btn"
+        onClick={openGeneralFeedbackCode}
+       >
+        <span>Feedback Code / QR</span>
+        <QrCode size={14}/>
+       </button>
+      </div>
+     </section>
+
+     <section className="platform-card" style={{padding:"16px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+       <h3 style={{fontSize:"13px",fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:"6px"}}>
+        <Activity size={15}/>
+        <span>Recent Activity</span>
+       </h3>
+       <span style={{fontSize:"10px",color:"var(--muted)"}}>{data.activity?.length||0} events</span>
+      </div>
+      <p style={{fontSize:"11px",color:"var(--muted)",margin:"0 0 10px 0"}}>Live audit log of operational actions</p>
+      <div className="hotel-activity-list">
+       {!data.activity?.length?(
+        <p style={{fontSize:"12px",color:"var(--muted)",margin:0,padding:"12px 0",textAlign:"center"}}>
+         {canManage?"No operational changes recorded yet.":"Activity history is available to administrators."}
+        </p>
+       ):(
+        data.activity.map((a:any)=>(
+         <div className="hotel-activity-item" key={a.id}>
+          <div className="hotel-activity-header">
+           <span className="hotel-activity-title">{label(a.entity_type)} · {a.action}</span>
+           <time style={{fontSize:"10px",color:"var(--muted)"}}>{format(a.created_at)}</time>
+          </div>
+          <div className="hotel-activity-meta">
+           <span>ID: {a.entity_id.slice(0,8)}</span>
+           <span>{a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Staff":"System"}</span>
+          </div>
+         </div>
+        ))
+       )}
+      </div>
+     </section>
+    </aside>
+
+    {/* MAIN AREA: Operational Graphs & Active Service Tickets Queue */}
+    <main className="hotel-overview-main">
+     {/* Visual Analytics Graphs */}
+     <section className="platform-card" style={{padding:"18px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"10px",marginBottom:"14px"}}>
+       <div>
+        <h2 style={{margin:0,fontSize:"15px",fontWeight:600,display:"flex",alignItems:"center",gap:"6px"}}>
+         <BarChart3 size={16}/>
+         <span>Operational Health &amp; Capacity</span>
+        </h2>
+        <p style={{margin:"2px 0 0 0",fontSize:"12px",color:"var(--muted)"}}>
+         {property==="all"?"Aggregated across all properties":`Scoped to ${nameOf(property)}`}
+        </p>
+       </div>
+       <span style={{fontSize:"11px",color:"var(--muted)",background:"var(--canvas)",padding:"3px 8px",borderRadius:"4px",border:"1px solid var(--line)"}}>
+        {totalRooms} Rooms · {totalActiveJobs} Active Tasks
+       </span>
+      </div>
+
+      <div className="hotel-charts-grid">
+       {/* Graph 1: Room Readiness & Occupancy */}
+       <div className="hotel-chart-card">
+        <div className="hotel-chart-header">
+         <div>
+          <h3>Room Readiness &amp; Occupancy</h3>
+          <p>{totalRooms>0?`${readyRooms} ready for guests (${readyPct}%)`:"No rooms configured"}</p>
+         </div>
+         <div className="hotel-chart-stat">
+          {totalRooms>0?`${readyPct}%`:"—"}
+          <small>{readyRooms} of {totalRooms} ready</small>
+         </div>
+        </div>
+
+        {totalRooms>0?(
+         <>
+          <div className="hotel-progress-stacked" title={`Ready: ${readyRooms}, Occupied: ${occupiedRooms}, Dirty: ${dirtyRooms}, Out of service: ${outOfServiceRooms}`}>
+           {inspectedRooms>0&&<div className="hotel-progress-segment" style={{width:`${(inspectedRooms/totalRooms)*100}%`,background:"#10b981"}} title={`Inspected & Ready: ${inspectedRooms}`}/>}
+           {cleanRooms>0&&<div className="hotel-progress-segment" style={{width:`${(cleanRooms/totalRooms)*100}%`,background:"#14b8a6"}} title={`Clean: ${cleanRooms}`}/>}
+           {occupiedRooms>0&&<div className="hotel-progress-segment" style={{width:`${(occupiedRooms/totalRooms)*100}%`,background:"#3b82f6"}} title={`Occupied: ${occupiedRooms}`}/>}
+           {dirtyRooms>0&&<div className="hotel-progress-segment" style={{width:`${(dirtyRooms/totalRooms)*100}%`,background:"#f59e0b"}} title={`Dirty / Needs Turnover: ${dirtyRooms}`}/>}
+           {outOfServiceRooms>0&&<div className="hotel-progress-segment" style={{width:`${(outOfServiceRooms/totalRooms)*100}%`,background:"#f43f5e"}} title={`Out of Service / Repair: ${outOfServiceRooms}`}/>}
+          </div>
+
+          <div className="hotel-chart-legend">
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#10b981"}}/>
+             Ready / Clean
+            </span>
+            <strong>{readyRooms} ({readyPct}%)</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#3b82f6"}}/>
+             Occupied
+            </span>
+            <strong>{occupiedRooms} ({occupiedPct}%)</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#f59e0b"}}/>
+             Needs Cleaning
+            </span>
+            <strong>{dirtyRooms} ({dirtyPct}%)</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#f43f5e"}}/>
+             Maintenance
+            </span>
+            <strong>{outOfServiceRooms} ({outOfServicePct}%)</strong>
+           </div>
+          </div>
+         </>
+        ):(
+         <div style={{textAlign:"center",padding:"16px 8px",background:"var(--canvas)",borderRadius:"4px",border:"1px dashed var(--line)"}}>
+          <p style={{margin:"0 0 8px 0",fontSize:"11px",color:"var(--muted)"}}>No rooms configured for this property.</p>
+          <button
+           type="button"
+           className="button button-outline compact"
+           onClick={()=>{
+            setRoomManagerPropertyId(property!=="all"?property:"");
+            setShowRoomManagerModal(true);
+           }}
+           style={{fontSize:"11px"}}
+          >
+           + Add / Import Rooms
+          </button>
+         </div>
+        )}
+       </div>
+
+       {/* Graph 2: Service Job Dispatch Workload */}
+       <div className="hotel-chart-card">
+        <div className="hotel-chart-header">
+         <div>
+          <h3>Service Dispatch Workload</h3>
+          <p>{totalActiveJobs>0?`${criticalJobs+highJobs} urgent priority`:"All service tickets closed"}</p>
+         </div>
+         <div className="hotel-chart-stat">
+          {totalActiveJobs}
+          <small>active tickets</small>
+         </div>
+        </div>
+
+        {totalActiveJobs>0?(
+         <>
+          <div className="hotel-progress-stacked" title={`Critical: ${criticalJobs}, High: ${highJobs}, Normal: ${normalJobs}, Low: ${lowJobs}`}>
+           {criticalJobs>0&&<div className="hotel-progress-segment" style={{width:`${critPct}%`,background:"#ef4444"}} title={`Critical: ${criticalJobs}`}/>}
+           {highJobs>0&&<div className="hotel-progress-segment" style={{width:`${highPct}%`,background:"#f97316"}} title={`High: ${highJobs}`}/>}
+           {normalJobs>0&&<div className="hotel-progress-segment" style={{width:`${normPct}%`,background:"#3b82f6"}} title={`Normal: ${normalJobs}`}/>}
+           {lowJobs>0&&<div className="hotel-progress-segment" style={{width:`${lowPct}%`,background:"#94a3b8"}} title={`Low: ${lowJobs}`}/>}
+          </div>
+
+          <div className="hotel-chart-legend">
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#ef4444"}}/>
+             Critical / High
+            </span>
+            <strong>{criticalJobs+highJobs}</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">
+             <span className="hotel-legend-dot" style={{background:"#3b82f6"}}/>
+             Normal / Low
+            </span>
+            <strong>{normalJobs+lowJobs}</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">Guest Requests</span>
+            <strong>{guestReqJobs}</strong>
+           </div>
+           <div className="hotel-legend-item">
+            <span className="hotel-legend-item-label">Housekeeping</span>
+            <strong>{cleanTurnoverJobs}</strong>
+           </div>
+          </div>
+         </>
+        ):(
+         <div style={{textAlign:"center",padding:"16px 8px",background:"var(--canvas)",borderRadius:"4px",border:"1px dashed var(--line)"}}>
+          <p style={{margin:"0 0 8px 0",fontSize:"11px",color:"var(--muted)"}}>No active service jobs in queue.</p>
+          <button
+           type="button"
+           className="button button-dark compact"
+           onClick={()=>setShowJobModal(true)}
+           style={{fontSize:"11px"}}
+          >
+           + Create Job Request
+          </button>
+         </div>
+        )}
+       </div>
+      </div>
+     </section>
+
+     {/* Live Active Service Tickets Queue */}
+     <section className="hotel-queue-card">
+      <div className="hotel-queue-header">
+       <div className="hotel-queue-title-area">
+        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+         <h2 style={{margin:0,fontSize:"15px",display:"flex",alignItems:"center",gap:"6px"}}>
+          <ClipboardList size={16}/>
+          <span>Active Service Tickets &amp; Work Queue</span>
+         </h2>
+         <span style={{fontSize:"11px",fontWeight:600,padding:"1px 6px",borderRadius:"3px",background:"var(--ink)",color:"var(--panel)"}}>
+          {totalActiveJobs}
+         </span>
+        </div>
+        <p style={{margin:"2px 0 0 0",fontSize:"12px",color:"var(--muted)"}}>
+         Live operational dispatch queue. Start, assign, and complete requests directly.
+        </p>
+       </div>
+       <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+        <button
+         type="button"
+         className="button button-dark compact"
+         onClick={()=>setShowJobModal(true)}
+         style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
+        >
+         <Plus size={13}/>
+         <span>New Job</span>
+        </button>
+        <button
+         type="button"
+         className="button button-outline compact"
+         onClick={()=>setTab("Service jobs")}
+         style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
+        >
+         <span>View All Jobs</span>
+         <ArrowUpRight size={13}/>
+        </button>
+       </div>
+      </div>
+
+      {totalActiveJobs===0?(
+       <div style={{padding:"28px 16px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
+        <CheckCircle2 size={24} style={{color:"var(--sage-deep)",margin:"0 auto 8px auto"}}/>
+        <h3 style={{fontSize:"14px",fontWeight:600,margin:"0 0 4px 0"}}>Work Queue Clear</h3>
+        <p style={{fontSize:"12px",color:"var(--muted)",maxWidth:"340px",margin:"0 auto 12px auto"}}>
+         All guest requests, housekeeping turnovers, and maintenance tickets are complete.
+        </p>
+        <button
+         type="button"
+         className="button button-dark compact"
+         onClick={()=>setShowJobModal(true)}
+        >
+         + Create Job Request
+        </button>
+       </div>
+      ):(
+       <div className="hotel-tickets-list">
+        {filteredActiveJobs.map((j:any)=>{
+         const deadline=formatDeadline(j.due_at);
+         const propTeam=(data.team||[]).filter((p:any)=>j.property_id?(p.property_id===j.property_id||(Array.isArray(p.property_ids)&&p.property_ids.includes(j.property_id))):true);
+         return (
+          <div className={`hotel-ticket-item priority-${j.priority}`} key={j.id}>
+           <div className="hotel-ticket-top">
+            <div className="hotel-ticket-badges">
+             <span className="hotel-badge badge-kind">
+              {getTicketIcon(j.kind)}
+              <span>{getTicketLabel(j.kind)}</span>
+             </span>
+             <span className={`hotel-badge priority-${j.priority}`}>
+              {label(j.priority)}
+             </span>
+             <span
+              className="hotel-badge"
+              style={{
+               background:j.status==="in_progress"?"var(--sage-soft)":"var(--canvas)",
+               color:j.status==="in_progress"?"var(--sage-deep)":"var(--muted)",
+               border:"1px solid var(--line)"
+              }}
+             >
+              {j.status==="in_progress"?"In Progress":"Waiting Dispatch"}
+             </span>
+            </div>
+            {deadline&&(
+             <span className={`hotel-ticket-due ${deadline.isOverdue?"overdue":""}`}>
+              {deadline.isOverdue?<AlertTriangle size={12}/>:<Clock size={12}/>}
+              <span>{deadline.isOverdue?"Overdue":"Due"} · {deadline.text}</span>
+             </span>
+            )}
+           </div>
+
+           <div className="hotel-ticket-body">
+            <div className="hotel-ticket-title-row">
+             <h4 className="hotel-ticket-title">{j.title}</h4>
+             <span className="hotel-ticket-room">
+              {roomOf(j.room_id)!=="—"?`Room ${roomOf(j.room_id)}`:"General Area"} · {nameOf(j.property_id)}
+             </span>
+            </div>
+            {j.description&&(
+             <p className="hotel-ticket-desc">{j.description}</p>
+            )}
+           </div>
+
+           <div className="hotel-ticket-footer">
+            <div className="hotel-ticket-assignee">
+             <span style={{fontSize:"11px",color:"var(--muted)"}}>Assignee:</span>
+             {canManage&&["open","in_progress"].includes(j.status)?(
+              <div style={{minWidth:"150px"}}>
+               <WorkspaceSelect
+                label={"Assign "+j.title}
+                disabled={busy}
+                value={j.assigned_to||""}
+                placeholder={j.assignee?.full_name||"Unassigned"}
+                options={[
+                 {value:"",label:propTeam.length===0?"Unassigned (No staff assigned)":"Unassigned"},
+                 ...propTeam.map((p:any)=>({value:p.id,label:p.full_name}))
+                ]}
+                onChange={assigned_to=>save({action:"job",id:j.id,assigned_to},"PATCH")}
+               />
+              </div>
+             ):(
+              <strong style={{fontSize:"11px",color:j.assigned_to?"var(--ink)":"var(--muted)"}}>
+               {j.assignee?.full_name||"Unassigned / Auto-dispatch"}
+              </strong>
+             )}
+            </div>
+
+            <div className="hotel-ticket-actions">
+             {(canManage||(canAttend&&j.assigned_to===user.id))&&["open","in_progress"].includes(j.status)&&(
+              <>
+               {j.status==="open"&&(
+                <button
+                 type="button"
+                 className="button button-ghost compact"
+                 disabled={busy}
+                 onClick={()=>save({action:"job",id:j.id,status:"in_progress"},"PATCH")}
+                >
+                 Start
+                </button>
+               )}
+               <button
+                type="button"
+                className="button button-dark compact"
+                disabled={busy}
+                onClick={()=>save({action:"job",id:j.id,status:"completed"},"PATCH")}
+                style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
+               >
+                <Check size={12}/>
+                <span>Complete</span>
+               </button>
+              </>
+             )}
+            </div>
+           </div>
+          </div>
+         );
+        })}
+       </div>
+      )}
+     </section>
+    </main>
    </div>
-   <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
-    <button className="button button-dark compact" onClick={()=>{setTab("Guests");setShowReserveModal(true);}} style={{display:"inline-flex",alignItems:"center",gap:"5px"}}>
-     <Calendar size={13}/>
-     <span>Reserve / Check-In</span>
-    </button>
-    <button className="button button-outline compact" onClick={openGeneralFeedbackCode} style={{display:"inline-flex",alignItems:"center",gap:"5px"}}>
-     <QrCode size={13}/>
-     <span>Feedback Code / QR</span>
-    </button>
-   </div>
-  </section>
-  <section className="platform-card">
-   <h2>Connected operations</h2>
-   <div className="hotel-workflow">
-    <span>Reserve a room</span><span>Check in</span><span>Dispatch service</span><span>Inspect readiness</span><span>Review costs</span>
-   </div>
-   <p>Room readiness, guest stays, service work and cost decisions are recorded in the same company workspace.</p>
-  </section>
-  <section className="platform-card">
-   <h2>Recent activity</h2>
-   {!data.activity.length&&<p>{canManage?"No operational changes recorded yet.":"Activity history is available to administrators."}</p>}
-   {data.activity.map((a:any)=><div className="platform-row" key={a.id}><span>{label(a.entity_type)} · {a.action}<small>{a.entity_id.slice(0,8)} · {a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Former administrator":"System"}</small></span><time>{format(a.created_at)}</time></div>)}
-  </section>
- </>}
+  </>;
+ })()}
 
  {tab==="Guests"&&<>
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
@@ -914,7 +1348,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
       {data.jobs.map((j:any)=><tr key={j.id}>
        <td>{j.title}<small>{label(j.kind)} · {j.priority}</small></td>
        <td>{nameOf(j.property_id)}<small>Room {roomOf(j.room_id)}</small></td>
-       <td>{canManage&&["open","in_progress"].includes(j.status)?<WorkspaceSelect label={"Assign "+j.title} disabled={busy} value={j.assigned_to||""} placeholder={j.assignee?.full_name||"Unassigned"} options={[{value:"",label:"Unassigned"},...data.team.filter((p:any)=>p.isAdmin||p.property_id===j.property_id||p.property_ids?.includes(j.property_id)).map((p:any)=>({value:p.id,label:p.full_name}))]} onChange={assigned_to=>save({action:"job",id:j.id,assigned_to},"PATCH")}/>:j.assignee?.full_name||"Unassigned"}</td>
+       <td>{canManage&&["open","in_progress"].includes(j.status)?<WorkspaceSelect label={"Assign "+j.title} disabled={busy} value={j.assigned_to||""} placeholder={j.assignee?.full_name||"Unassigned"} options={[{value:"",label:"Unassigned"},...data.team.filter((p:any)=>j.property_id?(p.property_id===j.property_id||(Array.isArray(p.property_ids)&&p.property_ids.includes(j.property_id))):true).map((p:any)=>({value:p.id,label:p.full_name}))]} onChange={assigned_to=>save({action:"job",id:j.id,assigned_to},"PATCH")}/>:j.assignee?.full_name||"Unassigned"}</td>
        <td>{format(j.due_at)}<small>{j.escalated_at?"Escalation queued":Date.parse(j.due_at)<Date.now()&&["open","in_progress"].includes(j.status)?"Overdue":""}</small></td>
        <td>{label(j.status)}</td>
        <td>{(canManage||canAttend&&j.assigned_to===user.id)&&["open","in_progress"].includes(j.status)&&<div className="platform-actions">{j.status==="open"&&<button className="button button-ghost compact" disabled={busy} onClick={()=>save({action:"job",id:j.id,status:"in_progress"},"PATCH")}>Start</button>}<button className="button button-dark compact" disabled={busy} onClick={()=>save({action:"job",id:j.id,status:"completed"},"PATCH")}>Complete</button>{canManage&&<button className="button button-ghost compact" disabled={busy} onClick={()=>save({action:"job",id:j.id,status:"cancelled"},"PATCH")}>Cancel job</button>}</div>}</td>
