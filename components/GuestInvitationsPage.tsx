@@ -19,6 +19,7 @@ import {
   Smartphone,
   MessageSquare,
   Link as LinkIcon,
+  Building2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
@@ -39,27 +40,45 @@ export default function GuestInvitationsPage({
     () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
   const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
-  const [error,setError]=useState("");
-  const [notice,setNotice]=useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>("all");
 
-  // Modal states
+  // Determine property access scope
+  const allowedProperties = useMemo(() => {
+    if (!properties || properties.length === 0) return [];
+    if (user?.isOrganizationAdmin) return properties;
+    const userPropertyIds =
+      user?.propertyIds && user.propertyIds.length > 0
+        ? user.propertyIds
+        : user?.propertyId
+        ? [user.propertyId]
+        : [];
+    if (userPropertyIds.length === 0) return properties;
+    return properties.filter((p) => userPropertyIds.includes(p.id));
+  }, [properties, user]);
+
+  // Modal & action states
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [qrModalInvite, setQrModalInvite] = useState<GuestInvitation | null>(null);
   const [qrModalDataUrl, setQrModalDataUrl] = useState<string>("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<GuestInvitation | null>(null);
   const [deletingInvite, setDeletingInvite] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [emailModalInvite, setEmailModalInvite] = useState<GuestInvitation | null>(null);
+  const [quickEmailValue, setQuickEmailValue] = useState("");
+  const [sendingQuickEmail, setSendingQuickEmail] = useState(false);
 
   // Form states
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
-  const [propertyId, setPropertyId] = useState(properties[0]?.id || "");
+  const [propertyId, setPropertyId] = useState(allowedProperties[0]?.id || properties[0]?.id || "");
   const [channel, setChannel] = useState<"direct_link" | "email" | "sms" | "whatsapp">("direct_link");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -77,16 +96,23 @@ export default function GuestInvitationsPage({
     loadInvitations();
   }, []);
 
+  useEffect(() => {
+    if (allowedProperties.length > 0 && (!propertyId || !allowedProperties.some((p) => p.id === propertyId))) {
+      setPropertyId(allowedProperties[0].id);
+    }
+  }, [allowedProperties, propertyId]);
+
   async function loadInvitations() {
     setLoading(true);
     try {
       const res = await fetch("/api/invitations");
       const json = await res.json();
-      if(!res.ok)throw new Error(json.error||"Cannot load invitations.");
+      if (!res.ok) throw new Error(json.error || "Cannot load invitations.");
       if (json.success && json.invitations) {
         setInvitations(json.invitations);
       }
-    } catch(e) {setError((e as Error).message);
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -96,15 +122,16 @@ export default function GuestInvitationsPage({
 
   function getInviteUrl(inv: GuestInvitation) {
     const p = properties.find((x) => x.id === inv.propertyId);
-    const propParam = p?.code || inv.propertyId;
+    const propParam = p?.code || inv.propertyCode || inv.propertyId;
     return `${origin}/feedback?token=${inv.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(inv.roomNumber)}&guest=${encodeURIComponent(inv.guestName)}`;
   }
 
-  async function handleCreateInvite(e: React.FormEvent) {
+  async function handleCreateInvite(e: React.FormEvent, sendEmailDirect = false) {
     e.preventDefault();
     if (!guestName.trim() || !roomNumber.trim() || !propertyId) return;
 
     setSubmitting(true);
+    setError("");
     try {
       const p = properties.find((x) => x.id === propertyId);
       const res = await fetch("/api/invitations", {
@@ -117,15 +144,19 @@ export default function GuestInvitationsPage({
           propertyId,
           propertyName: p?.name,
           roomNumber: roomNumber.trim(),
-          channel,
+          channel: sendEmailDirect ? "email" : channel,
+          sendEmail: sendEmailDirect,
           notes: notes.trim() || undefined,
         }),
       });
 
       const json = await res.json();
-      if(!res.ok||!json.success)throw new Error(json.error||"Cannot create invitation.");
+      if (!res.ok || !json.success) throw new Error(json.error || "Cannot create invitation.");
       if (json.success && json.invitation) {
-        setNotice(json.message||"Invitation link created.");setError("");
+        if (json.emailError) {
+          setError(`Notice: ${json.emailError}`);
+        }
+        setNotice(json.message || "Invitation link created.");
         setInvitations((prev) => [json.invitation, ...prev]);
         setShowInviteModal(false);
         setGuestName("");
@@ -134,8 +165,49 @@ export default function GuestInvitationsPage({
         setRoomNumber("");
         setNotes("");
       }
-    } catch(e){setError((e as Error).message);} finally {
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSendEmail(inv: GuestInvitation, explicitEmail?: string) {
+    const targetEmail = explicitEmail || inv.guestEmail;
+    if (!targetEmail) {
+      setEmailModalInvite(inv);
+      setQuickEmailValue("");
+      return;
+    }
+
+    if (explicitEmail) setSendingQuickEmail(true);
+    else setSendingEmailId(inv.id);
+    setError("");
+
+    try {
+      const res = await fetch("/api/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resend_email",
+          invitationId: inv.id,
+          guestEmail: targetEmail,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed to dispatch email.");
+
+      setNotice(json.message || `Invitation successfully sent to ${targetEmail}`);
+      setEmailModalInvite(null);
+      setInvitations((prev) =>
+        prev.map((i) => (i.id === inv.id ? { ...i, guestEmail: targetEmail } : i))
+      );
+    } catch (err: any) {
+      setError(err.message || "Email dispatch failed.");
+    } finally {
+      setSendingEmailId(null);
+      setSendingQuickEmail(false);
     }
   }
 
@@ -143,11 +215,15 @@ export default function GuestInvitationsPage({
     if (!pendingDelete) return;
     setDeletingInvite(true);
     try {
-      const r=await fetch(`/api/invitations?id=${pendingDelete.id}`, { method: "DELETE" });
-      if(!r.ok){const j=await r.json();throw new Error(j.error||"Could not remove invitation.");}
+      const r = await fetch(`/api/invitations?id=${pendingDelete.id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const j = await r.json();
+        throw new Error(j.error || "Could not remove invitation.");
+      }
       setInvitations((prev) => prev.filter((i) => i.id !== pendingDelete.id));
       setPendingDelete(null);
-    } catch(e) {setError((e as Error).message);
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setDeletingInvite(false);
     }
@@ -161,21 +237,20 @@ export default function GuestInvitationsPage({
   }
 
   const filtered = useMemo(() => {
-    return invitations
-      .filter((inv) => {
-        if (selectedPropertyFilter !== "all" && inv.propertyId !== selectedPropertyFilter) return false;
-        if (statusFilter !== "all" && inv.status !== statusFilter) return false;
-        if (search) {
-          const q = search.toLowerCase();
-          return (
-            inv.guestName.toLowerCase().includes(q) ||
-            inv.roomNumber.toLowerCase().includes(q) ||
-            inv.token.toLowerCase().includes(q) ||
-            (inv.guestEmail && inv.guestEmail.toLowerCase().includes(q))
-          );
-        }
-        return true;
-      });
+    return invitations.filter((inv) => {
+      if (selectedPropertyFilter !== "all" && inv.propertyId !== selectedPropertyFilter) return false;
+      if (statusFilter !== "all" && inv.status !== statusFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          inv.guestName.toLowerCase().includes(q) ||
+          inv.roomNumber.toLowerCase().includes(q) ||
+          inv.token.toLowerCase().includes(q) ||
+          (inv.guestEmail && inv.guestEmail.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
   }, [invitations, selectedPropertyFilter, statusFilter, search]);
 
   const total = invitations.length;
@@ -186,11 +261,42 @@ export default function GuestInvitationsPage({
   return (
     <AppShell active="Guest invitations" user={user}>
       <div className="content-wrap">
-        {error&&<p className="platform-notice" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+        {error && (
+          <p className="platform-notice" role="alert" style={{ marginBottom: "16px" }}>
+            {error}
+          </p>
+        )}
+        {notice && (
+          <div
+            role="status"
+            style={{
+              padding: "10px 14px",
+              background: "rgba(197, 160, 89, 0.12)",
+              border: "1px solid rgba(197, 160, 89, 0.3)",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              color: "var(--ink)",
+              fontSize: "13px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "16px" }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="page-heading">
           <div>
             <p className="eyebrow">Guest Collection Touchpoints</p>
-            <h1>Guest invitations & tracked links</h1>
+            <h1>Guest invitations &amp; tracked links</h1>
             <p className="subheading">
               Dispatch unique hash-tracked feedback links. When the guest submits feedback, the record is automatically marked as Completed.
             </p>
@@ -240,12 +346,29 @@ export default function GuestInvitationsPage({
 
         {/* Filter bar */}
         <div className="panel" style={{ padding: "16px 20px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
-            <div className="invitation-filters" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: "260px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+            }}
+          >
+            <div
+              className="invitation-filters"
+              style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: "260px" }}
+            >
               <div className="invitation-search" style={{ position: "relative", minWidth: "220px", flex: 1 }}>
                 <Search
                   size={15}
-                  style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }}
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--muted)",
+                  }}
                 />
                 <input
                   type="text"
@@ -280,17 +403,37 @@ export default function GuestInvitationsPage({
               </div>
             </div>
 
-            <div style={{ minWidth: "200px" }}>
-              <CustomSelect
-                value={selectedPropertyFilter}
-                onChange={(val) => setSelectedPropertyFilter(val)}
-                placeholder="All Properties"
-                options={[
-                  { value: "all", label: "All Properties" },
-                  ...properties.map((p) => ({ value: p.id, label: p.name })),
-                ]}
-              />
-            </div>
+            {/* Property Scoping in Filter Bar */}
+            {allowedProperties.length > 1 ? (
+              <div style={{ minWidth: "200px" }}>
+                <CustomSelect
+                  value={selectedPropertyFilter}
+                  onChange={(val) => setSelectedPropertyFilter(val)}
+                  placeholder="All Properties"
+                  options={[
+                    { value: "all", label: "All Properties" },
+                    ...allowedProperties.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
+              </div>
+            ) : allowedProperties.length === 1 ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 12px",
+                  background: "var(--canvas-alt)",
+                  borderRadius: "6px",
+                  border: "1px solid var(--line)",
+                  fontSize: "12px",
+                  color: "var(--ink)",
+                }}
+              >
+                <Building2 size={13} style={{ color: "var(--gold)" }} />
+                <span>{allowedProperties[0].name}</span>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -321,6 +464,7 @@ export default function GuestInvitationsPage({
                   filtered.map((inv) => {
                     const link = getInviteUrl(inv);
                     const isCopied = copiedId === inv.id;
+                    const isSendingThis = sendingEmailId === inv.id;
                     return (
                       <tr key={inv.id}>
                         <td>
@@ -333,6 +477,11 @@ export default function GuestInvitationsPage({
                               <span style={{ display: "block", fontSize: "11px", color: "var(--muted)" }}>
                                 {inv.roomNumber} · {new Date(inv.createdAt).toLocaleDateString()}
                               </span>
+                              {inv.guestEmail && (
+                                <span style={{ display: "block", fontSize: "10px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
+                                  {inv.guestEmail}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -368,7 +517,7 @@ export default function GuestInvitationsPage({
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                             <code
                               style={{
                                 fontSize: "11px",
@@ -393,6 +542,23 @@ export default function GuestInvitationsPage({
                             >
                               {isCopied ? <Check size={12} /> : <Copy size={12} />}
                               <span>{isCopied ? "Copied" : "Copy"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSendEmail(inv)}
+                              disabled={isSendingThis}
+                              className="button button-outline"
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "10px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title={inv.guestEmail ? `Send email to ${inv.guestEmail}` : "Send invitation via email"}
+                            >
+                              <Mail size={12} />
+                              <span>{isSendingThis ? "Sending…" : inv.guestEmail ? "Send Email" : "Email Link"}</span>
                             </button>
                             <button
                               type="button"
@@ -510,18 +676,56 @@ export default function GuestInvitationsPage({
                   Create a tracked link for a specific guest or stay. When the guest leaves feedback via this link, their submission is tracked and reconciled.
                 </p>
 
-                <form onSubmit={handleCreateInvite} style={{ display: "grid", gap: "16px" }}>
-                  <div>
-                    <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                      Target Hotel Property *
-                    </label>
-                    <CustomSelect
-                      value={propertyId}
-                      onChange={(val) => setPropertyId(val)}
-                      placeholder="Select property"
-                      options={properties.map((p) => ({ value: p.id, label: p.name }))}
-                    />
-                  </div>
+                <form onSubmit={(e) => handleCreateInvite(e, false)} style={{ display: "grid", gap: "16px" }}>
+                  {/* Property Selector Scoping */}
+                  {allowedProperties.length > 1 ? (
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                        Target Hotel Property *
+                      </label>
+                      <CustomSelect
+                        value={propertyId}
+                        onChange={(val) => setPropertyId(val)}
+                        placeholder="Select property"
+                        options={allowedProperties.map((p) => ({ value: p.id, label: p.name }))}
+                      />
+                    </div>
+                  ) : allowedProperties.length === 1 ? (
+                    <div>
+                      <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                        Target Hotel Property
+                      </label>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 14px",
+                          background: "var(--canvas-alt)",
+                          borderRadius: "6px",
+                          border: "1px solid var(--line)",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: "13px", display: "block" }}>{allowedProperties[0].name}</strong>
+                          <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                            Assigned Property ({allowedProperties[0].code || "Default"})
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            background: "var(--panel)",
+                            borderRadius: "4px",
+                            color: "var(--muted)",
+                          }}
+                        >
+                          Assigned
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div>
                     <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
@@ -608,24 +812,133 @@ export default function GuestInvitationsPage({
                     />
                   </div>
 
-                  <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                    <button
-                      type="submit"
-                      disabled={submitting || !guestName.trim() || !roomNumber.trim()}
-                      className="button button-dark"
-                      style={{ flex: 1 }}
-                    >
-                      {submitting ? "Generating Tracked Link…" : "Generate Tracked Link"}
-                    </button>
+                  {/* Actions */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
+                    {guestEmail.trim() ? (
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button
+                          type="button"
+                          disabled={submitting || !guestName.trim() || !roomNumber.trim()}
+                          onClick={(e) => handleCreateInvite(e, true)}
+                          className="button button-dark"
+                          style={{
+                            flex: 1,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <Mail size={14} />
+                          <span>{submitting ? "Sending via Email…" : "Send via Email"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={submitting || !guestName.trim() || !roomNumber.trim()}
+                          onClick={(e) => handleCreateInvite(e, false)}
+                          className="button button-outline"
+                          style={{ flex: 1 }}
+                        >
+                          Generate Link Only
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={submitting || !guestName.trim() || !roomNumber.trim()}
+                        className="button button-dark"
+                        style={{ width: "100%" }}
+                      >
+                        {submitting ? "Generating Tracked Link…" : "Generate Tracked Link"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowInviteModal(false)}
                       className="button button-outline"
+                      style={{ width: "100%" }}
                     >
                       Cancel
                     </button>
                   </div>
                 </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Quick Email Dispatch Modal (when clicking Send Email on row without stored email) */}
+        <AnimatePresence>
+          {emailModalInvite && (
+            <motion.div
+              className="drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEmailModalInvite(null)}
+              style={{ display: "grid", placeItems: "center" }}
+            >
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.94, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: "var(--panel)",
+                  borderRadius: "8px",
+                  padding: "28px",
+                  maxWidth: "420px",
+                  width: "90%",
+                  boxShadow: "var(--shadow-lg)",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <div>
+                    <p className="eyebrow" style={{ margin: 0 }}>Dispatch Invitation</p>
+                    <h3 style={{ margin: "4px 0 0 0", fontSize: "16px" }}>Email to {emailModalInvite.guestName}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEmailModalInvite(null)}
+                    style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "16px" }}>
+                  Enter the guest email to send their unique feedback tracking link for Room {emailModalInvite.roomNumber}.
+                </p>
+                <div style={{ marginBottom: "16px" }}>
+                  <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+                    Guest Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    className="auth-input"
+                    placeholder="guest@example.com"
+                    value={quickEmailValue}
+                    onChange={(e) => setQuickEmailValue(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="button button-outline"
+                    onClick={() => setEmailModalInvite(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-dark"
+                    disabled={sendingQuickEmail || !quickEmailValue.trim()}
+                    onClick={() => handleSendEmail(emailModalInvite, quickEmailValue.trim())}
+                  >
+                    {sendingQuickEmail ? "Sending…" : "Send Invitation"}
+                  </button>
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -701,14 +1014,21 @@ export default function GuestInvitationsPage({
             </motion.div>
           )}
         </AnimatePresence>
+
         <ConfirmDrawer
           open={pendingDelete !== null}
           title="Remove invitation"
-          recordName={pendingDelete ? `${pendingDelete.guestName}${pendingDelete.roomNumber ? ` · ${pendingDelete.roomNumber}` : ""}` : ""}
+          recordName={
+            pendingDelete
+              ? `${pendingDelete.guestName}${pendingDelete.roomNumber ? ` · ${pendingDelete.roomNumber}` : ""}`
+              : ""
+          }
           consequence="This removes the invitation record. The guest link will stop working."
           confirmLabel="Remove invitation"
           pending={deletingInvite}
-          onCancel={() => { if (!deletingInvite) setPendingDelete(null); }}
+          onCancel={() => {
+            if (!deletingInvite) setPendingDelete(null);
+          }}
           onConfirm={handleDelete}
         />
       </div>

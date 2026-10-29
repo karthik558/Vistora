@@ -104,33 +104,46 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               setSelectedPropertyId(activeProperties[0].id);
               setIsUrlPreselected(true);
             }
+
+            // Resolve invitation / stay if tokenParam exists
+            const tokenToLookup = (publicToken && publicToken !== "verified") ? publicToken : tokenParam;
+            if (tokenToLookup) {
+              fetch(`/api/stays/${encodeURIComponent(tokenToLookup)}`, { cache: "no-store" })
+                .then((r) => r.json())
+                .then((stayRes) => {
+                  if (mounted && stayRes.success && stayRes.data) {
+                    const d = stayRes.data;
+                    setStay(d);
+                    if (d.propertyId) {
+                      setSelectedPropertyId(d.propertyId);
+                      setIsUrlPreselected(true);
+                    }
+                    if (d.guestName && !guestParam) {
+                      setGuestName(d.guestName);
+                    }
+                    if (d.roomNumber && !roomParam) {
+                      setRoomNumber(d.roomNumber);
+                    }
+                    if (d.guestEmail) {
+                      setContactValue(d.guestEmail);
+                      setWantsContact(true);
+                      setContactPreference("email");
+                    } else if (d.guestPhone) {
+                      setContactValue(d.guestPhone);
+                      setWantsContact(true);
+                      setContactPreference("phone");
+                    }
+                  }
+                })
+                .catch(() => {});
+            }
           }
         }
       })
-      .catch(() => {});
-
-    if (publicToken && publicToken !== "verified") {
-      fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { cache: "no-store" })
-        .then((res) => res.json())
-        .then((json) => {
-          if (mounted && json.success && json.data) {
-            setStay(json.data);
-            if (json.data.propertyId) {
-              setSelectedPropertyId(json.data.propertyId);
-              setIsUrlPreselected(true);
-            }
-          }
-        })
-        .catch((err) => {
-          console.error("Error fetching stay details", err);
-        })
-        .finally(() => {
-          if (mounted) setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
-
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -286,6 +299,30 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           <li className={progressStep > 2 ? "done" : progressStep === 2 ? "current" : ""}>Rating</li>
           <li className={progressStep === 3 ? "current" : ""}>Note</li>
         </ol>
+
+        {stay && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "10px 14px",
+              background: "rgba(197, 160, 89, 0.08)",
+              border: "1px solid rgba(197, 160, 89, 0.22)",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              fontSize: "12px",
+              color: "var(--ink)",
+            }}
+          >
+            <span style={{ color: "var(--gold)", fontWeight: 700 }}>★</span>
+            <span>
+              Verified invitation for <strong>{stay.guestName || "Guest"}</strong>
+              {stay.roomNumber ? ` · Room ${stay.roomNumber}` : ""}
+              {stay.propertyName ? ` · ${stay.propertyName}` : ""}
+            </span>
+          </div>
+        )}
 
         <h1>How did we make<br /><em>you feel?</em></h1>
         <p className="guest-intro">

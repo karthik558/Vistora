@@ -171,23 +171,48 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
       .select("property_id,room_number,check_in_date,check_out_date,status,properties(name),guests(full_name,vip_tier)")
       .eq("public_token", publicToken)
       .eq("status", "active")
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      return null;
+    if (!error && data) {
+      const stayData = data as any;
+      return {
+        token: publicToken,
+        guestName: stayData.guests?.full_name || "",
+        roomNumber: stayData.room_number || "",
+        checkInDate: stayData.check_in_date,
+        checkOutDate: stayData.check_out_date,
+        propertyName: stayData.properties?.name || "Vistora Partner Property",
+        propertyId: stayData.property_id,
+        vipTier: stayData.guests?.vip_tier,
+      };
     }
 
-    const stayData = data as any;
-    return {
-      token: publicToken,
-      guestName: stayData.guests?.full_name || "",
-      roomNumber: stayData.room_number || "",
-      checkInDate: stayData.check_in_date,
-      checkOutDate: stayData.check_out_date,
-      propertyName: stayData.properties?.name || "Vistora Partner Property",
-      propertyId: stayData.property_id,
-      vipTier: stayData.guests?.vip_tier,
-    };
+    // Fallback: check guest_invitations table by hashToken(publicToken)
+    try {
+      const { hashToken } = await import("../platform/secrets");
+      const { data: inv, error: invErr } = await supabase
+        .from("guest_invitations")
+        .select("*,properties(name)")
+        .eq("token_hash", hashToken(publicToken))
+        .maybeSingle();
+
+      if (!invErr && inv) {
+        return {
+          token: publicToken,
+          guestName: inv.guest_name || "",
+          roomNumber: inv.room_number || "",
+          checkInDate: inv.created_at,
+          checkOutDate: inv.expires_at || "",
+          propertyName: inv.properties?.name || "Vistora Partner Property",
+          propertyId: inv.property_id,
+          vipTier: null,
+          guestEmail: inv.guest_email || null,
+          guestPhone: inv.guest_phone || null,
+        };
+      }
+    } catch (e) {
+      console.warn("[fetchStayByToken] invitation fallback check failed:", e);
+    }
   }
 
   return null;

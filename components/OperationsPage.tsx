@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Download,
   Printer,
@@ -18,9 +18,23 @@ import {
   FileText,
   Search,
   ShieldCheck,
+  Mail,
+  Phone,
+  Clock,
+  CheckCircle2,
+  Star,
+  X,
+  Send,
+  Calendar,
+  MessageSquare,
+  Plus,
+  Link as LinkIcon,
+  HeartHandshake,
+  UserCheck,
 } from "lucide-react";
 import { AppShell, FeedbackTable, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
-import { DashboardData, PropertyRow } from "../types/experience";
+import { DashboardData, PropertyRow, FeedbackViewModel } from "../types/experience";
+import { GuestInvitation } from "../lib/services/invitationsService";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
@@ -491,6 +505,28 @@ function Analytics({
 }
 
 
+interface CrmGuestProfile {
+  id: string;
+  name: string;
+  initials: string;
+  email: string | null;
+  phone: string | null;
+  properties: string[];
+  rooms: string[];
+  totalStays: number;
+  hasProvidedFeedback: boolean;
+  feedbackCount: number;
+  averageRating: number | null;
+  latestRating: number | null;
+  latestDepartment: string | null;
+  sentiment: "delighted" | "positive" | "neutral" | "recovery_needed" | "pending";
+  hasOpenComplaint: boolean;
+  vipTier: string;
+  lastActivityDate: string;
+  feedbacks: FeedbackViewModel[];
+  invitations: GuestInvitation[];
+}
+
 function Directory({
   data,
   query,
@@ -500,39 +536,836 @@ function Directory({
   query: string;
   setQuery: (value: string) => void;
 }) {
-  const guests = data.recentFeedback.filter(
-    (item) => !query || `${item.name} ${item.roomNumber}`.toLowerCase().includes(query.toLowerCase())
-  );
+  const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
+  const [filterTab, setFilterTab] = useState<"all" | "provided" | "awaiting" | "recovery" | "promoters">("all");
+  const [selectedGuest, setSelectedGuest] = useState<CrmGuestProfile | null>(null);
+
+  // Quick invite dispatch inside CRM drawer
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [invitePropertyId, setInvitePropertyId] = useState(data.properties[0]?.id || "");
+  const [inviteRoom, setInviteRoom] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteNotice, setInviteNotice] = useState("");
+  const [inviteError, setInviteError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/invitations")
+      .then((res) => res.json())
+      .then((json) => {
+        if (mounted && json.success && Array.isArray(json.invitations)) {
+          setInvitations(json.invitations);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Aggregate feedback and invitations into CRM guest profiles
+  const profiles = useMemo(() => {
+    const map = new Map<string, CrmGuestProfile>();
+
+    function getInitials(name: string) {
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    // Process feedback items
+    data.recentFeedback.forEach((f) => {
+      const key = (f.guestEmail?.trim().toLowerCase()) || (f.guestPhone?.trim()) || f.name.trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: f.name,
+          initials: f.initials || getInitials(f.name),
+          email: f.guestEmail || null,
+          phone: f.guestPhone || null,
+          properties: [f.detail ? f.detail.split("·")[0].trim() : "Main Property"],
+          rooms: f.roomNumber ? [f.roomNumber] : [],
+          totalStays: 1,
+          hasProvidedFeedback: true,
+          feedbackCount: 1,
+          averageRating: f.rating,
+          latestRating: f.rating,
+          latestDepartment: f.department,
+          sentiment: f.rating >= 4 ? (f.rating === 5 ? "delighted" : "positive") : f.rating === 3 ? "neutral" : "recovery_needed",
+          hasOpenComplaint: f.status === "needs_attention" || f.status === "escalated",
+          vipTier: "Verified Guest",
+          lastActivityDate: f.createdAt,
+          feedbacks: [f],
+          invitations: [],
+        });
+      } else {
+        const p = map.get(key)!;
+        p.feedbacks.push(f);
+        p.feedbackCount += 1;
+        p.hasProvidedFeedback = true;
+        if (f.roomNumber && !p.rooms.includes(f.roomNumber)) p.rooms.push(f.roomNumber);
+        if (f.status === "needs_attention" || f.status === "escalated") p.hasOpenComplaint = true;
+        if (new Date(f.createdAt) > new Date(p.lastActivityDate)) {
+          p.lastActivityDate = f.createdAt;
+          p.latestRating = f.rating;
+          p.latestDepartment = f.department;
+        }
+      }
+    });
+
+    // Process invitations
+    invitations.forEach((inv) => {
+      const key = (inv.guestEmail?.trim().toLowerCase()) || (inv.guestPhone?.trim()) || inv.guestName.trim().toLowerCase();
+      if (!map.has(key)) {
+        const isCompleted = inv.status === "completed";
+        map.set(key, {
+          id: key,
+          name: inv.guestName,
+          initials: getInitials(inv.guestName),
+          email: inv.guestEmail || null,
+          phone: inv.guestPhone || null,
+          properties: inv.propertyName ? [inv.propertyName] : ["Hotel Property"],
+          rooms: inv.roomNumber ? [inv.roomNumber] : [],
+          totalStays: 1,
+          hasProvidedFeedback: isCompleted,
+          feedbackCount: isCompleted ? 1 : 0,
+          averageRating: inv.feedbackRating || null,
+          latestRating: inv.feedbackRating || null,
+          latestDepartment: null,
+          sentiment: isCompleted && inv.feedbackRating ? (inv.feedbackRating >= 4 ? "positive" : "recovery_needed") : "pending",
+          hasOpenComplaint: false,
+          vipTier: "Touchpoint Guest",
+          lastActivityDate: inv.createdAt,
+          feedbacks: [],
+          invitations: [inv],
+        });
+      } else {
+        const p = map.get(key)!;
+        p.invitations.push(inv);
+        if (inv.propertyName && !p.properties.includes(inv.propertyName)) p.properties.push(inv.propertyName);
+        if (inv.roomNumber && !p.rooms.includes(inv.roomNumber)) p.rooms.push(inv.roomNumber);
+        if (!p.email && inv.guestEmail) p.email = inv.guestEmail;
+        if (!p.phone && inv.guestPhone) p.phone = inv.guestPhone;
+        if (new Date(inv.createdAt) > new Date(p.lastActivityDate)) {
+          p.lastActivityDate = inv.createdAt;
+        }
+      }
+    });
+
+    // Final calculations for each profile
+    const result: CrmGuestProfile[] = [];
+    map.forEach((p) => {
+      const ratings = p.feedbacks.map((f) => f.rating).concat(p.invitations.filter((i) => i.feedbackRating).map((i) => i.feedbackRating!));
+      if (ratings.length > 0) {
+        const sum = ratings.reduce((a, b) => a + b, 0);
+        p.averageRating = Math.round((sum / ratings.length) * 10) / 10;
+        if (p.averageRating >= 4.5) p.sentiment = "delighted";
+        else if (p.averageRating >= 4.0) p.sentiment = "positive";
+        else if (p.averageRating >= 3.0) p.sentiment = "neutral";
+        else p.sentiment = "recovery_needed";
+      }
+
+      p.totalStays = Math.max(p.feedbacks.length, p.invitations.length, 1);
+      if (p.totalStays >= 3 || p.feedbacks.length >= 2) {
+        p.vipTier = "Repeat VIP Guest";
+      } else if (p.hasOpenComplaint || p.sentiment === "recovery_needed") {
+        p.vipTier = "Attention Needed";
+      } else if (p.hasProvidedFeedback) {
+        p.vipTier = "Verified Guest";
+      } else {
+        p.vipTier = "New Touchpoint";
+      }
+
+      result.push(p);
+    });
+
+    return result.sort((a, b) => new Date(b.lastActivityDate).getTime() - new Date(a.lastActivityDate).getTime());
+  }, [data.recentFeedback, invitations]);
+
+  // Filtered list
+  const filtered = useMemo(() => {
+    return profiles.filter((p) => {
+      if (filterTab === "provided" && !p.hasProvidedFeedback) return false;
+      if (filterTab === "awaiting" && p.hasProvidedFeedback) return false;
+      if (filterTab === "recovery" && p.sentiment !== "recovery_needed" && !p.hasOpenComplaint) return false;
+      if (filterTab === "promoters" && (!p.averageRating || p.averageRating < 4)) return false;
+
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        const inName = p.name.toLowerCase().includes(q);
+        const inEmail = p.email ? p.email.toLowerCase().includes(q) : false;
+        const inPhone = p.phone ? p.phone.toLowerCase().includes(q) : false;
+        const inRooms = p.rooms.some((r) => r.toLowerCase().includes(q));
+        const inProps = p.properties.some((prop) => prop.toLowerCase().includes(q));
+        return inName || inEmail || inPhone || inRooms || inProps;
+      }
+      return true;
+    });
+  }, [profiles, filterTab, query]);
+
+  const totalProfiles = profiles.length;
+  const providedCount = profiles.filter((p) => p.hasProvidedFeedback).length;
+  const awaitingCount = profiles.filter((p) => !p.hasProvidedFeedback).length;
+  const recoveryCount = profiles.filter((p) => p.sentiment === "recovery_needed" || p.hasOpenComplaint).length;
+  const promotersCount = profiles.filter((p) => p.averageRating && p.averageRating >= 4).length;
+  const engagementRate = totalProfiles > 0 ? Math.round((providedCount / totalProfiles) * 100) : 0;
+
+  async function handleSendQuickInvite() {
+    if (!selectedGuest || !invitePropertyId || !inviteRoom.trim()) return;
+    setInviteSending(true);
+    setInviteError("");
+    setInviteNotice("");
+    try {
+      const p = data.properties.find((x) => x.id === invitePropertyId);
+      const res = await fetch("/api/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guestName: selectedGuest.name,
+          guestEmail: inviteEmail.trim() || selectedGuest.email || undefined,
+          guestPhone: selectedGuest.phone || undefined,
+          propertyId: invitePropertyId,
+          propertyName: p?.name,
+          roomNumber: inviteRoom.trim(),
+          channel: (inviteEmail.trim() || selectedGuest.email) ? "email" : "direct_link",
+          sendEmail: Boolean(inviteEmail.trim() || selectedGuest.email),
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed to dispatch invitation.");
+      setInviteNotice(json.message || "Invitation created successfully!");
+      if (json.invitation) {
+        setInvitations((prev) => [json.invitation, ...prev]);
+        setSelectedGuest((prev) =>
+          prev
+            ? {
+                ...prev,
+                invitations: [json.invitation, ...prev.invitations],
+                rooms: prev.rooms.includes(inviteRoom.trim()) ? prev.rooms : [...prev.rooms, inviteRoom.trim()],
+              }
+            : null
+        );
+      }
+      setShowInviteForm(false);
+      setInviteRoom("");
+    } catch (e: any) {
+      setInviteError(e.message || "Could not dispatch invitation.");
+    } finally {
+      setInviteSending(false);
+    }
+  }
 
   return (
-    <div className="panel">
-      <div className="panel-heading">
+    <div style={{ display: "grid", gap: "20px" }}>
+      {/* CRM Heading */}
+      <div className="page-heading" style={{ marginBottom: 0 }}>
         <div>
-          <h2>Guest records</h2>
-          <p>{guests.length} matching feedback profiles</p>
+          <p className="eyebrow">Hospitality Relationship Management</p>
+          <h1>Guest CRM &amp; Experience Directory</h1>
+          <p className="subheading">
+            Search guest profiles, review lifetime feedback history, track response conversion, and dispatch personalized touchpoints.
+          </p>
         </div>
-        <input
-          className="compact-input"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search guests"
-        />
       </div>
-      <div className="directory-grid">
-        {guests.map((guest) => (
-          <div className="directory-card" key={guest.id}>
-            <span className="mini-avatar">{guest.initials}</span>
-            <div>
-              <strong>{guest.name}</strong>
-              <p>
-                {guest.roomNumber} · {guest.department}
-              </p>
-              <small>{guest.guestEmail || guest.guestPhone || "No contact details provided"}</small>
-            </div>
-            <span className={`status ${guest.tone}`}>{guest.rating}/5</span>
+
+      {/* CRM Metric Cards */}
+      <section className="metric-grid">
+        <div className="metric-card">
+          <span className="metric-label">Tracked Guest Profiles</span>
+          <div className="metric-value">{totalProfiles}</div>
+          <div className="metric-change">Unique identified guests</div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">Feedback Provided</span>
+          <div className="metric-value">
+            {providedCount}
+            <small>({engagementRate}%)</small>
           </div>
-        ))}
+          <div className="metric-change">Submitted verified reviews</div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">Awaiting Responses</span>
+          <div className="metric-value">{awaitingCount}</div>
+          <div className="metric-change">Pending invitation touchpoints</div>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">Requires Attention</span>
+          <div className="metric-value" style={{ color: recoveryCount > 0 ? "var(--amber-deep)" : "inherit" }}>
+            {recoveryCount}
+          </div>
+          <div className="metric-change">{recoveryCount > 0 ? "Rating ≤ 3★ or open complaint" : "All guests in good standing"}</div>
+        </div>
+      </section>
+
+      {/* Filter and Search Panel */}
+      <div className="panel" style={{ padding: "16px 20px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ position: "relative", minWidth: "260px", flex: 1 }}>
+            <Search
+              size={15}
+              style={{
+                position: "absolute",
+                left: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--muted)",
+              }}
+            />
+            <input
+              type="text"
+              className="auth-input"
+              placeholder="Search guests by name, email, phone, room, or hotel…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              style={{ paddingLeft: "32px", height: "36px", fontSize: "12px" }}
+            />
+          </div>
+
+          {/* CRM Filter Chips */}
+          <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: "6px", overflow: "hidden", flexWrap: "wrap" }}>
+            {[
+              { id: "all", label: `All (${totalProfiles})` },
+              { id: "provided", label: `Feedback Provided (${providedCount})` },
+              { id: "awaiting", label: `Awaiting (${awaitingCount})` },
+              { id: "recovery", label: `Requires Attention (${recoveryCount})` },
+              { id: "promoters", label: `Promoters 4–5★ (${promotersCount})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilterTab(tab.id as any)}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  background: filterTab === tab.id ? "var(--ink)" : "var(--panel)",
+                  color: filterTab === tab.id ? "var(--panel)" : "var(--muted)",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* CRM Guest Cards Grid */}
+      <div className="panel" style={{ padding: "20px" }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--muted)" }}>
+            <Users size={32} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
+            <p style={{ margin: 0, fontSize: "14px", fontWeight: 500 }}>No guest CRM records match your search criteria.</p>
+            <p style={{ margin: "6px 0 0", fontSize: "12px" }}>Try searching by first or last name, email address, or room number.</p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: "14px",
+            }}
+          >
+            {filtered.map((guest) => {
+              const isPromoter = guest.averageRating && guest.averageRating >= 4.5;
+              const needsAttention = guest.sentiment === "recovery_needed" || guest.hasOpenComplaint;
+
+              return (
+                <div
+                  key={guest.id}
+                  onClick={() => {
+                    setSelectedGuest(guest);
+                    setShowInviteForm(false);
+                    setInviteNotice("");
+                    setInviteError("");
+                  }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    padding: "16px",
+                    borderRadius: "8px",
+                    border: needsAttention
+                      ? "1px solid rgba(220, 80, 50, 0.4)"
+                      : isPromoter
+                      ? "1px solid rgba(197, 160, 89, 0.4)"
+                      : "1px solid var(--line)",
+                    background: "var(--panel)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                  className="crm-guest-card"
+                >
+                  <div>
+                    {/* Header: Avatar, Name, Badges */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span
+                          className="mini-avatar"
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            border: guest.vipTier.includes("VIP") ? "2px solid var(--gold)" : "none",
+                          }}
+                        >
+                          {guest.initials}
+                        </span>
+                        <div>
+                          <strong style={{ fontSize: "14px", color: "var(--ink)", display: "block" }}>{guest.name}</strong>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              color: guest.vipTier.includes("VIP")
+                                ? "var(--gold)"
+                                : needsAttention
+                                ? "var(--amber-deep)"
+                                : "var(--muted)",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            {guest.vipTier}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Feedback Status / Rating Badge */}
+                      {guest.hasProvidedFeedback && guest.averageRating ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            background: needsAttention
+                              ? "rgba(220, 80, 50, 0.1)"
+                              : "rgba(197, 160, 89, 0.15)",
+                            color: needsAttention ? "var(--amber-deep)" : "var(--gold-deep, #91722e)",
+                          }}
+                        >
+                          <Star size={11} fill="currentColor" />
+                          <span>{guest.averageRating}★</span>
+                          <span style={{ fontSize: "10px", fontWeight: 400, opacity: 0.8 }}>
+                            ({guest.feedbackCount})
+                          </span>
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            background: "var(--canvas-alt)",
+                            color: "var(--muted)",
+                          }}
+                        >
+                          <Clock size={11} />
+                          <span>Awaiting Review</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stay & Room Details */}
+                    <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>
+                      <span>
+                        {guest.rooms.length > 0 ? `Room ${guest.rooms.join(", ")}` : "Room unassigned"}
+                      </span>
+                      {guest.properties.length > 0 && (
+                        <span> · {guest.properties[0]}</span>
+                      )}
+                    </div>
+
+                    {/* Contact Info */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", fontSize: "11px", color: "var(--muted)", fontFamily: "var(--font-dm-mono)" }}>
+                      {guest.email && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <Mail size={11} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {guest.email}
+                          </span>
+                        </span>
+                      )}
+                      {guest.phone && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <Phone size={11} />
+                          <span>{guest.phone}</span>
+                        </span>
+                      )}
+                      {!guest.email && !guest.phone && (
+                        <span style={{ color: "var(--line)" }}>No direct contact on file</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Timeline prompt */}
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      paddingTop: "10px",
+                      borderTop: "1px solid var(--line)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <span style={{ color: "var(--muted)" }}>
+                      {guest.hasProvidedFeedback
+                        ? `${guest.feedbackCount} feedback record${guest.feedbackCount === 1 ? "" : "s"}`
+                        : `${guest.invitations.length} invitation${guest.invitations.length === 1 ? "" : "s"} sent`}
+                    </span>
+                    <span style={{ color: "var(--gold)", fontWeight: 600 }}>
+                      View History &rarr;
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* CRM Guest Detail Drawer */}
+      <AnimatePresence>
+        {selectedGuest && (
+          <motion.div
+            className="drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedGuest(null)}
+          >
+            <motion.div
+              className="detail-drawer"
+              style={{ width: "min(540px, 100%)" }}
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="drawer-close"
+                onClick={() => setSelectedGuest(null)}
+              >
+                <X size={18} />
+              </button>
+
+              {/* Profile Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "20px" }}>
+                <span
+                  className="mini-avatar"
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    border: selectedGuest.vipTier.includes("VIP") ? "2px solid var(--gold)" : "none",
+                  }}
+                >
+                  {selectedGuest.initials}
+                </span>
+                <div>
+                  <p className="eyebrow" style={{ margin: 0 }}>Guest CRM Profile</p>
+                  <h2 style={{ margin: "2px 0 4px", fontSize: "20px" }}>{selectedGuest.name}</h2>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: selectedGuest.vipTier.includes("VIP") ? "var(--gold)" : "var(--muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    {selectedGuest.vipTier} · {selectedGuest.totalStays} Recorded Stay{selectedGuest.totalStays === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Contact Information Bar */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                  padding: "12px 14px",
+                  background: "var(--canvas-alt)",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  fontSize: "12px",
+                }}
+              >
+                <div>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: "10px", textTransform: "uppercase" }}>
+                    Email
+                  </span>
+                  {selectedGuest.email ? (
+                    <a
+                      href={`mailto:${selectedGuest.email}`}
+                      style={{ color: "var(--ink)", fontWeight: 500, wordBreak: "break-all" }}
+                    >
+                      {selectedGuest.email}
+                    </a>
+                  ) : (
+                    <span style={{ color: "var(--muted)" }}>Not provided</span>
+                  )}
+                </div>
+                <div>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: "10px", textTransform: "uppercase" }}>
+                    Phone
+                  </span>
+                  {selectedGuest.phone ? (
+                    <a href={`tel:${selectedGuest.phone}`} style={{ color: "var(--ink)", fontWeight: 500 }}>
+                      {selectedGuest.phone}
+                    </a>
+                  ) : (
+                    <span style={{ color: "var(--muted)" }}>Not provided</span>
+                  )}
+                </div>
+                <div>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: "10px", textTransform: "uppercase" }}>
+                    Rooms Visited
+                  </span>
+                  <span style={{ color: "var(--ink)", fontWeight: 500 }}>
+                    {selectedGuest.rooms.join(", ") || "None recorded"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: "10px", textTransform: "uppercase" }}>
+                    Lifetime Score
+                  </span>
+                  <span style={{ color: "var(--ink)", fontWeight: 600 }}>
+                    {selectedGuest.averageRating ? `★ ${selectedGuest.averageRating} / 5` : "No ratings yet"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Actions in Drawer */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
+                <button
+                  type="button"
+                  className="button button-dark"
+                  onClick={() => {
+                    setShowInviteForm(!showInviteForm);
+                    setInviteNotice("");
+                    setInviteError("");
+                    setInviteEmail(selectedGuest.email || "");
+                    setInviteRoom(selectedGuest.rooms[0] || "");
+                  }}
+                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                >
+                  <Send size={14} />
+                  <span>{showInviteForm ? "Close Touchpoint Form" : "Dispatch New Invitation"}</span>
+                </button>
+              </div>
+
+              {/* Inline Invitation Dispatch Form */}
+              <AnimatePresence>
+                {showInviteForm && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    style={{
+                      overflow: "hidden",
+                      background: "var(--canvas-alt)",
+                      border: "1px solid var(--line)",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      marginBottom: "24px",
+                    }}
+                  >
+                    <h4 style={{ margin: "0 0 12px", fontSize: "13px" }}>Dispatch Feedback Invitation to {selectedGuest.name}</h4>
+                    {inviteNotice && (
+                      <div style={{ padding: "8px 10px", background: "rgba(197, 160, 89, 0.15)", borderRadius: "4px", color: "var(--ink)", fontSize: "12px", marginBottom: "10px" }}>
+                        {inviteNotice}
+                      </div>
+                    )}
+                    {inviteError && (
+                      <div style={{ padding: "8px 10px", background: "rgba(220, 80, 50, 0.1)", borderRadius: "4px", color: "var(--amber-deep)", fontSize: "12px", marginBottom: "10px" }}>
+                        {inviteError}
+                      </div>
+                    )}
+
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label className="field-label" style={{ display: "block", marginBottom: "4px" }}>
+                          Target Property
+                        </label>
+                        <CustomSelect
+                          value={invitePropertyId}
+                          onChange={(val) => setInvitePropertyId(val)}
+                          options={data.properties.map((p) => ({ value: p.id, label: p.name }))}
+                        />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div>
+                          <label className="field-label" style={{ display: "block", marginBottom: "4px" }}>
+                            Room / Suite *
+                          </label>
+                          <input
+                            type="text"
+                            className="auth-input"
+                            placeholder="e.g. 302"
+                            value={inviteRoom}
+                            onChange={(e) => setInviteRoom(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="field-label" style={{ display: "block", marginBottom: "4px" }}>
+                            Recipient Email
+                          </label>
+                          <input
+                            type="email"
+                            className="auth-input"
+                            placeholder="guest@domain.com"
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="button button-dark"
+                        disabled={inviteSending || !inviteRoom.trim()}
+                        onClick={handleSendQuickInvite}
+                        style={{ marginTop: "6px" }}
+                      >
+                        {inviteSending ? "Dispatching…" : inviteEmail.trim() ? "Send via Email & Generate Link" : "Generate Tracked Link"}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* CRM Experience Timeline */}
+              <h3 style={{ fontSize: "14px", fontWeight: 600, margin: "0 0 14px 0", letterSpacing: "0.2px" }}>
+                Guest Experience History &amp; Timeline
+              </h3>
+
+              <div style={{ display: "grid", gap: "12px" }}>
+                {selectedGuest.feedbacks.length === 0 && selectedGuest.invitations.length === 0 ? (
+                  <p style={{ color: "var(--muted)", fontSize: "12px" }}>No previous activity found for this guest.</p>
+                ) : null}
+
+                {/* Feedback Submissions */}
+                {selectedGuest.feedbacks.map((f) => (
+                  <div
+                    key={f.id}
+                    style={{
+                      padding: "14px",
+                      background: "var(--panel)",
+                      border: "1px solid var(--line)",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontWeight: 700,
+                          color: f.rating <= 2 ? "var(--amber-deep)" : "var(--gold)",
+                        }}
+                      >
+                        <Star size={12} fill="currentColor" />
+                        <span>{f.rating} of 5 · {f.department}</span>
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                        {new Date(f.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div style={{ color: "var(--muted)", fontSize: "11px", marginBottom: "6px" }}>
+                      Room {f.roomNumber} · Status: <strong>{f.statusLabel}</strong>
+                    </div>
+
+                    {f.comment && (
+                      <p style={{ margin: "6px 0 0", color: "var(--ink)", fontStyle: "italic", lineHeight: 1.5 }}>
+                        &ldquo;{f.comment}&rdquo;
+                      </p>
+                    )}
+
+                    {f.wantsContact && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          background: "rgba(220, 80, 50, 0.08)",
+                          color: "var(--amber-deep)",
+                          fontSize: "11px",
+                        }}
+                      >
+                        Follow-up requested by guest via {f.contactPreference || "email"}.
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Invitations History */}
+                {selectedGuest.invitations.map((inv) => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      padding: "14px",
+                      background: "var(--canvas-alt)",
+                      border: "1px solid var(--line)",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <span style={{ fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        {inv.channel === "email" ? <Mail size={12} /> : <LinkIcon size={12} />}
+                        <span>Invitation Dispatched ({inv.channel.replace("_", " ")})</span>
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                        {new Date(inv.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: "11px" }}>
+                      Room {inv.roomNumber} · {inv.propertyName || "Hotel"} · Status:{" "}
+                      <strong style={{ color: inv.status === "completed" ? "var(--sage-deep)" : "var(--amber)" }}>
+                        {inv.status}
+                      </strong>
+                    </div>
+                    {inv.notes && (
+                      <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--muted)" }}>
+                        Note: {inv.notes}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

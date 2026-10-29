@@ -121,5 +121,7 @@ export interface GuestStayDetails {
   checkOutDate: string;
   propertyName: string;
   propertyId: string;
-  vipTier?: string;
+  vipTier?: string | null;
+  guestEmail?: string | null;
+  guestPhone?: string | null;
 }

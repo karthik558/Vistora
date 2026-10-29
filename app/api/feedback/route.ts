@@ -21,13 +21,21 @@ export async function POST(request:NextRequest) {
   let stayId:string|undefined;
   let stayRoom:string|undefined;
   let stayGuest:string|undefined;
+  let invGuest:string|undefined;
+  let invRoom:string|undefined;
+  let invEmail:string|undefined;
+  let invPhone:string|undefined;
   if(body.publicToken&&body.publicToken!=="verified") {
     const token=text(body.publicToken,"Invitation",200);
-    const {data:inv,error}=await db.from("guest_invitations").select("id,property_id,status,expires_at").eq("token_hash",hashToken(token)).maybeSingle();
+    const {data:inv,error}=await db.from("guest_invitations").select("id,property_id,status,expires_at,guest_name,room_number,guest_email,guest_phone").eq("token_hash",hashToken(token)).maybeSingle();
     if(error)checked({data:inv,error});
     if(inv) {
       if(inv.property_id!==property.id||inv.status!=="pending"||Date.parse(inv.expires_at)<=Date.now())throw new PlatformError("This invitation has expired or was already used.",410);
       invitationId=inv.id;
+      invGuest=inv.guest_name;
+      invRoom=inv.room_number;
+      invEmail=inv.guest_email;
+      invPhone=inv.guest_phone;
     } else {
       const {data:stay,error:stayError}=await db.from("stays").select("id,room_number,guests(full_name)").eq("public_token",token).eq("property_id",property.id).eq("status","active").maybeSingle();
       if(stayError)checked({data:stay,error:stayError});
@@ -42,14 +50,30 @@ export async function POST(request:NextRequest) {
   const relevant=questions.filter(q=>!q.department||q.department===body.department);
   let validated;
   try {validated=validateAnswers(relevant,body.answers,body.recommendationScore);}catch(error){throw new PlatformError(error instanceof Error?error.message:"Invalid answers.");}
+  const finalGuestName = text(stayGuest || body.guestName || invGuest || "Guest", "Name", 100);
+  const finalRoomNumber = text(stayRoom || body.roomNumber || invRoom || "Guest", "Room", 50);
+  const finalGuestEmail = (body.guestEmail || invEmail) ? text(body.guestEmail || invEmail, "Email", 254) : undefined;
+  const finalGuestPhone = (body.guestPhone || invPhone) ? text(body.guestPhone || invPhone, "Phone", 30) : undefined;
   const created=await createFeedback({
     organizationId:property.organization_id,propertyId:property.id,invitationId,stayId,rating,department:body.department,
-    guestName:text(stayGuest||body.guestName||"Guest","Name",100),roomNumber:text(stayRoom||body.roomNumber||"Guest","Room",50),
-    comment:text(body.comment,"Comment",4000,false),guestEmail:body.guestEmail?text(body.guestEmail,"Email",254):undefined,
-    guestPhone:body.guestPhone?text(body.guestPhone,"Phone",30):undefined,wantsContact:body.wantsContact===true,
+    guestName:finalGuestName,roomNumber:finalRoomNumber,
+    comment:text(body.comment,"Comment",4000,false),guestEmail:finalGuestEmail,
+    guestPhone:finalGuestPhone,wantsContact:body.wantsContact===true,
     contactPreference:["email","phone","in_person"].includes(body.contactPreference)?body.contactPreference:undefined,
     ...validated
   });
+  if(invitationId) {
+    try {
+      await db.from("guest_invitations").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        feedback_rating: rating,
+        feedback_id: created.id,
+      }).eq("id", invitationId);
+    } catch(e) {
+      console.warn("Failed to mark invitation as completed:", e);
+    }
+  }
   invalidateDashboardCache();
   await logAuditEvent({organizationId:property.organization_id,actorName:"Guest",actorEmail:"guest@vistora.app",actorRole:"guest",action:"Guest feedback submitted",resource:created.id,details:"Rating: "+rating});
   return NextResponse.json({success:true,data:created},{status:201});
