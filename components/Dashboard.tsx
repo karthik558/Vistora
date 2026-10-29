@@ -9,6 +9,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   ClipboardList,
+  BedDouble,
   BarChart3,
   MessageSquare,
   AlertCircle,
@@ -91,6 +92,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
   { label: "Audit log", href: "/dashboard/audit-log", group: "Operations & audit", icon: History, requiredRight: "view_audit_log" },
   { label: "Hotel operations", href: "/dashboard/hospitality", group: "Operations", icon: ClipboardList, adminOnly: true },
+  { label: "Rooms & inventory", href: "/dashboard/hospitality?section=Rooms", group: "Operations", icon: BedDouble, adminOnly: true },
   { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
   { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },

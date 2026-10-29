@@ -109,7 +109,7 @@ html[data-theme="dark"] .app-shell :is(input, textarea, select, option) {
 html[data-theme="dark"] .app-shell :is(input, textarea)::placeholder { color: var(--muted-light) !important; }
 html[data-theme="dark"] input.table-search-field { background: transparent !important; }
 html[data-theme="dark"] :is(.custom-dropdown-popover, .custom-datepicker-popover,
-  .property-filter-popover, .custom-select-popover) {
+  .property-filter-popover, .custom-select-popover, .custom-timepicker-popover) {
   background: var(--panel) !important; border-color: var(--line-strong) !important; color: var(--ink) !important;
 }
 html[data-theme="dark"] :is(.datepicker-presets, .drawer-chip, .drawer-statement-card,

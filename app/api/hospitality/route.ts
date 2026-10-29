@@ -59,7 +59,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
   db.from("properties").select("id,name,is_active").order("name"),
   guestsQuery,
   list(db.from("hotel_rooms").select("*").order("room_number").limit(200),propertyId),
-  list(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,guests(full_name),feedback(id,rating,status)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100),propertyId),
+  list(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,public_token,guests(id,full_name,email,phone,vip_tier,preferences),feedback(id,rating,status)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100),propertyId),
   list((request.nextUrl.searchParams.get("complaints")==="true"?db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").not("issue_type","is",null):db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)")).in("status",jobView==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:jobView==="active"}).limit(100),propertyId),
   list(db.from("room_inspections").select("*").order("created_at",{ascending:false}).limit(100),propertyId),
   list(db.from("operating_costs").select("*").gte("expense_date",month+"-01").lt("expense_date",new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,10)).order("created_at",{ascending:false}).limit(100),propertyId),
@@ -84,7 +84,14 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
   const id=checked(await db.rpc("submit_service_complaint",{p_complaint:{property_id:text(b.property_id,"Property",50),issue_type:issue.id,department,title:text(b.title||issue.label,"Complaint title",160),location:text(b.location,"Room / location",100),description:text(b.description,"Details",2000,false),priority:b.priority||"normal",intake_channel:b.intake_channel||"staff"}}));
   return NextResponse.json({success:true,result:{id}},{status:201});
  }
- admin();const config=hospitalityConfig((await getApplicationSettings()).hospitality);
+ if(b.action==="job"){
+  if(!user.isOrganizationAdmin&&!canManageServiceJobs(user))throw new PlatformError("Company administrator or service job management access required.",403);
+ }else if(b.action==="room"){
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
+ }else{
+  admin();
+ }
+ const config=hospitalityConfig((await getApplicationSettings()).hospitality);
  const modules:Record<string,keyof typeof config.modules>={guest:"guests",room:"property",stay:"guests",job:"operations",inspection:"compliance",cost:"operations"};
  const module=modules[b.action];if(!module)throw new PlatformError("Unknown operation.");
  if(!config.modules[module])throw new PlatformError("This module is disabled in Settings.",403);
@@ -93,8 +100,31 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
   result=checked(await db.from("guests").insert({organization_id:user.organizationId,full_name:text(b.full_name,"Guest name",100),email:b.email?email(b.email):null,phone:text(b.phone,"Phone",40,false)||null,vip_tier:text(b.vip_tier||"Standard","Guest tier",30),preferences:text(b.preferences,"Preferences",2000,false)}).select("id").single());
  }else if(b.action==="room"){
   await property(b.property_id);
-  if(!["dirty","clean","out_of_service"].includes(b.status||"dirty"))throw new PlatformError("Use an inspection to mark a room inspected.");
-  result=checked(await db.from("hotel_rooms").insert({organization_id:user.organizationId,property_id:b.property_id,room_number:text(b.room_number,"Room number",30),floor:text(b.floor,"Floor",30,false),room_type:text(b.room_type||"Standard","Room type",60),capacity:number(Number(b.capacity),"Capacity",1,20),status:b.status||"dirty",notes:text(b.notes,"Notes",2000,false)}).select("id").single());
+  if(Array.isArray(b.rooms)){
+   const rows=b.rooms.map((r:any)=>{
+    let notes=text(r.notes||"","Notes",2000,false);
+    if(r.view&&typeof r.view==="string"&&r.view.trim())notes=notes?`View: ${r.view.trim()} · ${notes}`:`View: ${r.view.trim()}`;
+    return {
+     organization_id:user.organizationId,
+     property_id:b.property_id,
+     room_number:text(r.room_number,"Room number",30),
+     floor:text(r.floor||"","Floor",30,false),
+     room_type:text(r.room_type||"Standard","Room type",60),
+     capacity:number(Number(r.capacity||2),"Capacity",1,20),
+     status:["dirty","clean","out_of_service"].includes(r.status)?r.status:"clean",
+     notes,
+     updated_at:new Date().toISOString()
+    };
+   });
+   result=checked(await db.from("hotel_rooms").upsert(rows,{onConflict:"property_id,room_number"}).select("id"));
+  }else{
+   if(!["dirty","clean","out_of_service"].includes(b.status||"dirty"))throw new PlatformError("Use an inspection to mark a room inspected.");
+   let notes=text(b.notes||"","Notes",2000,false);
+   if(b.view&&typeof b.view==="string"&&b.view.trim())notes=notes?`View: ${b.view.trim()} · ${notes}`:`View: ${b.view.trim()}`;
+   result=checked(await db.from("hotel_rooms").upsert({organization_id:user.organizationId,property_id:b.property_id,room_number:text(b.room_number,"Room number",30),floor:text(b.floor,"Floor",30,false),room_type:text(b.room_type||"Standard","Room type",60),capacity:number(Number(b.capacity),"Capacity",1,20),status:b.status||"dirty",notes,updated_at:new Date().toISOString()},{onConflict:"property_id,room_number"}).select("id").single());
+  }
+  const countRes=await db.from("hotel_rooms").select("id",{count:"exact",head:true}).eq("property_id",b.property_id);
+  if(countRes.count!==null&&countRes.count>0)await db.from("properties").update({total_rooms:countRes.count}).eq("id",b.property_id);
  }else if(b.action==="stay"){
   const selected=await room(b.room_id);await property(selected.property_id);
   checked(await db.from("guests").select("id").eq("id",b.guest_id).single());
@@ -121,8 +151,14 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json({success:true,result},{status:201});
 });
 export const PATCH=withWorkspace(async(request:NextRequest)=>{
- const b=await request.json(),db=workspaceDb();
+ const b=await request.json(),db=workspaceDb(),user=workspaceUser();
  if(!workspaceUser().isOrganizationAdmin){
+  if(b.action==="stay"&&b.status==="checked_out"&&hasModuleAccess(workspaceUser(),"hospitality")){
+   const current=checked(await db.from("stays").select("id,room_id,status").eq("id",text(b.id,"Stay",50)).single());
+   if(current.status!=="active")throw new PlatformError("Only active stays can be checked out.");
+   const result=checked(await db.from("stays").update({status:"checked_out"}).eq("id",current.id).select("id").single());
+   return NextResponse.json({success:true,result});
+  }
   if(!canManageServiceJobs(workspaceUser())||b.action!=="job"||Object.keys(b).some(k=>!["action","id","status","acknowledge"].includes(k)))throw new PlatformError("You may only attend your assigned service jobs.",403);
   const current=checked(await db.from("service_jobs").select("id,assigned_to,status,acknowledged_at").eq("id",text(b.id,"Job",50)).single());
   if(current.assigned_to!==workspaceUser().id||!["open","in_progress"].includes(current.status))throw new PlatformError("This job is not assigned to you or is already closed.",403);
@@ -131,7 +167,14 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
   const updates:Record<string,unknown>={};if(b.status)updates.status=b.status;if(b.acknowledge===true)updates.acknowledged_at=current.acknowledged_at||new Date().toISOString();
   const result=checked(await db.from("service_jobs").update(updates).eq("id",current.id).select("id").single());return NextResponse.json({success:true,result});
  }
- admin();const config=hospitalityConfig((await getApplicationSettings()).hospitality);
+ if(b.action==="job"){
+  if(!user.isOrganizationAdmin&&!canManageServiceJobs(user))throw new PlatformError("Company administrator or service job management access required.",403);
+ }else if(b.action==="room"){
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
+ }else{
+  admin();
+ }
+ const config=hospitalityConfig((await getApplicationSettings()).hospitality);
  const modules:Record<string,keyof typeof config.modules>={guest:"guests",room:"property",stay:"guests",job:"operations",cost:"operations"};
  const module=modules[b.action];if(!module||!config.modules[module])throw new PlatformError("This module is disabled or unknown.",403);
  let table="",updates:Record<string,unknown>={};

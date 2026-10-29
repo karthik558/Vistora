@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
-import { Building2, Plus, Trash2, X, Check, Users, Settings, Power } from "lucide-react";
+import { Building2, Plus, Trash2, X, Check, Users, Settings, Power, BedDouble } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfirmDrawer } from "./ConfirmDrawer";
+import RoomManagerModal from "./RoomManagerModal";
 
 export interface PropertyItem {
   id: string;
@@ -78,6 +79,15 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const [settingPhone, setSettingPhone] = useState("");
   const [settingWelcome, setSettingWelcome] = useState("");
   const [settingIsActive, setSettingIsActive] = useState(true);
+
+  // Property Rooms Modal states
+  const [selectedRoomsProperty, setSelectedRoomsProperty] = useState<PropertyItem | null>(null);
+  const [showRoomsModal, setShowRoomsModal] = useState(false);
+
+  function handleOpenRooms(prop: PropertyItem) {
+    setSelectedRoomsProperty(prop);
+    setShowRoomsModal(true);
+  }
 
   async function handleOpenSettings(prop: PropertyItem) {
     setSelectedSettingProperty(prop);
@@ -493,6 +503,16 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <button
                             type="button"
+                            onClick={() => handleOpenRooms(prop)}
+                            className="button button-outline compact"
+                            style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            title="Manage and create rooms for this property"
+                          >
+                            <BedDouble size={12} strokeWidth={1.75} />
+                            Rooms
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleOpenSettings(prop)}
                             className="button button-outline compact"
                             style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
@@ -502,9 +522,10 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                             Settings
                           </button>
                           <a
-                            href={`/dashboard?property=${prop.id}`}
+                            href={`/dashboard/hospitality?property=${prop.id}&section=Rooms`}
                             className="button button-outline compact"
                             style={{ fontSize: "11px", padding: "4px 10px" }}
+                            title="Open Hotel Operations for this property"
                           >
                             View Ops ↗
                           </a>
@@ -930,6 +951,25 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                       style={{ resize: "vertical" }}
                     />
                   </div>
+
+                  <div style={{ padding: "12px", background: "rgba(0,0,0,0.02)", border: "1px solid var(--line)", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <strong style={{ fontSize: "12px", display: "block", color: "var(--ink)" }}>Individual Rooms & Key Inventory</strong>
+                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>Create and manage room numbers, suites, and readiness for this property.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-outline compact"
+                      onClick={() => {
+                        setShowSettingsModal(false);
+                        handleOpenRooms(selectedSettingProperty);
+                      }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+                    >
+                      <BedDouble size={12} />
+                      Manage Rooms →
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
@@ -956,6 +996,13 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
           </div>
         )}
       </AnimatePresence>
+      <RoomManagerModal
+        open={showRoomsModal}
+        onClose={() => setShowRoomsModal(false)}
+        properties={properties}
+        selectedPropertyId={selectedRoomsProperty?.id || ""}
+        onRoomsUpdated={loadData}
+      />
       <ConfirmDrawer
         open={pendingDelete !== null}
         title="Remove property"
