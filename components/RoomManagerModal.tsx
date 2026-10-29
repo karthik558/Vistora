@@ -291,7 +291,7 @@ export default function RoomManagerModal({
       }
     }
     setGeneratedRooms(rooms);
-    setSuccess(`Generated preview of ${rooms.length} rooms. Click 'Save ${rooms.length} rooms' to commit to Supabase.`);
+    setSuccess(`Generated preview of ${rooms.length} rooms. Click 'Save ${rooms.length} rooms' to save your inventory.`);
   }
 
   async function handleSaveBulk(roomsToSave: RoomItem[]) {
@@ -317,7 +317,7 @@ export default function RoomManagerModal({
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "Failed to import rooms");
 
-      setSuccess(`Successfully added ${json.count || roomsToSave.length} rooms to Supabase!`);
+      setSuccess(`Successfully added ${json.count || roomsToSave.length} rooms!`);
       setParsedRooms([]);
       setGeneratedRooms([]);
       setCsvFileName(null);
@@ -362,7 +362,7 @@ export default function RoomManagerModal({
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "Failed to create room");
 
-      setSuccess(`Room ${singleNumber.trim()} created successfully in Supabase.`);
+      setSuccess(`Room ${singleNumber.trim()} created successfully.`);
       setSingleNumber("");
       setSingleView("");
       setSingleNotes("");
@@ -505,7 +505,7 @@ export default function RoomManagerModal({
                 </div>
               </div>
               <span style={{ fontSize: "12px", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                <strong style={{ color: "var(--ink)" }}>{existingRooms.length}</strong> room{existingRooms.length === 1 ? "" : "s"} in Supabase
+                <strong style={{ color: "var(--ink)" }}>{existingRooms.length}</strong> configured room{existingRooms.length === 1 ? "" : "s"}
               </span>
             </div>
 
@@ -656,7 +656,7 @@ export default function RoomManagerModal({
                         style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                       >
                         <Check size={13} />
-                        <span>{saving ? "Importing to Supabase…" : `Import ${parsedRooms.length} rooms to Supabase`}</span>
+                        <span>{saving ? "Importing rooms…" : `Import ${parsedRooms.length} rooms`}</span>
                       </button>
                     </div>
                     <div className="platform-table" style={{ maxHeight: "260px", overflowY: "auto" }}>
@@ -822,7 +822,7 @@ export default function RoomManagerModal({
                         style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                       >
                         <Check size={13} />
-                        <span>{saving ? "Saving to Supabase…" : `Save ${generatedRooms.length} rooms to Supabase`}</span>
+                        <span>{saving ? "Saving rooms…" : `Save ${generatedRooms.length} rooms`}</span>
                       </button>
                     </div>
                     <div className="platform-table" style={{ maxHeight: "260px", overflowY: "auto" }}>
@@ -945,7 +945,7 @@ export default function RoomManagerModal({
                     className="button button-dark"
                     disabled={saving || !singleNumber.trim()}
                   >
-                    {saving ? "Saving to Supabase…" : "Add room to Supabase"}
+                    {saving ? "Saving room…" : "Add room"}
                   </button>
                 </div>
               </form>
@@ -956,7 +956,7 @@ export default function RoomManagerModal({
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                   <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>
-                    Active inventory registered in Supabase for {selectedProp?.name || "this property"}.
+                    Active inventory registered for {selectedProp?.name || "this property"}.
                   </p>
                   <button
                     type="button"
@@ -971,11 +971,11 @@ export default function RoomManagerModal({
                 </div>
 
                 {loadingRooms ? (
-                  <p style={{ padding: "16px 0", color: "var(--muted)", fontSize: "12px" }}>Loading rooms from Supabase…</p>
+                  <p style={{ padding: "16px 0", color: "var(--muted)", fontSize: "12px" }}>Loading rooms…</p>
                 ) : existingRooms.length === 0 ? (
                   <div style={{ padding: "24px", textAlign: "center", background: "var(--canvas)", borderRadius: "6px" }}>
                     <p style={{ margin: "0 0 10px 0", color: "var(--muted)", fontSize: "12px" }}>
-                      No individual rooms registered for this property in Supabase yet.
+                      No individual rooms registered for this property yet.
                     </p>
                     <button type="button" className="button button-dark compact" onClick={() => setTab("import")}>
                       Bulk import via CSV
