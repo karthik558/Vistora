@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import DashboardPageHeading from "./DashboardPageHeading";
+import {operationTabs} from "../lib/omniops/types";
 import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,isAdministrationPath} from "../lib/auth/administration";
 import Link from "next/link";
 import { useEffect, useState, useMemo, useRef } from "react";
@@ -35,6 +36,7 @@ import {
   Eye,
   Lock,
   Shield,
+  Sparkles, Wrench, Luggage, Utensils, BellRing, Wallet, ArrowLeftRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
@@ -59,6 +61,7 @@ import {
 } from "./DashboardWidgets";
 
 export interface WorkspaceUser {
+  organizationId?: string;
   id?: string;
   email: string;
   fullName: string;
@@ -197,7 +200,10 @@ export function AppShell({
   const workspaceArea=workspaceForPath(pathname||"",searchParams.get("workspace"));
   const sectionModule=moduleForPath(pathname||'/dashboard');
   const activeModule=isAdministration?"administration":workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
-  const scopedHref=(href:string)=>!isAdministration&&workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
+  const scopedHref=(href:string)=>{
+    if(!isAdministration&&workspaceArea==="operations"&&href.startsWith("/dashboard/hospitality")&&searchParams.get("property"))return href+(href.includes("?")?"&":"?")+"property="+encodeURIComponent(searchParams.get("property")!);
+    return !isAdministration&&workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
+  };
   const [currentUser, setCurrentUser] = useState<WorkspaceUser | null>(
     () => propUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
@@ -340,7 +346,7 @@ export function AppShell({
 
   const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
-    ...["Overview","Guests","Rooms","Complaints","Service jobs","Inspections","Cost controls"].map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:section==="Guests"?Users:section==="Rooms"?Building2:section==="Inspections"?ShieldCheck:ClipboardList,adminOnly:section==="Cost controls"})),
+    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,Rooms:Building2,Cleaning:Sparkles,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing,"Cost controls":Wallet})[section],adminOnly:section==="Cost controls"})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
@@ -502,7 +508,7 @@ export function AppShell({
 
         {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          <Link href="/dashboard" className="nav-item module-switch-link" title={isAdministration?"Back to workspace":"Switch module"}><LayoutDashboard size={16}/><span className="nav-label">{isAdministration?"Back to workspace":"Switch module"}</span></Link>
+          <Link href="/dashboard" className="nav-item module-switch-link" title={isAdministration?"Back to workspace":"Switch module"}><ArrowLeftRight size={16}/><span className="nav-label">{isAdministration?"Back to workspace":"Switch module"}</span></Link>
           {visibleNav.length === 0 ? (
             <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
@@ -655,7 +661,7 @@ export function AppShell({
 
       {/* Mobile navigation stays inside the selected workspace. */}
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
-        {(isAdministration?visibleNav:workspaceArea==="operations"?visibleNav.slice(0,4):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
+        {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
           const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
           return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;

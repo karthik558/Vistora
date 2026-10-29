@@ -1,3 +1,4 @@
+import {deliverOperationsPush} from "../omniops/push";
 import {checked,serviceDb} from "./db";
 import {decryptSecret,hashToken} from "./secrets";
 import {sendSigned} from "./transport";
@@ -10,6 +11,9 @@ export async function runWorker(org?:string) {
  if(!hotelSchedule.error||!["42883","PGRST202"].includes(hotelSchedule.error.code))checked({data:true,error:hotelSchedule.error});
  const escalations=await db.rpc("advance_role_escalations",{p_org:org||null});
  if(!escalations.error||!["42883","PGRST202"].includes(escalations.error.code))checked({data:true,error:escalations.error});
+ const operations=await db.rpc("schedule_omniops_work",{p_org:org||null});
+ if(!operations.error||!["42883","PGRST202"].includes(operations.error.code))checked({data:true,error:operations.error});
+ let pushError="";try{await deliverOperationsPush(org);}catch(error){pushError=error instanceof Error?error.message:"Push delivery failed.";}
  const jobs=checked(await db.rpc("claim_workspace_jobs",{p_org:org||null,p_limit:5})),results=[];
  for(const job of jobs) {
   let status="retry",detail="";
@@ -89,5 +93,6 @@ export async function runWorker(org?:string) {
   } else {status="superseded";detail="A newer worker owns this delivery.";}
   results.push({id:job.id,status,detail});
  }
+ if(pushError)results.push({id:"operations-push",status:"failed",detail:pushError});
  return results;
 }

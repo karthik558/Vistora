@@ -258,3 +258,42 @@ test("Assignment delivery resolves the current authorized owner's email and canc
   owner='junior';eligible=false;assert.equal((await runWorker('org'))[0].status,'failed');assert.equal(sent,null);
  }finally{db.serviceDb=originalDb;email.sendEmail=originalSend;for(const key of Object.keys(process.env))if(!(key in env))delete process.env[key];Object.assign(process.env,env);}
 });
+
+test("Operations department controls require the service-work grant and an eligible department",()=>{
+ const {canOperateDepartment}=require("../lib/operations/access.ts");
+ const staff={rights:["module:hospitality","module_access:configured","manage_service_jobs","dept_scope:Housekeeping"]};
+ assert.equal(canOperateDepartment(staff,"Housekeeping"),true);
+ assert.equal(canOperateDepartment(staff,"Engineering"),false);
+ assert.equal(canOperateDepartment({rights:["module:hospitality"]},"Housekeeping"),false);
+ assert.equal(canOperateDepartment({isOrganizationAdmin:true},"Engineering"),true);
+ assert.throws(()=>validateHospitality({callRateMinor:-1}));
+ assert.throws(()=>validateHospitality({callRateMinor:1.5}));
+});
+test("Private guest-link generation returns the same valid token on an idempotent retry",async()=>{
+ const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server"),operations=require("../app/api/operations/route.ts"),{createHash}=require("node:crypto");
+ const prior=db.sessionDb,secret=process.env.GUEST_LINK_SECRET;process.env.GUEST_LINK_SECRET="test-only-guest-link-secret";
+ const commands=[],client={rpc:async(name,args)=>name==="omniops_ready"?{data:true,error:null}:(commands.push(args),{data:{id:"created-link"},error:null})};
+ const user={id:"11111111-1111-4111-8111-111111111111",organizationId:"22222222-2222-4222-8222-222222222222",isOrganizationAdmin:true,accessToken:"verified",rights:[],role:"admin"};
+ db.sessionDb=()=>client;
+ const body={action:"guest_link",requestId:"33333333-3333-4333-8333-333333333333",data:{property_id:"44444444-4444-4444-8444-444444444444",stay_id:"55555555-5555-4555-8555-555555555555"}};
+ try{
+  const send=()=>db.workspaceContext.run({user,client},()=>operations.POST(new NextRequest("http://localhost/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})));
+  const one=await send(),two=await send();assert.equal(one.status,200);assert.equal(two.status,200);const a=await one.json(),b=await two.json();assert.equal(a.path,b.path);
+  const token=a.path.split("/").pop();assert.match(token,/^[A-Za-z0-9_-]{43}$/);assert.equal(createHash("sha256").update(token).digest("hex"),commands[0].p_data.token_hash);assert.equal(commands[0].p_data.token_hash,commands[1].p_data.token_hash);
+ }finally{db.sessionDb=prior;if(secret===undefined)delete process.env.GUEST_LINK_SECRET;else process.env.GUEST_LINK_SECRET=secret;}
+});
+test("Push subscription endpoints reject SSRF destinations before using server credentials",async()=>{
+ const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server"),push=require("../app/api/operations/push/route.ts");
+ const prior=db.sessionDb,priorService=db.serviceDb;const client={};db.sessionDb=()=>client;db.serviceDb=()=>{throw new Error("Invalid endpoint reached the service client");};
+ const user={id:"member",organizationId:"company",isOrganizationAdmin:false,accessToken:"verified",rights:["module:hospitality","module_access:configured","manage_service_jobs"],role:"staff"};
+ try{for(const endpoint of ["http://127.0.0.1/", "https://169.254.169.254/", "https://evil.example/", "https://fcm.googleapis.com.evil.example/", "https://fcm.googleapis.com:8443/", "https://user:pass@fcm.googleapis.com/"]){const response=await db.workspaceContext.run({user,client},()=>push.POST(new NextRequest("http://localhost/api/operations/push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint,keys:{auth:"a".repeat(24),p256dh:"b".repeat(88)}})})));assert.equal(response.status,400,endpoint);}}
+ finally{db.sessionDb=prior;db.serviceDb=priorService;}
+});
+
+test("Inspection photo uploads reject oversized streams before parsing or storage writes",async()=>{
+ const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server"),evidence=require("../app/api/operations/evidence/route.ts");
+ const prior=db.sessionDb,client={rpc(){throw new Error("Oversized upload reached the database");}};
+ db.sessionDb=()=>client;const user={id:"owner",organizationId:"company",isOrganizationAdmin:true,accessToken:"verified",rights:[],role:"admin"};
+ try{const response=await db.workspaceContext.run({user,client},()=>evidence.POST(new NextRequest("http://localhost/api/operations/evidence",{method:"POST",headers:{"Content-Type":"multipart/form-data; boundary=test"},body:new Uint8Array(5500001)})));assert.equal(response.status,413);}
+ finally{db.sessionDb=prior;}
+});

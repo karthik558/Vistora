@@ -15,6 +15,7 @@ import "./globals.css";
 import "./dark-theme.css";
 import "./platform.css";
 import "./hospitality.css";
+import "./operations.css";
 import "./workspace-ui.css";
 
 export const metadata: Metadata = {

@@ -8,6 +8,7 @@ export interface HospitalityConfig {
  perExpenseLimitMinor:number;
  approvalThresholdMinor:number;
  taskResponseMinutes:number;
+ callRateMinor:number;
  requireInspection:boolean;
  alertsEnabled:boolean;
  inspectionChecklist:string[];
@@ -16,7 +17,7 @@ export const DEFAULT_HOSPITALITY:HospitalityConfig={
  colors:{feedback:"#3e6b51",guests:"#294f7c",property:"#243d6a",operations:"#4c617e",compliance:"#78634d",administration:"#5f6672"},
  modules:{guests:true,property:true,operations:true,compliance:true},
  currency:"INR",monthlyBudgetMinor:0,perExpenseLimitMinor:0,approvalThresholdMinor:0,
- taskResponseMinutes:120,requireInspection:true,alertsEnabled:false,
+ taskResponseMinutes:120,callRateMinor:0,requireInspection:true,alertsEnabled:false,
  inspectionChecklist:["Room cleaned and linen replaced","Bathroom and amenities checked","Safety equipment checked","Maintenance issues cleared"]
 };
 export function hospitalityConfig(value:any):HospitalityConfig {
@@ -28,6 +29,7 @@ export function validateHospitality(value:any):HospitalityConfig {
  for(const enabled of Object.values(config.modules))if(typeof enabled!=="boolean")throw new Error("Module switches must be enabled or disabled.");
  if(!["INR","USD","EUR","GBP","AED","THB"].includes(config.currency))throw new Error("Choose a supported currency.");
  for(const field of ["monthlyBudgetMinor","perExpenseLimitMinor","approvalThresholdMinor"] as const)if(!Number.isSafeInteger(config[field])||config[field]<0||config[field]>1e12)throw new Error("Budget limits must be non-negative amounts below 10 billion.");
+ if(!Number.isInteger(config.callRateMinor)||config.callRateMinor<0||config.callRateMinor>100000)throw new Error("Call rate must be 0–100,000 minor currency units per minute.");
  if(!Number.isInteger(config.taskResponseMinutes)||config.taskResponseMinutes<1||config.taskResponseMinutes>10080)throw new Error("Response target must be 1–10,080 minutes.");
  if(typeof config.requireInspection!=="boolean")throw new Error("Invalid inspection requirement.");
  if(typeof config.alertsEnabled!=="boolean")throw new Error("Invalid overdue alert setting.");
