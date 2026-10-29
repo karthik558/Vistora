@@ -14,9 +14,8 @@ import {canManageServiceJobs} from "../lib/operations/access";
 import {useAppearance} from "./AppearanceProvider";
 import {hospitalityConfig,money,ModuleName} from "../lib/hospitality/config";
 import {
- BedDouble,Users,ClipboardList,ClipboardCheck,Wallet,RefreshCw,ArrowUpRight,
+ BedDouble,Users,ClipboardList,ClipboardCheck,RefreshCw,
  Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Sparkles,Upload,Layers,
- Clock,AlertTriangle,CheckCircle2,Wrench,BarChart3,Activity
 } from "lucide-react";
 
 const format=(value:string)=>new Date(value).toLocaleString();
@@ -354,7 +353,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const canManage=user.isOrganizationAdmin===true;
  const canCreateJob=canManage||canManageServiceJobs(user);
  const canAttend=canManageServiceJobs(user)&&data?.complaintsReady===true;
- const firstName=user.fullName?.split(" ")[0]||user.email?.split("@")[0]||"";
  const descriptions:Record<Tab,string>={
   Overview:"A clear view of guest stays, room readiness, and immediate service requests.",
   Guests:"Track active in-house guests, handle checkouts, manage reservations, and customer profiles.",
@@ -381,15 +379,15 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const historyStays=stays.filter(s=>s.status==="checked_out"||s.status==="cancelled");
 
  const cards=[
-  {title:"Guests in house · active",value:data?.metrics.inHouse??activeStays.length,icon:BedDouble,section:"Guests",color:"guests"},
-  {title:"Open service jobs",value:data?.metrics.openJobs,icon:ClipboardList,section:"Service jobs",color:"operations"},
-  {title:"Rooms needing service",value:data?.metrics.roomsNeedService,icon:BedDouble,section:"Rooms",color:"property"},
-  {title:"Guest profiles · company",value:data?.metrics.guests,icon:Users,section:"Guests",color:"guests"},
-  {title:"Pending cost decisions",value:data?.metrics.pendingCosts,icon:Wallet,section:"Cost controls",color:"operations"}
+  {title:"Guests in house · active",value:data?.metrics.inHouse??activeStays.length,section:"Guests"},
+  {title:"Open service jobs",value:data?.metrics.openJobs,section:"Service jobs"},
+  {title:"Rooms needing service",value:data?.metrics.roomsNeedService,section:"Rooms"},
+  {title:"Guest profiles · company",value:data?.metrics.guests,section:"Guests"},
+  {title:"Pending cost decisions",value:data?.metrics.pendingCosts,section:"Cost controls"}
  ];
 
  return <AppShell active={tab} user={user} module="operations"><div className="content-wrap platform-page hotel-page">
- <DashboardPageHeading eyebrow={tab==="Overview"?"Hospitality overview":"Hotel operations"} title={tab==="Overview"?(firstName?`Good morning, ${firstName}`:"Hospitality operations"):tab} description={descriptions[tab]}>
+ <DashboardPageHeading eyebrow="Hotel operations" title={tab} description={descriptions[tab]}>
   <PropertyFilter properties={data?.properties||[]} selectedId={property} onChange={setProperty} manageHref="/dashboard/properties?workspace=operations"/>
   <button
    type="button"
@@ -480,14 +478,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
    return{isOverdue,text};
   };
 
-  const getTicketIcon=(kind:string)=>{
-   switch(kind){
-    case "cleaning":return <Sparkles size={11}/>;
-    case "maintenance":return <Wrench size={11}/>;
-    case "inspection":return <ClipboardCheck size={11}/>;
-    default:return <Users size={11}/>;
-   }
-  };
   const getTicketLabel=(kind:string)=>{
    switch(kind){
     case "cleaning":return "Housekeeping";
@@ -498,99 +488,17 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   };
 
   return <>
-   <section className="hotel-overview">
-    {cards.filter(c=>canManage||c.value!==null).map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} className="hotel-overview-card"><c.icon size={17}/><span>{c.title}</span><strong>{c.value}</strong><ArrowUpRight size={14}/></button>)}
+   <section className="platform-stats" aria-label="Operations summary">
+    {cards.filter(c=>canManage||c.section!=="Cost controls").map(c=><button key={c.title} onClick={()=>setTab(c.section as Tab)} type="button" className="platform-stat hotel-metric-link"><span>{c.title}</span><strong>{c.value??"—"}</strong></button>)}
    </section>
 
-   <div className="hotel-overview-layout">
-    {/* SIDEBAR: Operational Shortcuts & Recent Activity Feed */}
-    <aside className="hotel-overview-sidebar">
-     <section className="platform-card" style={{padding:"16px"}}>
-      <h3 style={{fontSize:"13px",fontWeight:600,margin:"0 0 3px 0",display:"flex",alignItems:"center",gap:"6px"}}>
-       <Building2 size={15}/>
-       <span>Operational Shortcuts</span>
-      </h3>
-      <p style={{fontSize:"11px",color:"var(--muted)",margin:"0 0 12px 0"}}>Rapid actions for front desk &amp; housekeeping</p>
-      <div className="hotel-tools-list">
-       <button
-        type="button"
-        className="hotel-tool-btn primary"
-        onClick={()=>setShowJobModal(true)}
-       >
-        <span>+ New Job Request</span>
-        <Plus size={14}/>
-       </button>
-       <button
-        type="button"
-        className="hotel-tool-btn"
-        onClick={()=>{setTab("Guests");setShowReserveModal(true);}}
-       >
-        <span>+ Reserve / Check-In</span>
-        <Calendar size={14}/>
-       </button>
-       <button
-        type="button"
-        className="hotel-tool-btn"
-        onClick={()=>{
-         setRoomManagerPropertyId(property!=="all"?property:"");
-         setShowRoomManagerModal(true);
-        }}
-       >
-        <span>Manage &amp; Import Rooms</span>
-        <BedDouble size={14}/>
-       </button>
-       <button
-        type="button"
-        className="hotel-tool-btn"
-        onClick={openGeneralFeedbackCode}
-       >
-        <span>Feedback Code / QR</span>
-        <QrCode size={14}/>
-       </button>
-      </div>
-     </section>
-
-     <section className="platform-card" style={{padding:"16px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
-       <h3 style={{fontSize:"13px",fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:"6px"}}>
-        <Activity size={15}/>
-        <span>Recent Activity</span>
-       </h3>
-       <span style={{fontSize:"10px",color:"var(--muted)"}}>{data.activity?.length||0} events</span>
-      </div>
-      <p style={{fontSize:"11px",color:"var(--muted)",margin:"0 0 10px 0"}}>Live audit log of operational actions</p>
-      <div className="hotel-activity-list">
-       {!data.activity?.length?(
-        <p style={{fontSize:"12px",color:"var(--muted)",margin:0,padding:"12px 0",textAlign:"center"}}>
-         {canManage?"No operational changes recorded yet.":"Activity history is available to administrators."}
-        </p>
-       ):(
-        data.activity.map((a:any)=>(
-         <div className="hotel-activity-item" key={a.id}>
-          <div className="hotel-activity-header">
-           <span className="hotel-activity-title">{label(a.entity_type)} · {a.action}</span>
-           <time style={{fontSize:"10px",color:"var(--muted)"}}>{format(a.created_at)}</time>
-          </div>
-          <div className="hotel-activity-meta">
-           <span>ID: {a.entity_id.slice(0,8)}</span>
-           <span>{a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Staff":"System"}</span>
-          </div>
-         </div>
-        ))
-       )}
-      </div>
-     </section>
-    </aside>
-
-    {/* MAIN AREA: Operational Graphs & Active Service Tickets Queue */}
-    <main className="hotel-overview-main">
+   <div className="hotel-overview-content">
      {/* Visual Analytics Graphs */}
-     <section className="platform-card" style={{padding:"18px"}}>
+     <section className="platform-card hotel-capacity">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"10px",marginBottom:"14px"}}>
        <div>
         <h2 style={{margin:0,fontSize:"15px",fontWeight:600,display:"flex",alignItems:"center",gap:"6px"}}>
-         <BarChart3 size={16}/>
-         <span>Operational Health &amp; Capacity</span>
+         <span>Room readiness &amp; service workload</span>
         </h2>
         <p style={{margin:"2px 0 0 0",fontSize:"12px",color:"var(--muted)"}}>
          {property==="all"?"Aggregated across all properties":`Scoped to ${nameOf(property)}`}
@@ -606,7 +514,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
        <div className="hotel-chart-card">
         <div className="hotel-chart-header">
          <div>
-          <h3>Room Readiness &amp; Occupancy</h3>
+          <h3>Room readiness</h3>
           <p>{totalRooms>0?`${readyRooms} ready for guests (${readyPct}%)`:"No rooms configured"}</p>
          </div>
          <div className="hotel-chart-stat">
@@ -678,7 +586,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
        <div className="hotel-chart-card">
         <div className="hotel-chart-header">
          <div>
-          <h3>Service Dispatch Workload</h3>
+          <h3>Service workload</h3>
           <p>{totalActiveJobs>0?`${criticalJobs+highJobs} urgent priority`:"All service tickets closed"}</p>
          </div>
          <div className="hotel-chart-stat">
@@ -724,14 +632,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
         ):(
          <div style={{textAlign:"center",padding:"16px 8px",background:"var(--canvas)",borderRadius:"4px",border:"1px dashed var(--line)"}}>
           <p style={{margin:"0 0 8px 0",fontSize:"11px",color:"var(--muted)"}}>No active service jobs in queue.</p>
-          <button
-           type="button"
-           className="button button-dark compact"
-           onClick={()=>setShowJobModal(true)}
-           style={{fontSize:"11px"}}
-          >
-           + Create Job Request
-          </button>
          </div>
         )}
        </div>
@@ -739,20 +639,19 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
      </section>
 
      {/* Live Active Service Tickets Queue */}
-     <section className="hotel-queue-card">
+     <section className="platform-card hotel-queue-card">
       <div className="hotel-queue-header">
        <div className="hotel-queue-title-area">
         <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
          <h2 style={{margin:0,fontSize:"15px",display:"flex",alignItems:"center",gap:"6px"}}>
-          <ClipboardList size={16}/>
-          <span>Active Service Tickets &amp; Work Queue</span>
+          <span>Active service jobs</span>
          </h2>
          <span style={{fontSize:"11px",fontWeight:600,padding:"1px 6px",borderRadius:"3px",background:"var(--ink)",color:"var(--panel)"}}>
           {totalActiveJobs}
          </span>
         </div>
         <p style={{margin:"2px 0 0 0",fontSize:"12px",color:"var(--muted)"}}>
-         Live operational dispatch queue. Start, assign, and complete requests directly.
+         Assign, start and complete service requests.
         </p>
        </div>
        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
@@ -763,7 +662,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
          style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
         >
          <Plus size={13}/>
-         <span>New Job</span>
+         <span>New job</span>
         </button>
         <button
          type="button"
@@ -771,26 +670,17 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
          onClick={()=>setTab("Service jobs")}
          style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
         >
-         <span>View All Jobs</span>
-         <ArrowUpRight size={13}/>
+         <span>View all jobs</span>
         </button>
        </div>
       </div>
 
       {totalActiveJobs===0?(
        <div style={{padding:"28px 16px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
-        <CheckCircle2 size={24} style={{color:"var(--sage-deep)",margin:"0 auto 8px auto"}}/>
-        <h3 style={{fontSize:"14px",fontWeight:600,margin:"0 0 4px 0"}}>Work Queue Clear</h3>
+        <h3 style={{fontSize:"14px",fontWeight:600,margin:"0 0 4px 0"}}>No active service jobs</h3>
         <p style={{fontSize:"12px",color:"var(--muted)",maxWidth:"340px",margin:"0 auto 12px auto"}}>
          All guest requests, housekeeping turnovers, and maintenance tickets are complete.
         </p>
-        <button
-         type="button"
-         className="button button-dark compact"
-         onClick={()=>setShowJobModal(true)}
-        >
-         + Create Job Request
-        </button>
        </div>
       ):(
        <div className="hotel-tickets-list">
@@ -802,7 +692,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
            <div className="hotel-ticket-top">
             <div className="hotel-ticket-badges">
              <span className="hotel-badge badge-kind">
-              {getTicketIcon(j.kind)}
               <span>{getTicketLabel(j.kind)}</span>
              </span>
              <span className={`hotel-badge priority-${j.priority}`}>
@@ -821,7 +710,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
             </div>
             {deadline&&(
              <span className={`hotel-ticket-due ${deadline.isOverdue?"overdue":""}`}>
-              {deadline.isOverdue?<AlertTriangle size={12}/>:<Clock size={12}/>}
               <span>{deadline.isOverdue?"Overdue":"Due"} · {deadline.text}</span>
              </span>
             )}
@@ -883,7 +771,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
                 onClick={()=>save({action:"job",id:j.id,status:"completed"},"PATCH")}
                 style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
                >
-                <Check size={12}/>
                 <span>Complete</span>
                </button>
               </>
@@ -896,8 +783,37 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
        </div>
       )}
      </section>
-    </main>
    </div>
+     <section className="platform-card hotel-recent-activity">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+       <h3 style={{fontSize:"13px",fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:"6px"}}>
+        <span>Recent activity</span>
+       </h3>
+       <span style={{fontSize:"10px",color:"var(--muted)"}}>{data.activity?.length||0} events</span>
+      </div>
+      <p style={{fontSize:"11px",color:"var(--muted)",margin:"0 0 10px 0"}}>Recent operational changes</p>
+      <div className="hotel-activity-list">
+       {!data.activity?.length?(
+        <p style={{fontSize:"12px",color:"var(--muted)",margin:0,padding:"12px 0",textAlign:"center"}}>
+         {canManage?"No operational changes recorded yet.":"Activity history is available to administrators."}
+        </p>
+       ):(
+        data.activity.map((a:any)=>(
+         <div className="hotel-activity-item" key={a.id}>
+          <div className="hotel-activity-header">
+           <span className="hotel-activity-title">{label(a.entity_type)} · {a.action}</span>
+           <time style={{fontSize:"10px",color:"var(--muted)"}}>{format(a.created_at)}</time>
+          </div>
+          <div className="hotel-activity-meta">
+           <span>ID: {a.entity_id.slice(0,8)}</span>
+           <span>{a.actor_id?data.team.find((p:any)=>p.id===a.actor_id)?.full_name||"Staff":"System"}</span>
+          </div>
+         </div>
+        ))
+       )}
+      </div>
+     </section>
+
   </>;
  })()}
 
