@@ -297,3 +297,37 @@ test("Inspection photo uploads reject oversized streams before parsing or storag
  try{const response=await db.workspaceContext.run({user,client},()=>evidence.POST(new NextRequest("http://localhost/api/operations/evidence",{method:"POST",headers:{"Content-Type":"multipart/form-data; boundary=test"},body:new Uint8Array(5500001)})));assert.equal(response.status,413);}
  finally{db.sessionDb=prior;}
 });
+
+const {validateAnswers,toggleMultiChoice,multiChoices}=require('../lib/feedbackAnswers.ts');
+test('Questionnaires retain multiple choices and reject invalid or contradictory answers before persistence',()=>{
+ const q=[{id:'multi',question_text:'Services',question_type:'multi_choice',is_required:true,options:['Pool','Spa']},{id:'nps',question_text:'Recommend',question_type:'nps',is_required:false},{id:'rating',question_text:'Room',question_type:'rating',is_required:false}];
+ let value=toggleMultiChoice('','Pool');value=toggleMultiChoice(value,'Spa');assert.deepEqual(multiChoices(value),['Pool','Spa']);
+ assert.equal(validateAnswers(q,[{questionId:'multi',answerValue:value}],null).answers[0].answerValue,value);
+ value=toggleMultiChoice(value,'Pool');assert.deepEqual(multiChoices(value),['Spa']);assert.equal(toggleMultiChoice(value,'Spa'),'');
+ const valid={questionId:'multi',answerValue:'["Pool"]'};
+ for(const bad of ['["Unknown"]','["Pool","Pool"]','[]','Pool'])assert.throws(()=>validateAnswers(q,[{questionId:'multi',answerValue:bad}],null));
+ assert.throws(()=>validateAnswers(q,[valid,valid],null));
+ assert.throws(()=>validateAnswers(q,[valid,{questionId:'rating',answerValue:'9/5'}],null));
+ assert.throws(()=>validateAnswers(q,[valid,{questionId:'nps',answerValue:'9'}],3));
+ assert.equal(validateAnswers(q,[valid,{questionId:'nps',answerValue:'0'}],null).recommendationScore,0);
+ assert.throws(()=>validateAnswers(q,[],null));
+ assert.throws(()=>validateAnswers(q,[valid],3.5));
+ assert.throws(()=>validateAnswers(q,[valid,{questionId:'foreign',answerValue:'yes'}],null));
+ for(const type of ['choice','dropdown','emoji','touchpoint','yes_no'])assert.throws(()=>validateAnswers([{...q[0],question_type:type}],[{questionId:'multi',answerValue:'impossible'}],null));
+});
+const {integrationStatus}=require('../lib/platform/integrationStatus.ts');
+test('Integration setup exposes only readiness and variable names, never secrets or unverified delivery claims',()=>{
+ const env={APP_URL:'https://hotel.example',WORKSPACE_ENCRYPTION_KEY:'a'.repeat(64),WORKSPACE_CRON_SECRET:'private-cron',RESEND_API_KEY:'private-provider',MAIL_FROM:'Hotel <service@example.com>',DELIVERY_WEBHOOK_URL:'https://adapter.example/events',DELIVERY_WEBHOOK_SECRET:'private-signing'};
+ const result=integrationStatus(env);assert.ok(result.every(s=>s.configured));
+ for(const secret of ['private-cron','private-provider','private-signing',env.WORKSPACE_ENCRYPTION_KEY])assert.ok(!JSON.stringify(result).includes(secret));
+ assert.ok(integrationStatus({}).every(s=>!s.configured));
+ assert.equal(integrationStatus({...env,DELIVERY_WEBHOOK_URL:'http://adapter.example'})[3].configured,false);
+ assert.equal(integrationStatus({...env,WORKSPACE_ENCRYPTION_KEY:'invalid'})[1].configured,false);
+});
+const {pagedRows}=require('../lib/platform/pagedRows.ts');
+test('Paged feedback reads survive a server row cap and fail rather than returning incomplete totals',async()=>{
+ const records=Array.from({length:1203},(_,id)=>({id})),offsets=[];
+ const result=await pagedRows({range:async(start,end)=>{offsets.push(start);return {data:records.slice(start,Math.min(end+1,start+100)),error:null};}});
+ assert.deepEqual(result,records);assert.equal(offsets.at(-1),1203);
+ await assert.rejects(()=>pagedRows({range:async()=>({data:null,error:{message:'denied'}})}),/denied/);
+});

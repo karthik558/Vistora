@@ -1,3 +1,4 @@
+import {pagedRows} from "../platform/pagedRows";
 import { serviceDb, workspaceContext } from "../platform/db";
 import { createServerSupabaseClient } from "../supabase/server";
 import {
@@ -167,8 +168,9 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
     const supabase = serviceDb();
     const { data, error } = await supabase
       .from("stays")
-      .select("*, properties(name), guests(full_name, vip_tier)")
+      .select("property_id,room_number,check_in_date,check_out_date,status,properties(name),guests(full_name,vip_tier)")
       .eq("public_token", publicToken)
+      .eq("status", "active")
       .single();
 
     if (error || !data) {
@@ -198,7 +200,7 @@ export async function fetchFeedbackList(options?: {
 }): Promise<FeedbackViewModel[]> {
   if (isSupabaseLive) {
     const supabase = await getSupabase();
-    let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("feedback").select("*").order("created_at", { ascending: false }).order("id", {ascending:false});
 
     if (options?.propertyId && options.propertyId !== "all") {
       query = query.eq("property_id", options.propertyId);
@@ -207,13 +209,7 @@ export async function fetchFeedbackList(options?: {
       query = query.eq("status", options.status);
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error("[Supabase Error] fetchFeedbackList failed:", error);
-      throw new Error(`Supabase query failed: ${error.message}`);
-    }
-
-    let rows: FeedbackRow[] = data || [];
+    let rows = await pagedRows<FeedbackRow>(query);
 
     if (options?.search && options.search.trim()) {
       const s = options.search.toLowerCase();
@@ -426,47 +422,18 @@ export async function getDashboardData(
     // 1. Fetch properties concurrently
     const propPromise = supabase.from("properties").select("*").order("name");
 
-    // 2. Fetch feedback concurrently with strict multi-tenant isolation
-    let feedPromise: Promise<any>;
-    if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
-      if (allowedPropertyIds.length === 0) {
-        feedPromise = Promise.resolve({ data: [], error: null });
-      } else if (propertyId !== "all") {
-        if (!allowedPropertyIds.includes(propertyId)) {
-          feedPromise = Promise.resolve({ data: [], error: null });
-        } else {
-          feedPromise = supabase
-            .from("feedback")
-            .select("*")
-            .eq("property_id", propertyId)
-            .order("created_at", { ascending: false });
-        }
-      } else {
-        feedPromise = supabase
-          .from("feedback")
-          .select("*")
-          .in("property_id", allowedPropertyIds)
-          .order("created_at", { ascending: false });
-      }
-    } else {
-      let query = supabase.from("feedback").select("*").order("created_at", { ascending: false });
-      if (propertyId !== "all") {
-        query = query.eq("property_id", propertyId);
-      }
-      feedPromise = query;
-    }
-
-    const [propRes, feedRes] = await Promise.all([propPromise, feedPromise]);
+    // Fetch every feedback page under the caller's RLS session.
+    let query=supabase.from("feedback").select("*").order("created_at",{ascending:false}).order("id",{ascending:false});
+    if(propertyId!=="all")query=query.eq("property_id",propertyId);
+    const restricted=allowedPropertyIds!==null&&allowedPropertyIds!==undefined;
+    if(restricted)query=query.in("property_id",allowedPropertyIds);
+    const denied=restricted&&(!allowedPropertyIds.length||(propertyId!=="all"&&!allowedPropertyIds.includes(propertyId)));
+    const [propRes,rows]=await Promise.all([propPromise,denied?Promise.resolve([]):pagedRows<FeedbackRow>(query)]);
 
     if (propRes.error) {
       console.error("[Supabase Error] Properties query failed:", propRes.error);
       throw new Error(`Failed to fetch properties from Supabase: ${propRes.error.message}`);
     }
-    if (feedRes.error) {
-      console.error("[Supabase Error] Feedback query failed:", feedRes.error);
-      throw new Error(`Failed to fetch feedback from Supabase: ${feedRes.error.message}`);
-    }
-
     // Filter properties strictly to allowedPropertyIds if restricted
     if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
       propertiesList = (propRes.data || []).filter((p: any) => allowedPropertyIds.includes(p.id));
@@ -474,7 +441,7 @@ export async function getDashboardData(
       propertiesList = propRes.data || [];
     }
 
-    feedbackRows = feedRes.data || [];
+    feedbackRows = rows;
   } else {
     if (allowedPropertyIds !== null && allowedPropertyIds !== undefined) {
       propertiesList = fallbackProperties.filter((p) => allowedPropertyIds.includes(p.id));
@@ -502,7 +469,7 @@ export async function getDashboardData(
   const satisfiedCount = feedbackRows.filter((r) => r.rating >= 4).length;
   const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0.0";
   const openComplaintsCount = feedbackRows.filter(
-    (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
+    (r) => r.status !== "resolved"
   ).length;
 
   // Rating distribution counts (5 down to 1)

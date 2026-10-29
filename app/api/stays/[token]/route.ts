@@ -9,9 +9,9 @@ export async function GET(
     const { token } = await params;
     const stay = await fetchStayByToken(token);
     if (!stay) {
-      return NextResponse.json({ success: false, error: "Stay not found" }, { status: 404 });
+      return NextResponse.json({ success: false, error: "Stay not found" }, { status: 404, headers: {"Cache-Control":"no-store"} });
     }
-    return NextResponse.json({ success: true, data: stay });
+    return NextResponse.json({ success: true, data: stay }, {headers:{"Cache-Control":"no-store"}});
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

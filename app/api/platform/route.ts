@@ -1,3 +1,4 @@
+import {integrationStatus} from "../../../lib/platform/integrationStatus";
 import {NextRequest,NextResponse} from "next/server";
 import {withWorkspace,text,email,number} from "../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,serviceDb,assertProperty,PlatformError} from "../../../lib/platform/db";
@@ -22,6 +23,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
   result.report=managementReport(await reportRows(db,user.organizationId,days,property),days);
  }
  if(user.isOrganizationAdmin) {
+  result.integrationStatus=integrationStatus(process.env);
   const tables=["sla_policies","report_schedules","report_runs","team_invitations","notification_outbox","notification_deliveries"];
   for(const table of tables)result[table]=checked(await db.from(table).select(table==="team_invitations"?"id,email,property_ids,rights,expires_at,accepted_at,created_at":table==="notification_outbox"?"id,kind,status,attempts,last_error,available_at,created_at":"*").order("created_at",{ascending:false}).limit(100));
   result.api_keys=checked(await db.from("api_keys").select("id,name,prefix,scopes,expires_at,revoked_at,last_used_at").order("created_at",{ascending:false}));

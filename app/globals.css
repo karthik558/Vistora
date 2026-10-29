@@ -4144,3 +4144,8 @@ html[data-theme="dark"] .brand-logo-light,
 /* Guest cards stay light even when the workspace uses dark mode. */
 [data-theme] .guest-shell .brand-logo-light{display:inline-block!important}
 [data-theme] .guest-shell .brand-logo-dark{display:none!important}
+
+/* Keep the shared property dropdown inside desktop heading bounds. Mobile uses the shared fixed popover. */
+@media (min-width: 769px) {
+ .page-heading-actions .property-filter-popover { left: auto; right: 0; max-width: calc(100vw - 32px); }
+}

@@ -17,7 +17,7 @@ import {useAppearance} from "./AppearanceProvider";
 import {hospitalityConfig,money,ModuleName} from "../lib/hospitality/config";
 import {
  BedDouble,Users,ClipboardList,ClipboardCheck,RefreshCw,
- Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Sparkles,Upload,Layers,
+ Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Upload,Layers,
 } from "lucide-react";
 
 const format=(value:string)=>new Date(value).toLocaleString();

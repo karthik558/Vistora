@@ -1,4 +1,5 @@
 "use client";
+import WorkspaceSelect from "./WorkspaceSelect";
 import { FormEvent, useState } from "react";
 import { Job, OperationsData } from "../lib/omniops/types";
 import { Dialog, Empty, Mutate, RoomLabel, Status } from "./OperationsUI";
@@ -242,42 +243,38 @@ export function InspectionWorkflow({
           ) : (
             <form className="ops-form" onSubmit={submit}>
               <div className="ops-fields">
-                <label>
+                <div className="ops-field-label">
                   Checklist
-                  <select
+                  <WorkspaceSelect
+                    label="Checklist"
                     value={template}
-                    onChange={(e) => {
-                      setTemplate(e.target.value);
+                    onChange={(value) => {
+                      setTemplate(value);
                       setAnswers({});
                       setEvidence({});
                     }}
-                  >
-                    <option value="">Workspace default</option>
-                    {data.templates
-                      .filter((t) => t.property_id === property)
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
+                    options={[
+                      { value: "", label: "Workspace default" },
+                      ...data.templates
+                        .filter((t) => t.property_id === property)
+                        .map((t) => ({ value: t.id, label: t.name })),
+                    ]}
+                  />
+                </div>
+                <div className="ops-field-label">
                   Room
-                  <select
+                  <WorkspaceSelect
+                    label="Inspection room"
                     value={room}
-                    onChange={(e) => setRoom(e.target.value)}
-                  >
-                    <option value="">Public area</option>
-                    {data.rooms
-                      .filter((r) => r.property_id === property)
-                      .map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.room_number}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                    onChange={setRoom}
+                    options={[
+                      { value: "", label: "Public area" },
+                      ...data.rooms
+                        .filter((r) => r.property_id === property)
+                        .map((r) => ({ value: r.id, label: r.room_number })),
+                    ]}
+                  />
+                </div>
                 {!room && (
                   <label>
                     Public area

@@ -1,4 +1,5 @@
 "use client";
+import WorkspaceSelect from "./WorkspaceSelect";
 import {
   FormEvent,
   ReactNode,
@@ -147,6 +148,7 @@ export function RecordForm({
   saveError?: string;
 }) {
   const [error, setError] = useState("");
+  const formId = useId();
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -177,23 +179,29 @@ export function RecordForm({
       {spec.description && <p>{spec.description}</p>}
       <form onSubmit={submit} className="ops-form">
         {spec.fields.map((f) => (
-          <label key={f.name}>
-            {f.label}
+          <div className="ops-field-label" key={f.name}>
             {f.type === "select" ? (
-              <select
+              <span>{f.label}</span>
+            ) : (
+              <label htmlFor={`${formId}-${f.name}`}>{f.label}</label>
+            )}
+            {f.type === "select" ? (
+              <WorkspaceSelect
+                label={f.label}
                 name={f.name}
-                defaultValue={f.value ?? ""}
+                defaultValue={String(f.value ?? "")}
                 required={f.required !== false}
-              >
-                <option value="">Choose {f.label.toLowerCase()}</option>
-                {f.options?.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  ...(f.required === false
+                    ? [{ value: "", label: "None" }]
+                    : []),
+                  ...(f.options || []),
+                ]}
+              />
             ) : f.type === "textarea" ? (
               <textarea
+                aria-label={f.label}
+                id={`${formId}-${f.name}`}
                 name={f.name}
                 defaultValue={f.value ?? ""}
                 rows={4}
@@ -202,6 +210,8 @@ export function RecordForm({
               />
             ) : (
               <input
+                aria-label={f.label}
+                id={`${formId}-${f.name}`}
                 name={f.name}
                 type={f.type || "text"}
                 defaultValue={f.value ?? ""}
@@ -218,7 +228,7 @@ export function RecordForm({
                   `Times use this device’s time zone (${Intl.DateTimeFormat().resolvedOptions().timeZone}) and are saved in UTC.`}
               </small>
             )}
-          </label>
+          </div>
         ))}
         {(saveError || error) && <p role="alert">{saveError || error}</p>}
         <div className="ops-form-actions">

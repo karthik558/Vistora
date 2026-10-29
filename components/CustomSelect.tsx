@@ -106,6 +106,9 @@ export default function CustomSelect({
   return (
     <div
       ref={containerRef}
+      onKeyDown={event=>{
+        if(event.key==="Escape"&&isOpen){event.stopPropagation();setIsOpen(false);containerRef.current?.querySelector("button")?.focus();}
+      }}
       className={`custom-select-wrapper ${className}`}
       style={{
         position: "relative",
@@ -297,7 +300,7 @@ export default function CustomSelect({
             </div>
           </motion.div>
           );
-          return floating && typeof document !== "undefined" ? createPortal(menu, document.body) : menu;
+          return floating && typeof document !== "undefined" ? createPortal(menu, containerRef.current?.closest("dialog,[role=dialog]") || document.body) : menu;
         })()}
     </div>
   );

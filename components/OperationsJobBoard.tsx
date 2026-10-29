@@ -1,4 +1,5 @@
 "use client";
+import WorkspaceSelect from "./WorkspaceSelect";
 import { useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, useReducedMotion } from "framer-motion";
 import { BellRing, Search } from "lucide-react";
@@ -78,6 +79,7 @@ export default function OperationsJobBoard({
   onResolve,
   compact = false,
   error,
+  clearError = () => {},
 }: {
   data: OperationsData;
   user: WorkspaceUser;
@@ -88,8 +90,13 @@ export default function OperationsJobBoard({
   onResolve: (job: Job) => void;
   compact?: boolean;
   error?: string;
+  clearError?: () => void;
 }) {
   const [cancel, setCancel] = useState<Job | null>(null);
+  const [assignment, setAssignment] = useState<{
+    job: Job;
+    assignee: string;
+  } | null>(null);
   const [dept, setDept] = useState("all"),
     [view, setView] = useState(user.isOrganizationAdmin ? "all" : "mine"),
     [search, setSearch] = useState(""),
@@ -121,6 +128,7 @@ export default function OperationsJobBoard({
       (j) => j.priority === "critical" || Date.parse(j.due_at) < Date.now(),
     );
     if (severe) {
+      clearError();
       setUrgent(severe);
       if (alerts) {
         navigator.vibrate?.([200, 100, 200]);
@@ -280,8 +288,8 @@ export default function OperationsJobBoard({
         </div>
         <div className="platform-actions">
           {canAttend && !compact && (
-            <details className="ops-alert-preferences">
-              <summary>Alert settings</summary>
+            <div className="ops-alert-preferences">
+              <span>Alerts</span>
               <div>
                 <button
                   className="button button-ghost"
@@ -318,7 +326,7 @@ export default function OperationsJobBoard({
                   Disable push
                 </button>
               </div>
-            </details>
+            </div>
           )}
           {canAttend && (
             <button className="button button-dark" onClick={onCreate}>
@@ -329,32 +337,40 @@ export default function OperationsJobBoard({
       </div>
       {pushState && <p role="status">{pushState}</p>}
       <div className="ops-board-filters">
-        <label>
+        <div className="ops-field-label">
           Department
-          <select value={dept} onChange={(e) => setDept(e.target.value)}>
-            <option value="all">All departments</option>
-            {[
-              ...new Set([
-                ...departments,
-                ...data.jobs.map((j) => j.department),
-              ]),
-            ]
-              .filter((d) => d !== "*")
-              .map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-          </select>
-        </label>
-        <label>
+          <WorkspaceSelect
+            label="Department"
+            value={dept}
+            onChange={setDept}
+            options={[
+              { value: "all", label: "All departments" },
+              ...[
+                ...new Set([
+                  ...departments,
+                  ...data.jobs.map((j) => j.department),
+                ]),
+              ]
+                .filter((d) => d !== "*")
+                .map((d) => ({ value: d, label: d })),
+            ]}
+          />
+        </div>
+        <div className="ops-field-label">
           Queue
-          <select value={view} onChange={(e) => setView(e.target.value)}>
-            <option value="all">All active work</option>
-            <option value="mine">Assigned to me</option>
-            <option value="overdue">Overdue</option>
-            <option value="unassigned">Unassigned</option>
-            <option value="history">Recent closed jobs</option>
-          </select>
-        </label>
+          <WorkspaceSelect
+            label="Queue"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "all", label: "All active work" },
+              { value: "mine", label: "Assigned to me" },
+              { value: "overdue", label: "Overdue" },
+              { value: "unassigned", label: "Unassigned" },
+              { value: "history", label: "Recent closed jobs" },
+            ]}
+          />
+        </div>
         <label className="ops-search">
           Find a job
           <input
@@ -411,36 +427,23 @@ export default function OperationsJobBoard({
                     : deadlineLabel(j.due_at, now)}
                 </time>
                 {user.isOrganizationAdmin ? (
-                  <label>
-                    Assigned to
-                    <select
-                      aria-label={`Assign ${j.title}`}
-                      value={j.assigned_to || ""}
+                  <div className="ops-assignee-control">
+                    <span>{j.assignee?.full_name || "Unassigned"}</span>
+                    <button
+                      type="button"
+                      className="button button-ghost"
                       disabled={busy}
-                      onChange={(e) =>
-                        mutate(
-                          "job",
-                          { id: j.id, assigned_to: e.target.value || null },
-                          true,
-                        )
-                      }
+                      onClick={() => {
+                        clearError();
+                        setAssignment({
+                          job: j,
+                          assignee: j.assigned_to || "",
+                        });
+                      }}
                     >
-                      <option value="">Unassigned</option>
-                      {data.team
-                        .filter(
-                          (p) =>
-                            p.isAdmin ||
-                            p.id === j.assigned_to ||
-                            p.property_id === j.property_id ||
-                            p.property_ids?.includes(j.property_id),
-                        )
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.full_name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                      {j.assigned_to ? "Reassign" : "Assign staff"}
+                    </button>
+                  </div>
                 ) : (
                   <span>{j.assignee?.full_name || "Unassigned"}</span>
                 )}
@@ -468,7 +471,10 @@ export default function OperationsJobBoard({
                     <button
                       className="button button-ghost"
                       disabled={busy}
-                      onClick={() => setCancel(j)}
+                      onClick={() => {
+                        clearError();
+                        setCancel(j);
+                      }}
                     >
                       Cancel job
                     </button>
@@ -484,6 +490,66 @@ export default function OperationsJobBoard({
             ? "Open Service jobs to see the full queue."
             : "Showing the first 100 matches. Narrow the filters to locate more work."}
         </p>
+      )}
+      {assignment && (
+        <Dialog
+          title="Assign service job"
+          busy={busy}
+          onClose={() => setAssignment(null)}
+        >
+          <p>{assignment.job.title}</p>
+          <WorkspaceSelect
+            label="Assigned staff"
+            value={assignment.assignee}
+            onChange={(assignee) =>
+              setAssignment((current) =>
+                current ? { ...current, assignee } : null,
+              )
+            }
+            disabled={busy}
+            options={[
+              { value: "", label: "Unassigned" },
+              ...data.team
+                .filter(
+                  (p) =>
+                    p.isAdmin ||
+                    p.id === assignment.job.assigned_to ||
+                    p.property_id === assignment.job.property_id ||
+                    p.property_ids?.includes(assignment.job.property_id),
+                )
+                .map((p) => ({ value: p.id, label: p.full_name })),
+            ]}
+          />
+          {error && <p role="alert">{error}</p>}
+          <div className="ops-form-actions">
+            <button
+              className="button button-ghost"
+              disabled={busy}
+              onClick={() => setAssignment(null)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button button-dark"
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  await mutate(
+                    "job",
+                    {
+                      id: assignment.job.id,
+                      assigned_to: assignment.assignee || null,
+                    },
+                    true,
+                  )
+                )
+                  setAssignment(null);
+              }}
+            >
+              Save assignment
+            </button>
+          </div>
+        </Dialog>
       )}
       {cancel && (
         <Dialog

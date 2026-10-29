@@ -1,3 +1,4 @@
+import {validateAnswers} from "../../../lib/feedbackAnswers";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchFeedbackList,createFeedback,deleteFeedback,updateFeedbackProperty,invalidateDashboardCache } from "../../../lib/services/guestExperienceService";
 import { withWorkspace,errorResponse,text,number } from "../../../lib/platform/http";
@@ -39,21 +40,15 @@ export async function POST(request:NextRequest) {
   }
   const questions=checked(await db.from("feedback_questions").select("id,question_text,question_type,is_required,department,options").eq("organization_id",property.organization_id).eq("is_active",true).or("property_id.is.null,property_id.eq."+property.id));
   const relevant=questions.filter(q=>!q.department||q.department===body.department);
-  const answers:Array<{questionId:string;questionText:string;answerValue:string}>=Array.isArray(body.answers)?body.answers.slice(0,80).map((a:any)=>{
-   const question=relevant.find(q=>q.id===a.questionId);if(!question)throw new PlatformError("This questionnaire changed. Reload the form and try again.");
-   const value=text(a.answerValue,"Answer",2000,false);
-   if(["nps","csat"].includes(question.question_type)&&(!/^\d+$/.test(value)||Number(value)<(question.question_type==="nps"?0:1)||Number(value)>10))throw new PlatformError("Choose a valid recommendation or satisfaction score.");
-   return {questionId:question.id,questionText:question.question_text,answerValue:value};
-  }):[];
-  if(relevant.some(q=>q.is_required&&!answers.some(a=>a.questionId===q.id&&a.answerValue)))throw new PlatformError("Please answer the required questions.");
-  const npsQuestion=relevant.find(q=>q.question_type==="nps"),npsAnswer=answers.find(a=>a.questionId===npsQuestion?.id)?.answerValue;
+  let validated;
+  try {validated=validateAnswers(relevant,body.answers,body.recommendationScore);}catch(error){throw new PlatformError(error instanceof Error?error.message:"Invalid answers.");}
   const created=await createFeedback({
     organizationId:property.organization_id,propertyId:property.id,invitationId,stayId,rating,department:body.department,
     guestName:text(stayGuest||body.guestName||"Guest","Name",100),roomNumber:text(stayRoom||body.roomNumber||"Guest","Room",50),
     comment:text(body.comment,"Comment",4000,false),guestEmail:body.guestEmail?text(body.guestEmail,"Email",254):undefined,
     guestPhone:body.guestPhone?text(body.guestPhone,"Phone",30):undefined,wantsContact:body.wantsContact===true,
     contactPreference:["email","phone","in_person"].includes(body.contactPreference)?body.contactPreference:undefined,
-    recommendationScore:body.recommendationScore===null||body.recommendationScore===undefined?(npsAnswer?Number(npsAnswer):null):number(body.recommendationScore,"Recommendation score",0,10),answers
+    ...validated
   });
   invalidateDashboardCache();
   await logAuditEvent({organizationId:property.organization_id,actorName:"Guest",actorEmail:"guest@vistora.app",actorRole:"guest",action:"Guest feedback submitted",resource:created.id,details:"Rating: "+rating});

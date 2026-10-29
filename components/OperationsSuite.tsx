@@ -1,4 +1,5 @@
 "use client";
+import WorkspaceSelect from "./WorkspaceSelect";
 import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import QRCode from "qrcode";
@@ -412,6 +413,7 @@ function Suite({ user, property, view }: Props) {
             onClean={openCleaning}
             onResolve={resolveJob}
             error={ops.notice}
+            clearError={() => ops.setNotice("")}
             compact
           />
           <section className="platform-card">
@@ -444,6 +446,7 @@ function Suite({ user, property, view }: Props) {
           onClean={openCleaning}
           onResolve={resolveJob}
           error={ops.notice}
+          clearError={() => ops.setNotice("")}
         />
       )}
       {view === "Cleaning" && (
@@ -470,13 +473,13 @@ function Suite({ user, property, view }: Props) {
               </div>
             </div>
             <div className="ops-board-filters">
-              <label>
+              <div className="ops-field-label">
                 Room state
-                <select
+                <WorkspaceSelect
+                  label="Room state"
                   value={roomStatus}
-                  onChange={(e) => setRoomStatus(e.target.value)}
-                >
-                  {[
+                  onChange={setRoomStatus}
+                  options={[
                     "all",
                     "dirty",
                     "clean",
@@ -484,13 +487,15 @@ function Suite({ user, property, view }: Props) {
                     "out_of_service",
                     "occupied",
                     "vacant",
-                  ].map((s) => (
-                    <option value={s} key={s}>
-                      {s === "all" ? "All rooms" : s.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  ].map((value) => ({
+                    value,
+                    label:
+                      value === "all"
+                        ? "All rooms"
+                        : value.replaceAll("_", " "),
+                  }))}
+                />
+              </div>
               <label>
                 Find a room
                 <input

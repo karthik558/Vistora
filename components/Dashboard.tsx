@@ -36,7 +36,7 @@ import {
   Eye,
   Lock,
   Shield,
-  Sparkles, Wrench, Luggage, Utensils, BellRing, Wallet, ArrowLeftRight,
+  BrushCleaning, Wrench, Luggage, Utensils, BellRing, Wallet, ArrowLeftRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experience";
@@ -346,7 +346,7 @@ export function AppShell({
 
   const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
-    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,Rooms:Building2,Cleaning:Sparkles,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing,"Cost controls":Wallet})[section],adminOnly:section==="Cost controls"})),
+    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,Rooms:Building2,Cleaning:BrushCleaning,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing,"Cost controls":Wallet})[section],adminOnly:section==="Cost controls"})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
@@ -807,7 +807,7 @@ export default function Dashboard({
   const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
   const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0";
   const openComplaintsCount = filteredFeedback.filter(
-    (r) => r.status === "needs_attention" || r.status === "escalated" || r.rating <= 2
+    (r) => r.status !== "resolved"
   ).length;
 
   const distributionCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };

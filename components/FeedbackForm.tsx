@@ -1,4 +1,5 @@
 "use client";
+import {multiChoices,toggleMultiChoice} from "../lib/feedbackAnswers";
 
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
@@ -404,13 +405,14 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   {["choice","multi_choice","dropdown","emoji","touchpoint"].includes(q.question_type) && q.options && q.options.length > 0 && (
                     <div className="guest-choice-row">
                       {q.options.map((opt) => {
-                        const isSelected = answers[q.id] === opt;
+                        const isSelected = q.question_type==="multi_choice"?multiChoices(answers[q.id]||"").includes(opt):answers[q.id] === opt;
                         return (
                           <button
                             type="button"
                             key={opt}
                             className={`guest-choice${isSelected ? " selected" : ""}`}
-                            onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
+                            aria-pressed={isSelected}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: q.question_type==="multi_choice"?toggleMultiChoice(prev[q.id]||"",opt):isSelected ? "" : opt }))}
                           >
                             {opt}
                           </button>

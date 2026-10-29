@@ -774,3 +774,11 @@ html[data-theme="dark"]
     min-height: 44px;
   }
 }
+
+/* Shared feedback controls keep forms compact at all viewport sizes. */
+.ops-field-label { display: grid; gap: 7px; min-width: 0; font-size: 12px; }
+.ops-field-label .workspace-select { min-width: 0; width: 100%; }
+.hotel-page .page-heading-actions { flex-wrap: wrap; min-width: 0; }
+.hotel-page .property-filter-container { max-width: 100%; }
+.hotel-page .filter-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ops-alert-preferences { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
