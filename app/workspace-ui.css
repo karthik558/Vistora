@@ -1,4 +1,6 @@
 /* Shared workspace controls use the active module palette in both themes. */
+.initial-preloader{opacity:1;transition:opacity 300ms ease-out}.initial-preloader.is-leaving{opacity:0}
+.initial-preloader{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:var(--canvas);pointer-events:none}.initial-preloader-logo{display:block;width:140px;height:auto;object-fit:contain}.initial-preloader .brand-logo-dark{display:none}html[data-theme="dark"] .initial-preloader .brand-logo-light{display:none}html[data-theme="dark"] .initial-preloader .brand-logo-dark{display:block}
 .auth-frame{min-width:0;border-radius:0}
 .auth-visual{position:relative;min-width:0;padding:0;overflow:hidden}
 .auth-artwork-frame{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;border-radius:0}

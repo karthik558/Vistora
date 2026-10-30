@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import MotionPreferences from "../components/MotionPreferences";
+import InitialPreloader from "../components/InitialPreloader";
 import "@fontsource/dm-sans/latin-400.css";
 import "@fontsource/dm-sans/latin-500.css";
 import "@fontsource/dm-sans/latin-600.css";
@@ -55,7 +56,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body><MotionPreferences>{children}</MotionPreferences></body>
+      <body>
+        <InitialPreloader />
+        <noscript><style>{`.initial-preloader { display: none !important; }`}</style></noscript>
+        <MotionPreferences>{children}</MotionPreferences>
+      </body>
     </html>
   );
 }

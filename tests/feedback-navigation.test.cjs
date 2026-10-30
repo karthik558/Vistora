@@ -5,6 +5,27 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
+test("Initial preloader is document-scoped rather than route-scoped", () => {
+  const loader = read("components/InitialPreloader.tsx");
+  assert.match(loader, /\[mounted, setMounted\] = useState\(false\)/);
+  assert.match(loader, /if \(!mounted \|\| !loading\) return null/);
+  assert.match(read("app/layout.tsx"), /<InitialPreloader \/>/);
+  assert.match(loader, /document.readyState === "complete"/);
+  assert.match(loader, /addEventListener\("load", finish/);
+  assert.match(loader, /removeEventListener\("load", finish\)/);
+  assert.match(loader, /clearTimeout\(fallback\)/);
+  assert.match(loader, /1500 - \(performance.now\(\) - startedAt\)/);
+  assert.match(loader, /reducedMotion \? 0 : 300/);
+  assert.match(loader, /if \(scheduled\) return/);
+  assert.match(loader, /clearTimeout\(hold\)/);
+  assert.match(loader, /clearTimeout\(removal\)/);
+  assert.doesNotMatch(loader, /usePathname|useSearchParams|router|setLoading\(true\)/);
+  assert.match(loader, /vistora_wordmark_green\.webp/);
+  assert.match(loader, /vistora_wordmark_white\.webp/);
+  assert.doesNotMatch(loader, /Loading…/);
+  assert.match(read("app/layout.tsx"), /<noscript>/);
+});
+
 test("Workspace entry prefetches public links and keeps login pending through navigation", () => {
   assert.equal((read("app/page.tsx").match(/prefetch=\{true\}/g) || []).length, 2);
   const login = read("components/LoginForm.tsx");
