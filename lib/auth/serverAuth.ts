@@ -50,10 +50,13 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
     return null;
   }
   const db = serviceDb();
-  const { data: profile, error: profileError } = await db.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
+  const [profileResult, memberResult] = await Promise.all([
+    db.from("profiles").select("*").eq("id", data.user.id).maybeSingle(),
+    db.from("organization_members").select("organization_id, role").eq("user_id", data.user.id).eq("is_active", true).maybeSingle(),
+  ]);
+  const { data: profile, error: profileError } = profileResult;
   if (profileError) checked({data: profile, error: profileError});
   if (!profile) return null;
-  const memberResult = await db.from("organization_members").select("organization_id, role").eq("user_id", data.user.id).eq("is_active", true).maybeSingle();
   if(memberResult.error)checked(memberResult);
   const membership=memberResult.data;
   if(!membership)return null;

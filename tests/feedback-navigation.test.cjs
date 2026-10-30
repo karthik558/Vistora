@@ -5,6 +5,17 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
+test("Workspace entry prefetches public links and keeps login pending through navigation", () => {
+  assert.equal((read("app/page.tsx").match(/prefetch=\{true\}/g) || []).length, 2);
+  const login = read("components/LoginForm.tsx");
+  assert.match(login, /startNavigation\(\(\) => router.replace/);
+  assert.match(login, /disabled=\{loading \|\| openingWorkspace\}/);
+  assert.doesNotMatch(login, /window.location|router.prefetch/);
+  const auth = read("lib/auth/serverAuth.ts");
+  assert.match(auth, /\[profileResult, memberResult\] = await Promise.all/);
+  assert.match(auth, /membership.organization_id !== profile.organization_id/);
+});
+
 test("Administration shares its shell and hotel operations starts without waiting for legacy data", () => {
   for (const section of ["workspace", "users", "settings", "properties", "role-mapping"]) {
     assert.match(read(`app/dashboard/${section}/page.tsx`), /AdministrationWorkspace/);

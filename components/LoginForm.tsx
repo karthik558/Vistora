@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
@@ -12,11 +12,13 @@ export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [openingWorkspace, startNavigation] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (loading || openingWorkspace) return;
     setError(null);
     setLoading(true);
 
@@ -38,7 +40,9 @@ export default function LoginForm() {
         } catch {}
       }
 
-      router.replace(data.needsOnboarding?"/start":"/dashboard");
+      // Navigate only after the response has installed the authenticated cookies.
+      // Prefetching this protected route before login could cache a login redirect.
+      startNavigation(() => router.replace(data.needsOnboarding?"/start":"/dashboard"));
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please try again.");
     } finally {
@@ -87,8 +91,8 @@ export default function LoginForm() {
               </div>
             </div>
 
-            <button type="submit" className="button button-dark auth-submit" disabled={loading}>
-              {loading ? "Signing in…" : <><span>Sign in</span><ArrowRight size={16} /></>}
+            <button type="submit" className="button button-dark auth-submit" disabled={loading || openingWorkspace} aria-busy={loading || openingWorkspace}>
+              {openingWorkspace ? "Opening workspace…" : loading ? "Signing in…" : <><span>Sign in</span><ArrowRight size={16} /></>}
             </button>
           </form>
 

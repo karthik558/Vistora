@@ -29,7 +29,7 @@ export default async function HomePage() {
         </Link>
         <div className="landing-header-actions">
           <ThemeToggle />
-          <Link href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">
+          <Link prefetch={true} href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">
             {isLoggedIn ? "Dashboard" : "Sign in"}<ArrowRight size={15} />
           </Link>
         </div>
@@ -43,7 +43,7 @@ export default async function HomePage() {
             One workspace for guest feedback, hotel operations and the teams behind every stay.
           </p>
           <div className="landing-actions">
-            <Link className="button button-dark landing-primary" href={isLoggedIn ? "/dashboard" : "/login"}>
+            <Link prefetch={true} className="button button-dark landing-primary" href={isLoggedIn ? "/dashboard" : "/login"}>
               {isLoggedIn ? "Open workspace" : "Access workspace"}<ArrowRight size={16} />
             </Link>
             <span className="landing-assurance"><CheckCircle2 size={15} /> Built for hospitality teams</span>
