@@ -1,5 +1,7 @@
 import { serverUser } from "../../../lib/platform/server-session";
-import PropertiesPage from "../../../components/PropertiesPage";
+import AdministrationWorkspace from "../../../components/AdministrationWorkspace";
+import {redirect} from "next/navigation";
+import {canOpenProperties} from "../../../lib/auth/administration";
 import { WorkspaceUser } from "../../../components/Dashboard";
 
 export const dynamic = "force-dynamic";
@@ -7,5 +9,6 @@ export const dynamic = "force-dynamic";
 export default async function PropertiesRoute() {
   const initialUser = await serverUser();
 
-  return <PropertiesPage initialUser={initialUser} />;
+  if(!initialUser||!canOpenProperties(initialUser))redirect("/dashboard");
+  return <AdministrationWorkspace user={initialUser} initialSection="properties" />;
 }

@@ -157,6 +157,14 @@ html[data-theme="dark"] .app-shell :is(.drawer-close,.drawer-close:hover){backgr
 }
 
 /* Accessible shared controls, including popovers portalled outside the shell. */
+.ops-job-board .ops-section-heading{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px}
+.ops-job-board .ops-section-heading>div:first-child{flex:1 1 220px;min-width:0}
+.ops-job-board details.ops-alert-preferences{display:block;width:100%;min-width:0;margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--canvas);box-sizing:border-box}
+.ops-job-board .ops-alert-preferences summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);padding:4px 0}
+.ops-job-board .ops-alert-preferences summary:focus-visible{outline:2px solid var(--sage);outline-offset:4px}
+.ops-job-board .ops-alert-preferences>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;min-width:0}
+.ops-job-board .ops-alert-preferences .button{white-space:normal;min-height:40px;max-width:100%}
+.ops-job-board>p[role="status"]{overflow-wrap:anywhere}
 :is(button,a,input,textarea,select,[tabindex]):focus-visible{
   outline:2px solid var(--module-accent,var(--sage));
   outline-offset:3px;

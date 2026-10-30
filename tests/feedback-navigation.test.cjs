@@ -5,6 +5,22 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
+test("Administration shares its shell and hotel operations starts without waiting for legacy data", () => {
+  for (const section of ["workspace", "users", "settings", "properties", "role-mapping"]) {
+    assert.match(read(`app/dashboard/${section}/page.tsx`), /AdministrationWorkspace/);
+  }
+  const admin = read("components/AdministrationWorkspace.tsx");
+  assert.match(admin, /window.history.pushState/);
+  assert.match(admin, /visible.filter\(allowed\)/);
+  assert.match(admin, /hidden=\{name!==section\}/);
+  const hotel = read("components/HospitalityPage.tsx");
+  assert.ok(hotel.indexOf("<OperationsSuite") < hotel.indexOf("{data&&<>"));
+  assert.equal((hotel.match(/<OperationsSuite/g) || []).length, 1);
+  const jobs = read("components/OperationsJobBoard.tsx");
+  assert.match(jobs, /<details className="ops-alert-preferences">/);
+  assert.match(jobs, /disabled=\{pushBusy\}/);
+});
+
 test("Guest link origins are identical during SSR and initial hydration", () => {
   const ts = require("typescript");
   const vm = require("node:vm");

@@ -208,6 +208,7 @@ function StandaloneAppShell({
   const sectionModule=moduleForPath(pathname||'/dashboard');
   const activeModule=isAdministration?"administration":workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
   const scopedHref=(href:string)=>{
+    if(isAdministration&&isAdministrationPath(href))return pathname+"?adminSection="+encodeURIComponent(href.split("/")[2]);
     if(!isAdministration&&workspaceArea==="feedback"&&feedbackSection(href)){
       const section=feedbackSection(href)!;
       return "/dashboard/overview?section="+encodeURIComponent(section);
@@ -526,7 +527,7 @@ function StandaloneAppShell({
           ) : (
             visibleNav.map((item) => {
               const Icon = item.icon;
-              const isActive = workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?
+              const isActive = isAdministration&&searchParams.get("adminSection")?searchParams.get("adminSection")===item.href.split("/")[2]:workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?
                 searchParams.get("section")===feedbackSection(item.href):item.href.startsWith("/dashboard/hospitality")?
                 pathname==="/dashboard/hospitality"&&(searchParams.get("section")||"Overview")===(item.href.includes("?")?decodeURIComponent(item.href.split("section=")[1]):"Overview"):
                 pathname === item.href ||
@@ -540,7 +541,7 @@ function StandaloneAppShell({
                 <Link
                   key={item.href}
                   href={scopedHref(item.href)}
-                  prefetch={workspaceArea === "feedback" && feedbackSection(item.href) ? false : true}
+                  prefetch={isAdministration ? false : workspaceArea === "feedback" && feedbackSection(item.href) ? false : true}
                   className={`nav-item ${isActive ? "active" : ""}`}
                   onClick={() => setMobileNavOpen(false)}
                   title={item.label}

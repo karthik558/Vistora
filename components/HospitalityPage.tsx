@@ -188,7 +188,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   }catch(error){if(ticket===sequence.current)setError((error as Error).message);}
   finally{if(ticket===sequence.current)setLoading(false);}
  }
- useEffect(()=>{const timer=setTimeout(()=>load(),200);return()=>clearTimeout(timer);},[property,month,search,jobView]);
+  useEffect(()=>{const timer=setTimeout(()=>load(),search?200:0);return()=>clearTimeout(timer);},[property,month,search,jobView]);
  useEffect(()=>{if(tab==="Complaints"&&!data?.complaintsReady){load();}},[tab]);
  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden&&!busy&&!suiteTabs.includes(tab))load();},30000);return()=>clearInterval(timer);},[property,month,search,jobView,tab,busy]);
 
@@ -329,12 +329,14 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
 
  {!canManage&&<p className="platform-notice">{canAttend?"You can log complaints and attend your assigned work. Inventory, stays and costs remain administrator-only.":"Read-only access to your assigned properties. Ask an administrator for complaint intake and assigned work permission."}</p>}
  {error&&<p role="alert" className="platform-notice">{error}</p>}{message&&<p role="status" className="hotel-success">{message}</p>}
- {loading&&!data&&<p role="status">Loading hotel operations…</p>}
+  {loading&&!data&&!suiteTabs.includes(tab)&&<p role="status">Loading hotel operations…</p>}
+  <div hidden={!enabled||(!suiteTabs.includes(tab)&&!(tab==="Complaints"&&canManage))}>
+    <OperationsSuite user={user} property={property} view={tab==="Complaints"?"Recovery":suiteTabs.includes(tab)?tab:"Overview"}/>
+  </div>
  {data&&<>{(tab==="Guests"||tab==="Cost controls")&&<div className="hotel-filter">{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<WorkspaceDateField label="Ledger month" mode="month" value={month} onChange={value=>{if(value)setMonth(value);}} required/></label>}</div>}
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in workspace Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard">Open workspace</Link>}</section>:<>
  {(tab==="Complaints")&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
   {tab==="Complaints"&&<ComplaintBoard data={data} user={user} save={save} busy={busy}/>}
-  {(suiteTabs.includes(tab)||(tab==="Complaints"&&canManage))&&<OperationsSuite user={user} property={property} view={tab==="Complaints"?"Recovery":tab}/>}
  {tab==="Guests"&&<>
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
    <nav className="platform-tabs" aria-label="Guest views" style={{borderBottom:"none",marginBottom:0,paddingBottom:0}}>

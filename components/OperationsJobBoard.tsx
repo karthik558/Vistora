@@ -93,6 +93,7 @@ export default function OperationsJobBoard({
   clearError?: () => void;
 }) {
   const [cancel, setCancel] = useState<Job | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
   const [assignment, setAssignment] = useState<{
     job: Job;
     assignee: string;
@@ -238,6 +239,8 @@ export default function OperationsJobBoard({
     }
   }
   async function enablePush() {
+    if(pushBusy)return;
+    setPushBusy(true);
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window))
         throw new Error(
@@ -275,6 +278,8 @@ export default function OperationsJobBoard({
       setPushState("Background notifications enabled on this device.");
     } catch (e) {
       setPushState((e as Error).message);
+    } finally {
+      setPushBusy(false);
     }
   }
   return (
@@ -287,9 +292,12 @@ export default function OperationsJobBoard({
           </p>
         </div>
         <div className="platform-actions">
+          {canAttend && <button className="button button-dark" onClick={onCreate}>New service job</button>}
+        </div>
+      </div>
           {canAttend && !compact && (
-            <div className="ops-alert-preferences">
-              <span>Alerts</span>
+            <details className="ops-alert-preferences">
+              <summary>Notification preferences</summary>
               <div>
                 <button
                   className="button button-ghost"
@@ -298,12 +306,14 @@ export default function OperationsJobBoard({
                 >
                   {alerts ? "Sound enabled" : "Enable sound"}
                 </button>
-                <button className="button button-ghost" onClick={enablePush}>
-                  Enable push
+                <button className="button button-ghost" disabled={pushBusy} onClick={enablePush}>
+                  {pushBusy ? "Updating notifications…" : "Enable push"}
                 </button>
                 <button
                   className="button button-ghost"
+                  disabled={pushBusy}
                   onClick={async () => {
+                    setPushBusy(true);
                     try {
                       const response = await fetch("/api/operations/push", {
                         method: "DELETE",
@@ -320,21 +330,16 @@ export default function OperationsJobBoard({
                       );
                     } catch (e) {
                       setPushState((e as Error).message);
+                    } finally {
+                      setPushBusy(false);
                     }
                   }}
                 >
                   Disable push
                 </button>
               </div>
-            </div>
+            </details>
           )}
-          {canAttend && (
-            <button className="button button-dark" onClick={onCreate}>
-              New service job
-            </button>
-          )}
-        </div>
-      </div>
       {pushState && <p role="status">{pushState}</p>}
       <div className="ops-board-filters">
         <div className="ops-field-label">
