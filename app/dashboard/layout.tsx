@@ -4,8 +4,7 @@ import {headers} from "next/headers";
 import AppearanceProvider from "../../components/AppearanceProvider";
 import {companyAppearance} from "../../lib/hospitality/server";
 import {hasModuleAccess} from "../../lib/auth/modules";
-import {Suspense} from "react";
-import DashboardLoading from "./loading";
+
 export default async function DashboardLayout({children}:{children:React.ReactNode}) {
  const user=await serverUser();if(!user)redirect("/login");
  const path=(await headers()).get("x-vistora-path")||"";
@@ -17,9 +16,7 @@ export default async function DashboardLayout({children}:{children:React.ReactNo
  if(right&&!user.isOrganizationAdmin&&!user.rights.includes(right))redirect("/dashboard");
  return (
   <AppearanceProvider initial={await companyAppearance(user.organizationId)}>
-   <Suspense fallback={<DashboardLoading />}>
     {children}
-   </Suspense>
   </AppearanceProvider>
  );
 }

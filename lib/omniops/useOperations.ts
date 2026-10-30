@@ -28,7 +28,9 @@ export function useOperations(property: string, organizationId: string) {
       operationsFetch("/api/operations?" + new URLSearchParams({ property }), {
         signal,
       }),
-    staleTime: 15000,
+    staleTime: 60000,
+    gcTime: 300000,
+    placeholderData: (previousData) => previousData,
     refetchInterval: 30000,
     retry: 1,
   });

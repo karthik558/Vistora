@@ -75,7 +75,7 @@ function Suite({ user, property, view }: Props) {
       luggage: params.get("luggage") || "",
     });
   }, [property, view]);
-  if (ops.isPending)
+  if (ops.isPending && !data)
     return (
       <section className="platform-card" aria-busy="true">
         <p role="status">Loading operations…</p>
