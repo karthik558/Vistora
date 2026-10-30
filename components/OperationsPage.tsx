@@ -190,38 +190,40 @@ export default function OperationsPage({
           </div>
         ) : (
           <>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">Guest experience operations</p>
-                <h1>{title}</h1>
-                <p className="subheading">{descriptions[section]}</p>
+            {section !== "directory" && (
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">Guest experience operations</p>
+                  <h1>{title}</h1>
+                  <p className="subheading">{descriptions[section]}</p>
+                </div>
+                <div className="page-heading-actions">
+                  <PropertyFilter
+                    properties={
+                      userAllowedPropIds !== null
+                        ? data.properties.filter((p) => userAllowedPropIds.includes(p.id))
+                        : data.properties
+                    }
+                    selectedId={selectedProperty}
+                    onChange={setSelectedProperty}
+                  />
+                  <CustomDatePicker
+                    value={dateFilter}
+                    onChange={setDateFilter}
+                  />
+                  {section === "reports" && (
+                    <button
+                      className="button button-outline compact"
+                      onClick={() => window.print()}
+                      style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    >
+                      <Printer size={13} />
+                      <span>Print / Save PDF</span>
+                    </button>
+                  )}
+                </div>
               </div>
-          <div className="page-heading-actions">
-            <PropertyFilter
-              properties={
-                userAllowedPropIds !== null
-                  ? data.properties.filter((p) => userAllowedPropIds.includes(p.id))
-                  : data.properties
-              }
-              selectedId={selectedProperty}
-              onChange={setSelectedProperty}
-            />
-            <CustomDatePicker
-              value={dateFilter}
-              onChange={setDateFilter}
-            />
-            {section === "reports" && (
-              <button
-                className="button button-outline compact"
-                onClick={() => window.print()}
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-              >
-                <Printer size={13} />
-                <span>Print / Save PDF</span>
-              </button>
             )}
-          </div>
-        </div>
 
         {userDeptScope && (
           <div
