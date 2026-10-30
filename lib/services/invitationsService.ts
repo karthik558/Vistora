@@ -44,7 +44,17 @@ function map(r: any, token = ""): GuestInvitation {
 export async function listInvitations(propertyId?: string) {
   let q = workspaceDb().from("guest_invitations").select("*,properties(name,code)").order("created_at", { ascending: false });
   if (propertyId && propertyId !== "all") q = q.eq("property_id", propertyId);
-  return checked(await q).map((r: any) => map(r, r.token_encrypted ? decryptSecret(r.token_encrypted) : ""));
+  return checked(await q).map((r: any) => {
+    let token = "";
+    if (r.token_encrypted) {
+      try {
+        token = decryptSecret(r.token_encrypted);
+      } catch (e) {
+        console.warn("[invitationsService] Could not decrypt token for row:", r.id);
+      }
+    }
+    return map(r, token);
+  });
 }
 
 export async function createInvitation(payload: {
@@ -59,20 +69,74 @@ export async function createInvitation(payload: {
 }) {
   await assertProperty(payload.propertyId);
   const token = newToken(), org = workspaceUser().organizationId;
-  const row = checked(await serviceDb().rpc("create_guest_invitation", {
-    p_invitation: {
-      organization_id: org,
-      property_id: payload.propertyId,
-      token_encrypted: encryptSecret(token),
-      guest_name: payload.guestName,
-      guest_email: payload.guestEmail || null,
-      guest_phone: payload.guestPhone || null,
-      room_number: payload.roomNumber,
-      channel: payload.channel || "direct_link",
-      notes: payload.notes || null,
-    },
-    p_token: token,
-  }));
+  const tokenHash = hashToken(token);
+  const tokenEncrypted = encryptSecret(token);
+
+  let row: any = null;
+
+  // Try RPC first
+  try {
+    const rpcRes = await serviceDb().rpc("create_guest_invitation", {
+      p_invitation: {
+        organization_id: org,
+        property_id: payload.propertyId,
+        token_encrypted: tokenEncrypted,
+        guest_name: payload.guestName,
+        guest_email: payload.guestEmail || null,
+        guest_phone: payload.guestPhone || null,
+        room_number: payload.roomNumber,
+        channel: payload.channel || "direct_link",
+        notes: payload.notes || null,
+      },
+      p_token: token,
+    });
+    if (!rpcRes.error && rpcRes.data) {
+      row = rpcRes.data;
+    }
+  } catch (e) {
+    console.warn("[invitationsService] RPC create_guest_invitation failed, falling back to direct insert:", e);
+  }
+
+  // Fallback to direct insertion if RPC errored or is missing
+  if (!row) {
+    const insertRes = await serviceDb()
+      .from("guest_invitations")
+      .insert({
+        organization_id: org,
+        property_id: payload.propertyId,
+        token_hash: tokenHash,
+        token_encrypted: tokenEncrypted,
+        guest_name: payload.guestName,
+        guest_email: payload.guestEmail || null,
+        guest_phone: payload.guestPhone || null,
+        room_number: payload.roomNumber,
+        channel: payload.channel || "direct_link",
+        notes: payload.notes || null,
+      })
+      .select("*,properties(name,code)")
+      .single();
+
+    row = checked(insertRes);
+
+    if (payload.channel && payload.channel !== "direct_link") {
+      try {
+        await serviceDb().from("notification_outbox").insert({
+          organization_id: org,
+          kind: "invitation",
+          dedup_key: "invitation:" + row.id,
+          payload: {
+            recipient: payload.channel === "email" ? payload.guestEmail : payload.guestPhone,
+            channel: payload.channel,
+            token,
+            propertyId: payload.propertyId,
+          },
+        });
+      } catch (e) {
+        console.warn("[invitationsService] notification_outbox insert skipped:", e);
+      }
+    }
+  }
+
   return map(row, token);
 }
 
@@ -95,7 +159,12 @@ export async function getInvitationById(id: string): Promise<GuestInvitation | n
     .eq("id", id)
     .maybeSingle();
   if (error || !data) return null;
-  const token = data.token_encrypted ? decryptSecret(data.token_encrypted) : "";
+  let token = "";
+  if (data.token_encrypted) {
+    try {
+      token = decryptSecret(data.token_encrypted);
+    } catch {}
+  }
   return map(data, token);
 }
 
