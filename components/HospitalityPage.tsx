@@ -333,8 +333,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  {data&&<>{(tab==="Guests"||tab==="Cost controls")&&<div className="hotel-filter">{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<WorkspaceDateField label="Ledger month" mode="month" value={month} onChange={value=>{if(value)setMonth(value);}} required/></label>}</div>}
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in workspace Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard">Open workspace</Link>}</section>:<>
  {(tab==="Complaints")&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
- {tab==="Complaints"&&<><ComplaintBoard data={data} user={user} save={save} busy={busy}/>{canManage&&<OperationsSuite user={user} property={property} view="Recovery"/>}</>}
- {suiteTabs.includes(tab)&&<OperationsSuite user={user} property={property} view={tab}/>}
+  {tab==="Complaints"&&<ComplaintBoard data={data} user={user} save={save} busy={busy}/>}
+  {(suiteTabs.includes(tab)||(tab==="Complaints"&&canManage))&&<OperationsSuite user={user} property={property} view={tab==="Complaints"?"Recovery":tab}/>}
  {tab==="Guests"&&<>
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
    <nav className="platform-tabs" aria-label="Guest views" style={{borderBottom:"none",marginBottom:0,paddingBottom:0}}>

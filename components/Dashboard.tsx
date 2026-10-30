@@ -7,6 +7,7 @@ import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,isAdminis
 import Link from "next/link";
 import { useEffect, useState, useMemo, useRef, useContext } from "react";
 import { FeedbackShellContext } from "./FeedbackShellContext";
+import { feedbackSection } from "../lib/feedback/sections";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
@@ -207,6 +208,10 @@ function StandaloneAppShell({
   const sectionModule=moduleForPath(pathname||'/dashboard');
   const activeModule=isAdministration?"administration":workspaceArea==="feedback"?"feedback":moduleOverride||(sectionModule==="administration"?"property":sectionModule);
   const scopedHref=(href:string)=>{
+    if(!isAdministration&&workspaceArea==="feedback"&&feedbackSection(href)){
+      const section=feedbackSection(href)!;
+      return "/dashboard/overview?section="+encodeURIComponent(section);
+    }
     if(!isAdministration&&workspaceArea==="operations"&&href.startsWith("/dashboard/hospitality")&&searchParams.get("property"))return href+(href.includes("?")?"&":"?")+"property="+encodeURIComponent(searchParams.get("property")!);
     return !isAdministration&&workspaceArea==="operations"&&!href.startsWith("/dashboard/hospitality")?href+(href.includes("?")?"&":"?")+"workspace=operations":href;
   };
@@ -521,7 +526,8 @@ function StandaloneAppShell({
           ) : (
             visibleNav.map((item) => {
               const Icon = item.icon;
-              const isActive = item.href.startsWith("/dashboard/hospitality")?
+              const isActive = workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?
+                searchParams.get("section")===feedbackSection(item.href):item.href.startsWith("/dashboard/hospitality")?
                 pathname==="/dashboard/hospitality"&&(searchParams.get("section")||"Overview")===(item.href.includes("?")?decodeURIComponent(item.href.split("section=")[1]):"Overview"):
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
@@ -534,9 +540,9 @@ function StandaloneAppShell({
                 <Link
                   key={item.href}
                   href={scopedHref(item.href)}
-                  prefetch={true}
+                  prefetch={workspaceArea === "feedback" && feedbackSection(item.href) ? false : true}
                   className={`nav-item ${isActive ? "active" : ""}`}
-                  onNavigate={() => setMobileNavOpen(false)}
+                  onClick={() => setMobileNavOpen(false)}
                   title={item.label}
                 >
                   <Icon
@@ -666,8 +672,8 @@ function StandaloneAppShell({
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
         {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
-          const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
-          return <Link key={item.href} href={scopedHref(item.href)} prefetch={true} className={`mobile-nav-tab ${selected?"active":""}`} onNavigate={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
+          const selected=workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?searchParams.get("section")===feedbackSection(item.href):pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
+          return <Link key={item.href} href={scopedHref(item.href)} prefetch={workspaceArea === "feedback" && feedbackSection(item.href) ? false : true} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
       </nav>
@@ -1593,7 +1599,6 @@ export function FeedbackTable({
 
       setSelected(null);
       router.refresh();
-      window.location.reload();
     }
     setSaving(false);
   }

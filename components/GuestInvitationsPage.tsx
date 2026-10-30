@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
+import { useBrowserOrigin } from "../lib/useBrowserOrigin";
 import {
   Send,
   Plus,
@@ -39,10 +41,29 @@ export default function GuestInvitationsPage({
   const [user, setUser] = useState<WorkspaceUser | null>(
     () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
   );
-  const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
+  const queryClient = useQueryClient();
+  const invitationKey = ["feedback-invitations", user?.organizationId, user?.id];
+  const invitationQuery = useQuery<GuestInvitation[]>({
+    queryKey: invitationKey,
+    enabled: !!user,
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/invitations", { signal, cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok || !body.success) throw new Error(body.error || "Cannot load invitations.");
+      return body.invitations || [];
+    },
+    staleTime: 60_000,
+    gcTime: 300_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const invitations = invitationQuery.data || [];
+  const loading = invitationQuery.isPending;
+  const setInvitations = (update: (previous: GuestInvitation[]) => GuestInvitation[]) => {
+    queryClient.setQueryData<GuestInvitation[]>(invitationKey, previous => update(previous || []));
+  };
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>("all");
@@ -93,8 +114,11 @@ export default function GuestInvitationsPage({
       })
       .catch(() => {});
 
-    loadInvitations();
   }, []);
+
+  useEffect(() => {
+    if (invitationQuery.error) setError(invitationQuery.error.message);
+  }, [invitationQuery.error]);
 
   useEffect(() => {
     if (allowedProperties.length > 0 && (!propertyId || !allowedProperties.some((p) => p.id === propertyId))) {
@@ -102,23 +126,7 @@ export default function GuestInvitationsPage({
     }
   }, [allowedProperties, propertyId]);
 
-  async function loadInvitations() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/invitations");
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Cannot load invitations.");
-      if (json.success && json.invitations) {
-        setInvitations(json.invitations);
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://vistora.app";
+  const origin = useBrowserOrigin();
 
   function getInviteUrl(inv: GuestInvitation) {
     const p = properties.find((x) => x.id === inv.propertyId);

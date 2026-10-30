@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@supabase/supabase-js";
+import { createOperationsRealtimeClient } from "./realtime-client";
 import type { OperationsData } from "./types";
 
 export async function operationsFetch(url: string, init?: RequestInit) {
@@ -123,27 +123,27 @@ export function useOperations(property: string, organizationId: string) {
   );
   useEffect(() => {
     let disposed = false;
-    let realtime: ReturnType<typeof createClient> | undefined;
+    const controller = new AbortController();
+    let token: string | null = null;
+    let realtime: ReturnType<typeof createOperationsRealtimeClient> | undefined;
     let refresh: ReturnType<typeof setInterval> | undefined;
     let debounce: ReturnType<typeof setTimeout> | undefined;
     async function connect() {
       try {
-        const auth = await operationsFetch("/api/operations/realtime");
+        const auth = await operationsFetch("/api/operations/realtime", { signal: controller.signal });
         if (disposed) return;
         if (!auth.url || !auth.key) {
           setConnection("Polling · realtime not configured");
           return;
         }
-        realtime = createClient(auth.url, auth.key, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-          },
-        });
+        token = auth.token;
+        // Authentication is owned by the server's HttpOnly session. The SDK's
+        // accessToken mode skips GoTrue entirely; no browser auth store is needed.
+        realtime = createOperationsRealtimeClient(auth.url, auth.key, () => token);
         await realtime.realtime.setAuth(auth.token);
+        if (disposed) return;
         const channel = realtime.channel(
-          `operations:${organizationId}:${property}`,
+          `operations:${organizationId}`,
         );
         for (const table of [
           "service_jobs",
@@ -165,6 +165,7 @@ export function useOperations(property: string, organizationId: string) {
               filter: `organization_id=eq.${organizationId}`,
             },
             () => {
+              if (disposed) return;
               clearTimeout(debounce);
               debounce = setTimeout(
                 () =>
@@ -188,8 +189,11 @@ export function useOperations(property: string, organizationId: string) {
         });
         refresh = setInterval(async () => {
           try {
-            const auth = await operationsFetch("/api/operations/realtime");
-            if (!disposed) await realtime?.realtime.setAuth(auth.token);
+            const auth = await operationsFetch("/api/operations/realtime", { signal: controller.signal });
+            if (!disposed) {
+              token = auth.token;
+              await realtime?.realtime.setAuth(token);
+            }
           } catch {
             if (!disposed) setConnection("Session refresh needed");
           }
@@ -202,7 +206,8 @@ export function useOperations(property: string, organizationId: string) {
       navigator.serviceWorker
         .register("/ops-sw.js", { scope: "/" })
         .catch(() => {});
-    connect();
+    // Strict Mode's setup/cleanup probe must not open a socket or auth request.
+    const connectTimer = setTimeout(connect, 0);
     const onOffline = () => setConnection("Offline · saves disabled");
     const onOnline = () => {
       setConnection("Reconnecting");
@@ -212,13 +217,16 @@ export function useOperations(property: string, organizationId: string) {
     window.addEventListener("online", onOnline);
     return () => {
       disposed = true;
+      token = null;
+      controller.abort();
+      clearTimeout(connectTimer);
       clearInterval(refresh);
       clearTimeout(debounce);
-      realtime?.removeAllChannels();
+      void realtime?.removeAllChannels();
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
     };
-  }, [organizationId, property, client]);
+  }, [organizationId, client]);
   return {
     ...query,
     mutate,

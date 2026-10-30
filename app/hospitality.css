@@ -9,7 +9,7 @@
 .app-shell[data-workspace] .sidebar .module-switch-link{border:1px solid rgba(255,255,255,.16);margin-bottom:5px;font-size:11px}
 .module-launcher{min-height:100dvh;background:var(--canvas);color:var(--ink);display:flex;flex-direction:column}
 .module-launcher-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 5vw;border-bottom:1px solid var(--line)}
-.module-launcher-header>a{display:flex}.module-launcher-header img{object-fit:contain;width:134px;height:36px}
+.module-launcher-header>a{display:flex}.module-launcher-header img{object-fit:contain;width:134px;height:auto}
 html[data-theme="dark"] .module-launcher-header img:not([src*="white"]){filter:brightness(0) invert(1)}
 .module-launcher-header>div{display:flex;align-items:center;gap:16px}.module-launcher-header>div>span{font-size:12px;color:var(--muted)}
 .module-launcher-header .button{padding:10px;min-height:36px}

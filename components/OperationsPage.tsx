@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
+import { useBrowserOrigin } from "../lib/useBrowserOrigin";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Download,
@@ -1430,6 +1431,7 @@ function exportToExcelCsv(filename: string, headers: string[], rows: (string | n
 }
 
 function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
+  const origin = useBrowserOrigin();
   const [qrType, setQrType] = useState<"room" | "dining" | "spa" | "reception" | "general">("room");
   const [identifier, setIdentifier] = useState("Room 302");
   const [label, setLabel] = useState("In-Room Concierge Card");
@@ -1443,7 +1445,6 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
 
   // Construct URL with property and room parameters so when walked over, feedback form preselects them
   const url = useMemo(() => {
-    const origin = typeof window === "undefined" ? "https://vistora.app" : window.location.origin;
     const params = new URLSearchParams();
     if (selectedPropertyId) {
       const propParam = selectedProp?.code || selectedPropertyId;
@@ -1460,9 +1461,12 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
     }
     const query = params.toString();
     return `${origin}/feedback${query ? `?${query}` : ""}`;
-  }, [selectedPropertyId, selectedProp, identifier, qrType, isDemoLink]);
+  }, [origin, selectedPropertyId, selectedProp, identifier, qrType, isDemoLink]);
 
   useEffect(() => {
+    if (!origin) return;
+    let active = true;
+    setQrDataUrl("");
     QRCode.toDataURL(url, {
       width: 400,
       margin: 2,
@@ -1471,9 +1475,10 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
         light: "#ffffff",
       },
     })
-      .then((dataUri) => setQrDataUrl(dataUri))
+      .then((dataUri) => { if (active) setQrDataUrl(dataUri); })
       .catch((err) => console.error("QR Code generation error:", err));
-  }, [url]);
+    return () => { active = false; };
+  }, [origin, url]);
 
   function downloadPng() {
     if (!qrDataUrl) return;
@@ -1486,6 +1491,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
   }
 
   async function downloadSvg() {
+    if (!origin) return;
     try {
       const svgString = await QRCode.toString(url, { type: "svg", margin: 2 });
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
@@ -1639,6 +1645,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             <button
               type="button"
               className="button button-dark"
+              disabled={!origin}
               onClick={async () => {
                 await navigator.clipboard?.writeText(url);
                 setCopied(true);
@@ -1676,6 +1683,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
               type="button"
               className="button button-outline"
               onClick={downloadSvg}
+              disabled={!origin}
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
               <Download size={14} />
