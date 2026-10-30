@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -47,6 +47,18 @@ export default function CustomSelect({
   const [floatingStyle, setFloatingStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchRef = useRef({ text: "", time: 0 });
+
+  function openMenu(index = Math.max(0, options.findIndex(option => option.value === value))) {
+    setActiveIndex(index);
+    setIsOpen(true);
+  }
+
+  useEffect(() => {
+    if (isOpen) menuRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[activeIndex]?.focus();
+  }, [isOpen, activeIndex]);
 
   useEffect(() => {
     if (!isOpen || !floating) return;
@@ -107,7 +119,27 @@ export default function CustomSelect({
     <div
       ref={containerRef}
       onKeyDown={event=>{
-        if(event.key==="Escape"&&isOpen){event.stopPropagation();setIsOpen(false);containerRef.current?.querySelector("button")?.focus();}
+        if (disabled) return;
+        if(event.key==="Escape"&&isOpen){event.preventDefault();event.stopPropagation();setIsOpen(false);containerRef.current?.querySelector("button")?.focus();return;}
+        if (event.key === "Tab" && isOpen) {
+          // Portalled options must return to the trigger's natural tab order.
+          containerRef.current?.querySelector("button")?.focus();
+          setIsOpen(false);
+          return;
+        }
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          if (!options.length) return;
+          if (!isOpen) { openMenu(event.key === "End" ? options.length - 1 : undefined); return; }
+          setActiveIndex(index => event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
+        } else if (isOpen && event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault();
+          const now = Date.now();
+          const text = (now - searchRef.current.time < 700 ? searchRef.current.text : "") + event.key.toLowerCase();
+          searchRef.current = { text, time: now };
+          const index = options.findIndex(option => option.label.toLowerCase().startsWith(text));
+          if (index >= 0) setActiveIndex(index);
+        }
       }}
       className={`custom-select-wrapper ${className}`}
       style={{
@@ -122,11 +154,12 @@ export default function CustomSelect({
         disabled={disabled}
         className={`custom-select-trigger ${isOpen ? "open" : ""} ${value ? "has-value" : ""}`}
         onClick={() => {
-          if (!disabled) setIsOpen(!isOpen);
+          if (isOpen) setIsOpen(false); else openMenu();
         }}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-controls={isOpen ? menuId : undefined}
         style={{
           width: "100%",
           display: "flex",
@@ -145,7 +178,6 @@ export default function CustomSelect({
           boxShadow: isOpen ? "0 0 0 2px var(--sage-soft)" : "var(--shadow-xs)",
           transition: "all 0.15s ease",
           textAlign: "left",
-          outline: "none",
           opacity: disabled ? 0.6 : 1,
           ...triggerStyle,
         }}
@@ -216,17 +248,22 @@ export default function CustomSelect({
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              {options.map((option) => {
+            <div id={menuId} role="listbox" aria-label={ariaLabel || header || placeholder} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              {options.length === 0 && <p className="custom-select-empty">No options available</p>}
+              {options.map((option, index) => {
                 const isSelected = option.value === value;
                 return (
                   <button
                     key={option.value || "__empty__"}
                     type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={index === activeIndex ? 0 : -1}
                     className={`custom-select-option ${isSelected ? "selected" : ""}`}
                     onClick={() => {
                       onChange(option.value);
                       setIsOpen(false);
+                      containerRef.current?.querySelector("button")?.focus();
                     }}
                     style={{
                       display: "flex",

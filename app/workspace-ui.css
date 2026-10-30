@@ -135,14 +135,11 @@ html[data-theme="dark"] .app-shell :is(.drawer-close,.drawer-close:hover){backgr
 }
 
 @media(prefers-reduced-motion:reduce){
-  .app-shell *, .landing-shell *{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  html,body,body *,body *::before,body *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
 }
 
 /* Mobile navigation is a drawer; the desktop collapse preference never sizes it. */
 @media(max-width:768px){
- html,body,body *{scrollbar-width:none}
- html::-webkit-scrollbar,body::-webkit-scrollbar,.app-shell ::-webkit-scrollbar,.custom-select-popover::-webkit-scrollbar{display:none;width:0;height:0}
- .app-shell :is(.sidebar,.sidebar-nav,.main-content,.platform-tabs,.table-shell,.platform-table,.table-wrap,.detail-drawer,.workspace-modal),.custom-select-popover{scrollbar-width:none;-ms-overflow-style:none}
  .app-shell .sidebar{width:280px!important;max-width:86vw;height:100dvh;visibility:hidden;pointer-events:none;overscroll-behavior:contain;transition:transform .28s cubic-bezier(.16,1,.3,1),visibility 0s .28s}
  .app-shell .sidebar.mobile-open{visibility:visible;pointer-events:auto;transform:translateX(0);transition-delay:0s,0s}
  .app-shell .sidebar .sidebar-favi-toggle,.app-shell .sidebar .sidebar-collapsed-header{display:none!important}
@@ -157,4 +154,26 @@ html[data-theme="dark"] .app-shell :is(.drawer-close,.drawer-close:hover){backgr
  .app-shell[data-workspace="administration"] .platform-actions{flex-wrap:wrap;gap:8px}
  .app-shell .mobile-bottom-navbar{display:flex;overflow-x:auto;scrollbar-width:none;height:calc(60px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
  .app-shell .mobile-bottom-navbar .mobile-nav-tab{min-width:52px;flex:1 0 52px}
+}
+
+/* Accessible shared controls, including popovers portalled outside the shell. */
+:is(button,a,input,textarea,select,[tabindex]):focus-visible{
+  outline:2px solid var(--module-accent,var(--sage));
+  outline-offset:3px;
+}
+button:disabled{cursor:not-allowed}
+.custom-select-option:focus-visible{outline-offset:-2px;background:var(--sage-soft)!important}
+.custom-select-empty{padding:10px 12px;margin:0;color:var(--muted);font-size:13px}
+.confirm-drawer{max-width:100vw;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain}
+.confirm-record,.confirm-consequence{overflow-wrap:anywhere}
+.onboarding-card textarea{width:100%;min-height:112px;resize:vertical;padding:12px;border:1px solid var(--line-strong);border-radius:5px;background:var(--canvas);color:var(--ink);font:inherit}
+@media(pointer:coarse){
+  .button,.custom-select-trigger,.custom-select-option,.app-shell .nav-item,.ops-icon-button{min-height:44px!important}
+  .theme-toggle-btn,.landing-header-actions .theme-toggle-btn{width:44px!important;height:44px!important;min-height:44px!important;flex-basis:44px}
+  .app-shell .sidebar .sidebar-close-btn{width:44px!important;height:44px!important}
+}
+@media(max-width:768px){
+  /* Prevent automatic input zoom on iOS without disabling user zoom. */
+  body :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea){font-size:16px!important}
+  .confirm-actions{flex-wrap:wrap}
 }

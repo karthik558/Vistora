@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/platform.test.cjs",
+    "test": "node --test tests/platform.test.cjs tests/feedback-navigation.test.cjs",
     "test:database": "node tests/workspace-database.test.mjs",
     "test:hospitality": "node tests/hospitality-database.test.mjs",
     "test:routing": "node tests/role-mapping-database.test.mjs",

@@ -5,7 +5,8 @@ import DashboardPageHeading from "./DashboardPageHeading";
 import {operationTabs} from "../lib/omniops/types";
 import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,isAdministrationPath} from "../lib/auth/administration";
 import Link from "next/link";
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useContext } from "react";
+import { FeedbackShellContext } from "./FeedbackShellContext";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
@@ -179,7 +180,12 @@ export function fetchLatestSession(force = false): Promise<any> {
   return inflightSessionPromise;
 }
 
-export function AppShell({
+export function AppShell(props: React.ComponentProps<typeof StandaloneAppShell>) {
+  const sharedFeedbackShell = useContext(FeedbackShellContext);
+  return sharedFeedbackShell ? <>{props.children}</> : <StandaloneAppShell {...props} />;
+}
+
+function StandaloneAppShell({
   children,
   active = "Dashboard",
   complaints = 0,
@@ -215,12 +221,6 @@ export function AppShell({
   const closeNavigationRef=useRef<HTMLButtonElement>(null);
   const desktopSidebarCollapsed=sidebarCollapsed&&!isMobile;
   const navigationKey=pathname+"?"+searchParams.toString();
-  const [isNavigating, setIsNavigating] = useState(false);
-
-  useEffect(()=>{
-    setIsNavigating(false);
-  },[navigationKey]);
-
   useEffect(()=>{
     const viewport=window.matchMedia("(max-width: 768px)");
     const update=()=>{setIsMobile(viewport.matches);if(!viewport.matches)setMobileNavOpen(false);};
@@ -390,23 +390,6 @@ export function AppShell({
 
   return (
     <div className={`app-shell ${desktopSidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
-      {isNavigating && (
-        <div
-          role="progressbar"
-          aria-label="Loading workspace page"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "2px",
-            background: "linear-gradient(90deg, var(--gold, #c5a059) 0%, #ffffff 50%, var(--gold, #c5a059) 100%)",
-            backgroundSize: "200% 100%",
-            zIndex: 99999,
-            animation: "skeletonShift 1.2s ease infinite",
-          }}
-        />
-      )}
       {/* Remove the backdrop immediately on close so it cannot intercept a quick reopen. */}
       {isMobile&&mobileNavOpen&&<div className="sidebar-mobile-backdrop" onClick={()=>setMobileNavOpen(false)} aria-hidden="true"/>}
 
@@ -551,13 +534,9 @@ export function AppShell({
                 <Link
                   key={item.href}
                   href={scopedHref(item.href)}
+                  prefetch={true}
                   className={`nav-item ${isActive ? "active" : ""}`}
-                  onClick={() => {
-                    setMobileNavOpen(false);
-                    if (pathname !== item.href.split("?")[0]) {
-                      setIsNavigating(true);
-                    }
-                  }}
+                  onNavigate={() => setMobileNavOpen(false)}
                   title={item.label}
                 >
                   <Icon
@@ -688,7 +667,7 @@ export function AppShell({
         {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
           const selected=pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
-          return <Link key={item.href} href={scopedHref(item.href)} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>{setMobileNavOpen(false);if(pathname!==item.href.split("?")[0])setIsNavigating(true);}}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
+          return <Link key={item.href} href={scopedHref(item.href)} prefetch={true} className={`mobile-nav-tab ${selected?"active":""}`} onNavigate={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
       </nav>
@@ -755,6 +734,10 @@ export default function Dashboard({
 
   // Keep one portfolio dataset so property changes cannot race or overwrite overall totals.
   useEffect(() => {
+    if (initialData) {
+      setLiveFeedback(initialData.recentFeedback);
+      return;
+    }
     const controller = new AbortController();
     fetch("/api/feedback", { signal: controller.signal })
       .then((res) => res.json())
@@ -765,7 +748,7 @@ export default function Dashboard({
       })
       .catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [initialData]);
 
   const data = initialData;
 

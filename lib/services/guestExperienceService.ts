@@ -1,4 +1,6 @@
 import {pagedRows} from "../platform/pagedRows";
+import { cookies } from "next/headers";
+import { createHash } from "node:crypto";
 import { serviceDb, workspaceContext } from "../platform/db";
 import { createServerSupabaseClient } from "../supabase/server";
 import {
@@ -421,7 +423,7 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-const DASHBOARD_CACHE_TTL_MS = 60_000; // 60 seconds fast in-memory cache for instant navigation
+const DASHBOARD_CACHE_TTL_MS = 15_000;
 const dashboardCache = new Map<string, CacheEntry<DashboardData>>();
 
 export function invalidateDashboardCache(): void {
@@ -433,10 +435,14 @@ export async function getDashboardData(
   propertyId: string | "all" = "all",
   allowedPropertyIds?: string[] | null
 ): Promise<DashboardData> {
-  const cacheKey = `${propertyId}:${allowedPropertyIds ? [...allowedPropertyIds].sort().join(",") : "all"}`;
+  // RLS results are session-specific, even when two users have the same property filter.
+  const token = workspaceContext.getStore()?.user.accessToken || (isSupabaseLive ? (await cookies()).get("sb-access-token")?.value : "local");
+  if (!token) throw new Error("A signed-in session is required to load feedback.");
+  const sessionKey = createHash("sha256").update(token).digest("hex");
+  const cacheKey = `${sessionKey}:${propertyId}:${allowedPropertyIds ? [...allowedPropertyIds].sort().join(",") : "all"}`;
   const now = Date.now();
   const cached = dashboardCache.get(cacheKey);
-  if (cached && (now - cached.timestamp < 15_000)) {
+  if (cached && (now - cached.timestamp < DASHBOARD_CACHE_TTL_MS)) {
     return cached.data;
   }
 
@@ -578,7 +584,11 @@ export async function getDashboardData(
     source: isSupabaseLive ? "supabase" : "local",
   };
 
-  dashboardCache.set(cacheKey, { data: result, timestamp: now });
+  for (const [key, entry] of dashboardCache) {
+    if (Date.now() - entry.timestamp >= DASHBOARD_CACHE_TTL_MS) dashboardCache.delete(key);
+  }
+  if (dashboardCache.size >= 100) dashboardCache.delete(dashboardCache.keys().next().value!);
+  dashboardCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import MotionPreferences from "../components/MotionPreferences";
 import "@fontsource/dm-sans/latin-400.css";
 import "@fontsource/dm-sans/latin-500.css";
 import "@fontsource/dm-sans/latin-600.css";
@@ -54,7 +55,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body><MotionPreferences>{children}</MotionPreferences></body>
     </html>
   );
 }
