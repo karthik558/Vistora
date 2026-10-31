@@ -409,8 +409,34 @@ export default function CustomDatePicker({
           </motion.div>
   );
   return <div className="custom-datepicker-container" ref={containerRef} style={{position:"relative"}}>
-    <button type="button" className={`custom-datepicker-trigger ${value.preset!=="all"?"active":""}`} onClick={()=>setIsOpen(!isOpen)} aria-label={label||"Select date range"} aria-expanded={isOpen} aria-haspopup="dialog">
-      <CalendarIcon size={14} className="datepicker-icon"/><span className="datepicker-label">{selectionMode==="range"?getPresetLabel(value):value.startDate?selectionMode==="month"?new Date(value.startDate+"T12:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"}):new Date(value.startDate+"T12:00:00").toLocaleDateString():"Choose date"}</span><ChevronDown size={13} className="datepicker-chevron"/>
+    <button
+      type="button"
+      className={`custom-datepicker-trigger ${value.preset!=="all"?"active":""}`}
+      onClick={()=>setIsOpen(!isOpen)}
+      aria-label={label||"Select date range"}
+      aria-expanded={isOpen}
+      aria-haspopup="dialog"
+    >
+      <CalendarIcon size={14} className="datepicker-icon" style={{ flexShrink: 0 }} />
+      <span className="datepicker-label">
+        {selectionMode==="range"
+          ? getPresetLabel(value)
+          : value.startDate
+          ? selectionMode==="month"
+            ? new Date(value.startDate+"T12:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"})
+            : new Date(value.startDate+"T12:00:00").toLocaleDateString()
+          : "Choose date"}
+      </span>
+      <ChevronDown
+        size={13}
+        className="datepicker-chevron"
+        style={{
+          flexShrink: 0,
+          marginLeft: "2px",
+          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.16s ease",
+        }}
+      />
     </button>
     {floating?typeof document!=="undefined"&&createPortal(<AnimatePresence>{isOpen&&calendar}</AnimatePresence>,containerRef.current?.closest('dialog,[role="dialog"]')||document.body):<AnimatePresence>{isOpen&&calendar}</AnimatePresence>}
   </div>;

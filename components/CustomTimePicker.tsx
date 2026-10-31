@@ -301,7 +301,7 @@ export default function CustomTimePicker({
     <div
       ref={containerRef}
       className={`custom-timepicker-container ${className}`}
-      style={{ position: "relative", minWidth: "124px", flex: "0 0 auto" }}
+      style={{ position: "relative", minWidth: "100px", flex: "1 1 auto", maxWidth: "100%", boxSizing: "border-box" }}
     >
       <button
         type="button"
@@ -315,6 +315,7 @@ export default function CustomTimePicker({
         aria-expanded={isOpen}
         style={{
           width: "100%",
+          minWidth: 0,
           minHeight: "36px",
           padding: "7px 10px",
           borderRadius: "4px",
@@ -329,16 +330,40 @@ export default function CustomTimePicker({
           cursor: disabled ? "not-allowed" : "pointer",
           transition: "all 0.15s ease",
           boxShadow: "var(--shadow-xs)",
+          overflow: "hidden",
+          boxSizing: "border-box",
         }}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
           <Clock size={13} style={{ color: isOpen ? "var(--module-accent, var(--sage-deep))" : "var(--muted)", flexShrink: 0 }} />
-          <span style={{ fontWeight: 500, fontSize: "12px" }}>{format12h(value)}</span>
+          <span
+            style={{
+              fontWeight: 500,
+              fontSize: "12px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {format12h(value)}
+          </span>
         </span>
         <ChevronDown
           size={12}
           style={{
             flexShrink: 0,
+            marginLeft: "4px",
             color: "var(--muted)",
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.16s ease",

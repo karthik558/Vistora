@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import CustomDatePicker from "./CustomDatePicker";
 import CustomTimePicker from "./CustomTimePicker";
 
@@ -57,40 +58,42 @@ export default function WorkspaceDateField({
 
   return (
     <div className="workspace-date-field" ref={root}>
-      <CustomDatePicker
-        label={label}
-        selectionMode={mode === "month" ? "month" : "single"}
-        floating
-        minDate={minDate}
-        value={{
-          preset: selected ? "custom" : "all",
-          startDate: selected || null,
-          endDate: selected || null,
-        }}
-        onChange={(next) => {
-          const nextDate = next.startDate || "";
-          setDate(nextDate);
-          setInvalid(false);
-          onChange?.(
-            mode === "month"
-              ? nextDate.slice(0, 7)
-              : mode === "datetime" && nextDate
-              ? nextDate + "T" + time
-              : nextDate
-          );
-        }}
-      />
-
-      {mode === "datetime" && (
-        <CustomTimePicker
-          value={time}
-          label={label + " time"}
-          onChange={(newTime) => {
-            setTime(newTime);
-            onChange?.(selected && newTime ? selected + "T" + newTime : "");
+      <div className="workspace-date-inputs">
+        <CustomDatePicker
+          label={label}
+          selectionMode={mode === "month" ? "month" : "single"}
+          floating
+          minDate={minDate}
+          value={{
+            preset: selected ? "custom" : "all",
+            startDate: selected || null,
+            endDate: selected || null,
+          }}
+          onChange={(next) => {
+            const nextDate = next.startDate || "";
+            setDate(nextDate);
+            setInvalid(false);
+            onChange?.(
+              mode === "month"
+                ? nextDate.slice(0, 7)
+                : mode === "datetime" && nextDate
+                ? nextDate + "T" + time
+                : nextDate
+            );
           }}
         />
-      )}
+
+        {mode === "datetime" && (
+          <CustomTimePicker
+            value={time}
+            label={label + " time"}
+            onChange={(newTime) => {
+              setTime(newTime);
+              onChange?.(selected && newTime ? selected + "T" + newTime : "");
+            }}
+          />
+        )}
+      </div>
 
       {selected && !required && mode !== "month" && (
         <button
@@ -102,8 +105,10 @@ export default function WorkspaceDateField({
             setInvalid(false);
             onChange?.("");
           }}
+          title={"Clear " + label.toLowerCase()}
         >
-          Clear
+          <X size={11} strokeWidth={2} />
+          <span>Clear</span>
         </button>
       )}
 

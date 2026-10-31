@@ -4432,3 +4432,283 @@ html[data-theme="dark"] .brand-logo-light,
     box-sizing: border-box !important;
   }
 }
+
+/* ==============================================================================
+   CASE WORKSPACE & SLA RESPONSE DEADLINE RESPONSIVENESS
+   ============================================================================== */
+
+.case-panel {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+}
+
+.case-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.case-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.case-status-badge.active {
+  background: var(--sage-soft);
+  color: var(--sage-deep);
+}
+
+.case-status-badge.overdue {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.case-status-badge.resolved {
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+
+.case-attendance {
+  padding: 10px 12px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+
+.case-attendance p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.case-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .case-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.case-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.case-field-label span {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.case-input,
+.case-textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.case-input:focus,
+.case-textarea:focus {
+  border-color: var(--sage);
+  outline: none;
+}
+
+/* Dedicated SLA Response Deadline Card */
+.case-deadline-card {
+  width: 100%;
+  background: var(--canvas-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 14px 0 16px;
+  box-sizing: border-box;
+}
+
+.case-deadline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.case-deadline-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.case-deadline-icon {
+  color: var(--red);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.case-deadline-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.case-deadline-meta {
+  display: block;
+  font-size: 11px;
+  font-family: var(--font-dm-mono, monospace);
+  margin-top: 2px;
+}
+
+.case-deadline-meta.active {
+  color: var(--sage-deep);
+}
+
+.case-deadline-meta.overdue {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.case-deadline-meta.unassigned {
+  color: var(--muted);
+  font-family: inherit;
+}
+
+.case-deadline-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.case-deadline-picker-wrap {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.case-deadline-btn {
+  flex: 0 0 auto;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+@media (max-width: 480px) {
+  .case-deadline-btn {
+    width: 100%;
+  }
+}
+
+.case-deadline-success {
+  color: var(--sage-deep);
+  font-size: 11px;
+  margin: 8px 0 0;
+  font-weight: 500;
+}
+
+/* Workspace Date Field Flex Improvements */
+.workspace-date-field {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.workspace-date-inputs {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.workspace-date-inputs > .custom-datepicker-container {
+  flex: 1 1 140px !important;
+  min-width: 120px !important;
+  box-sizing: border-box !important;
+}
+
+.workspace-date-inputs > .custom-timepicker-container {
+  flex: 0 1 120px !important;
+  min-width: 100px !important;
+  box-sizing: border-box !important;
+}
+
+.workspace-date-field .date-field-clear {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  color: var(--muted) !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+.workspace-date-field .date-field-clear:hover {
+  background: var(--canvas-alt) !important;
+  color: var(--red) !important;
+  border-color: var(--red) !important;
+}
+
+.case-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.case-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.case-attachment-btn {
+  text-align: left;
+  justify-content: flex-start !important;
+  font-size: 11.5px !important;
+}

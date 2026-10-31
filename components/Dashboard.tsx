@@ -2059,6 +2059,14 @@ export function FeedbackTable({
                   <span className="drawer-chip-label">Logged</span>
                   <strong className="drawer-chip-value">{selected.timeAgo}</strong>
                 </div>
+                {selected.deadline && (
+                  <div className="drawer-chip">
+                    <span className="drawer-chip-label">SLA Deadline</span>
+                    <strong className="drawer-chip-value mono" style={{ color: "var(--red)" }}>
+                      {new Date(selected.deadline).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </strong>
+                  </div>
+                )}
               </div>
 
               {/* Property Assignment Section (Admin can change property) */}
