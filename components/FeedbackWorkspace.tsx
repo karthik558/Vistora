@@ -10,6 +10,7 @@ import { FeedbackShellContext } from "./FeedbackShellContext";
 import GuestInvitationsPage from "./GuestInvitationsPage";
 import AuditLogPage from "./AuditLogPage";
 import WorkspacePage from "./WorkspacePage";
+import ReportsModule from "./ReportsModule";
 import { feedbackSectionRights } from "../lib/feedback/sections";
 import { hasModuleAccess } from "../lib/auth/modules";
 
@@ -81,7 +82,7 @@ export default function FeedbackWorkspacePage({ section: initialSection }: { sec
   }
   if (section === "invitations") return <GuestInvitationsPage initialUser={workspace.user} properties={workspace.data.properties} />;
   if (section === "audit-log") return <AuditLogPage initialUser={workspace.user} />;
-  if (section === "reports") return <WorkspacePage user={workspace.user} initialTab="Reports" />;
+  if (section === "reports") return <ReportsModule user={workspace.user} />;
   return section === "overview"
     ? <Dashboard initialData={workspace.data} initialUser={workspace.user} />
     : <OperationsPage section={section} data={workspace.data} initialUser={workspace.user} />;

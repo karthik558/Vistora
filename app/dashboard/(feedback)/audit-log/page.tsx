@@ -1,7 +1,10 @@
-import FeedbackWorkspacePage from "../../../../components/FeedbackWorkspace";
-import { requireFeedbackPage } from "../../../../lib/feedback/page-access";
+import {redirect} from "next/navigation";
+import {serverUser} from "../../../../lib/platform/server-session";
+import {canOpenAuditLog} from "../../../../lib/auth/administration";
 
 export default async function Page() {
-  await requireFeedbackPage("view_audit_log");
-  return <FeedbackWorkspacePage section="audit-log" />;
+  const user=await serverUser();
+  if(!user)redirect("/login");
+  if(!canOpenAuditLog(user))redirect("/dashboard");
+  redirect("/dashboard/administration?adminSection=audit-log");
 }

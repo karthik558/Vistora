@@ -91,6 +91,7 @@ const nav: readonly NavItemConfig[] = [
   {label:"Role mapping",href:"/dashboard/role-mapping",group:"Settings",icon:Users,adminOnly:true},
   { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
+  { label: "Reports", href: "/dashboard/reports", group: "Overview", icon: FileSpreadsheet, requiredRight: "export_reports" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
@@ -98,13 +99,11 @@ const nav: readonly NavItemConfig[] = [
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText, requiredRight: "manage_questionnaire" },
   { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
-  { label: "Audit log", href: "/dashboard/audit-log", group: "Operations & audit", icon: History, requiredRight: "view_audit_log" },
   { label: "Hotel operations", href: "/dashboard/hospitality", group: "Operations", icon: ClipboardList, adminOnly: true },
   { label: "Rooms & inventory", href: "/dashboard/hospitality?section=Rooms", group: "Operations", icon: BedDouble, adminOnly: true },
   { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
   { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
   { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
-  { label: "Reports", href: "/dashboard/reports", group: "Reporting", icon: FileSpreadsheet, requiredRight: "export_reports" },
   { label: "Workspace", href: "/dashboard/workspace", group: "Settings", icon: Building2, adminOnly: true },
 ];
 

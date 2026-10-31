@@ -13,7 +13,32 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  const organization=checked(await db.from("organizations").select("name").single());
  const views=checked(await db.from("saved_views").select("*").order("created_at",{ascending:false}));
  const report=managementReport(await reportRows(db,user.organizationId,days,property),days);
- return NextResponse.json({success:true,properties,organization,views,report,isAdmin:false},{headers:{"Cache-Control":"no-store"}});
+
+ const safe = async (query: any) => {
+  try { const res = await query; return res?.data || []; } catch { return []; }
+ };
+
+ const [emailsSent, emailsReceived, recoveryFollowups, voiceLogs, serviceJobs] = await Promise.all([
+  safe(db.from("notification_outbox").select("id, kind, status, attempts, last_error, payload, created_at").eq("organization_id", user.organizationId).order("created_at", { ascending: false }).limit(200)),
+  safe(db.from("feedback").select("id, guest_name, guest_email, guest_phone, room_number, property_id, department, rating, status, wants_contact, contact_preference, comment, created_at").eq("organization_id", user.organizationId).order("created_at", { ascending: false }).limit(200)),
+  safe(db.from("recovery_followups").select("id, feedback_id, rating, recommendation_score, responded_at, created_at").eq("organization_id", user.organizationId).order("created_at", { ascending: false }).limit(100)),
+  safe(db.from("telephony_events").select("id, kind, scheduled_at, duration_seconds, destination, notes, status, created_at, property_id").eq("organization_id", user.organizationId).order("created_at", { ascending: false }).limit(200)),
+  safe(db.from("service_jobs").select("id, property_id, department, title, priority, status, created_at").eq("organization_id", user.organizationId).order("created_at", { ascending: false }).limit(200)),
+ ]);
+
+ return NextResponse.json({
+  success: true,
+  properties,
+  organization,
+  views,
+  report,
+  emailsSent,
+  emailsReceived,
+  recoveryFollowups,
+  voiceLogs,
+  serviceJobs,
+  isAdmin: !!user.isOrganizationAdmin
+ }, { headers: { "Cache-Control": "no-store" } });
 },"export_reports");
 
 export const POST=withWorkspace(async(request:NextRequest)=>{

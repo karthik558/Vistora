@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import MotionPreferences from "../components/MotionPreferences";
 import InitialPreloader from "../components/InitialPreloader";
+import ThemeInitializer from "../components/ThemeInitializer";
 import "@fontsource/dm-sans/latin-400.css";
 import "@fontsource/dm-sans/latin-500.css";
 import "@fontsource/dm-sans/latin-600.css";
@@ -45,18 +46,9 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/x-icon" href="/favicon-blue.ico" />
         <link rel="apple-touch-icon" href="/vistora_logo_blue.webp" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function() {
-              try {
-                var theme = localStorage.getItem("vistora-theme") === "dark" ? "dark" : "light";
-                document.documentElement.setAttribute("data-theme", theme);
-              } catch(e) {}
-            })();`,
-          }}
-        />
       </head>
       <body>
+        <ThemeInitializer />
         <InitialPreloader />
         <noscript><style>{`.initial-preloader { display: none !important; }`}</style></noscript>
         <MotionPreferences>{children}</MotionPreferences>

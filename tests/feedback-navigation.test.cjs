@@ -89,7 +89,7 @@ test("Guest link origins are identical during SSR and initial hydration", () => 
 });
 
 test("Feedback destinations share their data layout and retain per-page authorization", () => {
-  const rights = { overview: "view_feedback", feedback: "view_feedback", analytics: "view_feedback", directory: "view_feedback", complaints: "manage_complaints", forms: "manage_questionnaire", questionnaire: "manage_questionnaire", "qr-codes": "manage_questionnaire", invitations: "manage_questionnaire", "audit-log": "view_audit_log", reports: "export_reports" };
+  const rights = { overview: "view_feedback", feedback: "view_feedback", analytics: "view_feedback", directory: "view_feedback", complaints: "manage_complaints", forms: "manage_questionnaire", questionnaire: "manage_questionnaire", "qr-codes": "manage_questionnaire", invitations: "manage_questionnaire" };
   for (const [section, right] of Object.entries(rights)) {
     const page = read(`app/dashboard/(feedback)/${section}/page.tsx`);
     assert.ok(section === "overview" ? page.includes("feedbackSectionRights[section]") : page.includes(`requireFeedbackPage("${right}")`));
@@ -101,6 +101,10 @@ test("Feedback destinations share their data layout and retain per-page authoriz
   const access = read("lib/feedback/page-access.ts");
   assert.match(access, /hasModuleAccess\(user, "feedback"\)/);
   assert.match(access, /user\.rights\.includes\(right\)/);
+  assert.match(read("app/dashboard/(feedback)/reports/page.tsx"), /adminSection=reports/);
+  assert.match(read("app/dashboard/(feedback)/audit-log/page.tsx"), /adminSection=audit-log/);
+  assert.match(read("app/dashboard/administration/page.tsx"), /canOpenReports\(user\)/);
+  assert.match(read("app/dashboard/administration/page.tsx"), /canOpenAuditLog\(user\)/);
 });
 
 test("Feedback shell persists, refreshes independently of navigation, and avoids duplicate overview fetches", () => {

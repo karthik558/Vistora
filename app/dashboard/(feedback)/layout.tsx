@@ -3,10 +3,15 @@ import { serverUser } from "../../../lib/platform/server-session";
 import { hasModuleAccess } from "../../../lib/auth/modules";
 import { getDashboardData } from "../../../lib/services/guestExperienceService";
 import { FeedbackWorkspace } from "../../../components/FeedbackWorkspace";
+import {headers} from "next/headers";
 
 export default async function FeedbackLayout({ children }: { children: React.ReactNode }) {
   const user = await serverUser();
   if (!user) redirect("/login");
+  const path=(await headers()).get("x-vistora-path")||"";
+  const section=path.split("/")[2];
+  // Audit log has moved to administration; do not require feedback-module access here.
+  if(section==="audit-log")return <>{children}</>;
   if (!hasModuleAccess(user, "feedback")) redirect("/dashboard");
   const allowed = user.isOrganizationAdmin ? null : user.propertyIds;
   const data = await getDashboardData("all", allowed);
