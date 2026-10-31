@@ -28,6 +28,7 @@ import {
   Menu,
   X,
   Trash2,
+  Check,
   Send,
   History,
   Settings,
@@ -1676,6 +1677,33 @@ export function FeedbackTable({
     }
   }
 
+  async function handleBatchResolve() {
+    if (selectedIds.length === 0) return;
+    setDeleting(true);
+    setRowError(null);
+    try {
+      await Promise.all(
+        selectedIds.map((id) =>
+          fetch(`/api/feedback/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "resolved" }),
+          })
+        )
+      );
+      const resolvedSet = new Set(selectedIds);
+      setRecords((prev) =>
+        prev.map((row) => (resolvedSet.has(row.id) ? { ...row, status: "resolved" as FeedbackStatus } : row))
+      );
+      setSelectedIds([]);
+      router.refresh();
+    } catch (err: any) {
+      setRowError(err.message || "Failed to resolve selected records.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <section className="panel table-panel">
       <div className="panel-heading table-panel-header">
@@ -1751,6 +1779,16 @@ export function FeedbackTable({
             <strong>{selectedIds.length}</strong> record{selectedIds.length > 1 ? "s" : ""} selected
           </span>
           <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              className="button button-outline compact"
+              onClick={handleBatchResolve}
+              disabled={deleting}
+              title="Mark selected feedbacks as resolved / checked out"
+            >
+              <Check size={13} style={{ color: "var(--sage-deep)" }} />
+              {deleting ? "Updating…" : `Mark resolved (${selectedIds.length})`}
+            </button>
             <button
               type="button"
               className="button button-danger compact"

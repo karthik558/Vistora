@@ -36,7 +36,9 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     }
 
     const propParam = invitation.propertyCode || invitation.propertyId;
-    const inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
+    let inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
+    if (invitation.guestEmail) inviteLink += `&email=${encodeURIComponent(invitation.guestEmail)}`;
+    if (invitation.guestPhone) inviteLink += `&phone=${encodeURIComponent(invitation.guestPhone)}`;
 
     const sendRes = await sendInvitationEmail({
       recipient,
@@ -93,7 +95,9 @@ export const POST = withWorkspace(async (request: NextRequest) => {
   });
 
   const propParam = invitation.propertyCode || invitation.propertyId;
-  const inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
+  let inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
+  if (invitation.guestEmail) inviteLink += `&email=${encodeURIComponent(invitation.guestEmail)}`;
+  if (invitation.guestPhone) inviteLink += `&phone=${encodeURIComponent(invitation.guestPhone)}`;
 
   let emailSent = false;
   let emailError: string | undefined;

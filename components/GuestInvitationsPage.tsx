@@ -138,7 +138,10 @@ export default function GuestInvitationsPage({
   function getInviteUrl(inv: GuestInvitation) {
     const p = properties.find((x) => x.id === inv.propertyId);
     const propParam = p?.code || inv.propertyCode || inv.propertyId;
-    return `${origin}/feedback?token=${inv.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(inv.roomNumber)}&guest=${encodeURIComponent(inv.guestName)}`;
+    let url = `${origin}/feedback?token=${inv.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(inv.roomNumber)}&guest=${encodeURIComponent(inv.guestName)}`;
+    if (inv.guestEmail) url += `&email=${encodeURIComponent(inv.guestEmail)}`;
+    if (inv.guestPhone) url += `&phone=${encodeURIComponent(inv.guestPhone)}`;
+    return url;
   }
 
   async function handleCreateInvite(e: React.FormEvent, sendEmailDirect = false) {

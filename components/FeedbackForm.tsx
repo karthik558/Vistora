@@ -9,14 +9,14 @@ import { DepartmentType } from "../types/database";
 import { GuestStayDetails } from "../types/experience";
 import CustomSelect from "./CustomSelect";
 
-const departments: DepartmentType[] = [
-  "Front Desk",
-  "Housekeeping",
-  "Food & Beverage",
-  "Concierge",
-  "Facilities & Room",
-  "Spa & Wellness",
-  "Valet & Transfers",
+const departments: { value: DepartmentType; label: string; detail: string }[] = [
+  { value: "Front Desk", label: "Front Desk & Reception", detail: "Arrival, departure, keycards & billing" },
+  { value: "Housekeeping", label: "Housekeeping & Cleanliness", detail: "Room servicing, turn-down, fresh linen & amenities" },
+  { value: "Food & Beverage", label: "Food & Beverage", detail: "Restaurants, in-room dining, bar & breakfast" },
+  { value: "Facilities & Room", label: "Facilities & Maintenance", detail: "In-room AC, fixtures, plumbing, lighting & hardware" },
+  { value: "Spa & Wellness", label: "Spa & Wellness Facilities", detail: "Spa treatments, fitness center, sauna & pools" },
+  { value: "Concierge", label: "Concierge & Guest Relations", detail: "Tours, local transport, bookings & luggage" },
+  { value: "Valet & Transfers", label: "Valet & Transfers", detail: "Airport transit, drop-off & parking" },
 ];
 
 export default function FeedbackForm({ publicToken = "verified" }: { publicToken?: string }) {
@@ -35,6 +35,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [contactValue, setContactValue] = useState("");
   const [guestName, setGuestName] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
 
   // Mandatory Property Selection
   const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string; is_active?: boolean;organizations?:{name:string;logo_url:string|null;brand_color:string;welcome_message:string} }>>([]);
@@ -78,11 +80,24 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             const roomParam = params.get("room") || params.get("roomNumber") || params.get("r");
             const guestParam = params.get("guest") || params.get("guestName") || params.get("name");
             const deptParam = params.get("dept") || params.get("department");
+            const emailParam = params.get("email") || params.get("guestEmail");
+            const phoneParam = params.get("phone") || params.get("guestPhone");
 
             if (tokenParam) setTrackedToken(tokenParam);
             if (roomParam) setRoomNumber(roomParam);
             if (guestParam) setGuestName(guestParam);
-            if (deptParam && departments.includes(deptParam as DepartmentType)) {
+            if (emailParam) {
+              setGuestEmail(emailParam);
+              setContactValue(emailParam);
+            }
+            if (phoneParam) {
+              setGuestPhone(phoneParam);
+              if (!emailParam) {
+                setContactValue(phoneParam);
+                setContactPreference("phone");
+              }
+            }
+            if (deptParam && departments.some((d) => d.value === deptParam)) {
               setDepartment(deptParam as DepartmentType);
             }
             if (demoParam) setIsDemoMode(true);
@@ -125,13 +140,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                       setRoomNumber(d.roomNumber);
                     }
                     if (d.guestEmail) {
+                      setGuestEmail(d.guestEmail);
                       setContactValue(d.guestEmail);
-                      setWantsContact(true);
                       setContactPreference("email");
-                    } else if (d.guestPhone) {
-                      setContactValue(d.guestPhone);
-                      setWantsContact(true);
-                      setContactPreference("phone");
+                    }
+                    if (d.guestPhone) {
+                      setGuestPhone(d.guestPhone);
+                      if (!d.guestEmail) {
+                        setContactValue(d.guestPhone);
+                        setContactPreference("phone");
+                      }
                     }
                   }
                 })
@@ -161,7 +179,18 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     return ()=>controller.abort();
   },[selectedPropertyId,questionsRetry]);
 
-  const activeQuestions=questions.filter(q=>!q.department||q.department===department);
+  const activeQuestions = questions.filter((q) => {
+    if (department === "Housekeeping") {
+      // Keep housekeeping simple and focused on cleanliness / room quality
+      const lower = q.question_text.toLowerCase();
+      if (lower.includes("check-in") || lower.includes("arrival") || lower.includes("valet") || lower.includes("dining")) {
+        return false;
+      }
+    }
+    if (!q.department) return true;
+    return q.department === department;
+  });
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPropertyError(null);
@@ -170,7 +199,22 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
       setPropertyError("Please select the hotel property location of your stay.");
       return;
     }
-    if (!rating) return;
+    if (!rating) {
+      setPropertyError("Please select an overall rating (1-5).");
+      return;
+    }
+    if (!guestName.trim()) {
+      setPropertyError("Please enter your name (Required).");
+      const nameInput = document.getElementById("guest-name");
+      nameInput?.focus();
+      return;
+    }
+    if (!roomNumber.trim()) {
+      setPropertyError("Please enter your room number, or 'NR' for non-resident (Required).");
+      const roomInput = document.getElementById("guest-room");
+      roomInput?.focus();
+      return;
+    }
     if(questionsProperty!==selectedPropertyId){setPropertyError(questionsError||"Please wait for the feedback questions to load.");return;}
     if(activeQuestions.some(q=>q.is_required&&!answers[q.id]?.trim())){setPropertyError("Please answer the required questions.");return;}
     if(isDemoMode){setSubmitted(true);return;}
@@ -184,6 +228,9 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           answerValue: answers[q.id] || "",
         }))
         .filter((a) => a.answerValue && a.answerValue.trim().length > 0);
+
+      const finalEmail = (wantsContact && contactPreference === "email" ? contactValue : guestEmail).trim() || undefined;
+      const finalPhone = (wantsContact && contactPreference === "phone" ? contactValue : guestPhone).trim() || undefined;
 
       const res = await fetch("/api/feedback", {
         method: "POST",
@@ -200,8 +247,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           answers: answersPayload,
           wantsContact,
           contactPreference: wantsContact ? contactPreference : undefined,
-          guestEmail: wantsContact && contactPreference === "email" ? contactValue : undefined,
-          guestPhone: wantsContact && contactPreference === "phone" ? contactValue : undefined,
+          guestEmail: finalEmail,
+          guestPhone: finalPhone,
         }),
       });
       const json = await res.json();
@@ -250,6 +297,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             <div><dt>Area</dt><dd>{department}</dd></div>
             {roomNumber.trim() && <div><dt>Room</dt><dd>{roomNumber.trim()}</dd></div>}
             {guestName.trim() && <div><dt>Name</dt><dd>{guestName.trim()}</dd></div>}
+            {guestEmail.trim() && <div><dt>Email</dt><dd>{guestEmail.trim()}</dd></div>}
+            {guestPhone.trim() && <div><dt>Mobile</dt><dd>{guestPhone.trim()}</dd></div>}
             {comment.trim() && <div><dt>Note</dt><dd>{comment.trim()}</dd></div>}
           </dl>
           {managerFollowUp && !isDemoMode && (
@@ -266,7 +315,6 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   return (
     <main className="guest-shell">
       <div className="guest-card">
-        {selectedProperty?.organizations&&<div style={{borderBottom:"2px solid "+selectedProperty.organizations.brand_color,paddingBottom:12,marginBottom:16}}>{selectedProperty.organizations.logo_url&&<img src={selectedProperty.organizations.logo_url} alt={selectedProperty.organizations.name} style={{maxWidth:140,maxHeight:50,objectFit:"contain"}}/>}<p>{selectedProperty.organizations.welcome_message||selectedProperty.organizations.name}</p></div>}
         <div className="guest-top">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
             <Image
@@ -365,7 +413,16 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           {!activeQuestions.some(q=>q.question_type==="nps")&&<fieldset className="guest-recommendation"><legend>Would you recommend your stay? <span>Optional</span></legend><div className="nps-input" role="group" aria-label="Recommendation score, 0 to 10">{Array.from({length:11},(_,n)=><button type="button" key={n} aria-pressed={recommendationScore===n} onClick={()=>setRecommendationScore(recommendationScore===n?null:n)} aria-label={`${n} out of 10`}>{n}</button>)}</div><div className="guest-score-ends"><span>Not likely</span><span>Extremely likely</span></div></fieldset>}
           {/* Rating */}
           <fieldset>
-            <legend>How would you rate your experience overall?</legend>
+            <legend>
+              {department === "Housekeeping"
+                ? "How would you rate housekeeping & room cleanliness?"
+                : department === "Spa & Wellness"
+                ? "How would you rate your spa & wellness experience?"
+                : department === "Facilities & Room"
+                ? "How would you rate our hotel facilities & amenities?"
+                : "How would you rate your experience overall?"}
+              <strong className="guest-required" style={{ marginLeft: "4px" }}>*</strong>
+            </legend>
             <div className="guest-star-rating" role="group" aria-label="Overall star rating">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
@@ -373,7 +430,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   key={value}
                   className={`guest-star-button ${rating!==null&&value<=rating?"filled":""}`}
                   aria-pressed={rating===value}
-                  onClick={() => setRating(value)}
+                  onClick={() => {
+                    setRating(value);
+                    if (propertyError) setPropertyError(null);
+                  }}
                   aria-label={`${value} out of 5`}
                 >
                   <Star size={32} strokeWidth={1.5} aria-hidden="true"/>
@@ -393,39 +453,97 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
               onChange={(val) => setDepartment(val as DepartmentType)}
               header="Hospitality Department"
               options={departments.map((dep) => ({
-                value: dep,
-                label: dep,
+                value: dep.value,
+                label: dep.label,
+                detail: dep.detail,
               }))}
             />
           </div>
 
-          {/* Guest Name & Room confirmation */}
-          <div className="guest-split">
-            <div>
-              <label className="field-label" htmlFor="guest-name">
-                Your name
-              </label>
-              <input
-                id="guest-name"
-                type="text"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Your name (optional)"
-                className="guest-field"
-              />
+          {/* Guest Identity Details (Name, Room, Email, Mobile) */}
+          <div className="guest-identity-group" style={{ marginBottom: "20px" }}>
+            <div className="guest-split" style={{ marginBottom: "12px" }}>
+              <div>
+                <label className="field-label" htmlFor="guest-name">
+                  <span>Your name <strong className="guest-required">*</strong></span>
+                </label>
+                <input
+                  id="guest-name"
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => {
+                    setGuestName(e.target.value);
+                    if (propertyError) setPropertyError(null);
+                  }}
+                  placeholder="Your full name"
+                  className={`guest-field${propertyError && !guestName.trim() ? " has-error" : ""}`}
+                  autoComplete="name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="guest-room">
+                  <span>Room or location <strong className="guest-required">*</strong></span>
+                </label>
+                <input
+                  id="guest-room"
+                  type="text"
+                  value={roomNumber}
+                  onChange={(e) => {
+                    setRoomNumber(e.target.value);
+                    if (propertyError) setPropertyError(null);
+                  }}
+                  placeholder="e.g. 304 or NR if non-resident"
+                  className={`guest-field${propertyError && !roomNumber.trim() ? " has-error" : ""}`}
+                  required
+                />
+                <small style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "var(--muted)" }}>
+                  Enter room number, or &quot;NR&quot; if you are a non-resident / day guest.
+                </small>
+              </div>
             </div>
-            <div>
-              <label className="field-label" htmlFor="guest-room">
-                Room or location
-              </label>
-              <input
-                id="guest-room"
-                type="text"
-                value={roomNumber}
-                onChange={(e) => setRoomNumber(e.target.value)}
-                placeholder="e.g. 304 or Poolside"
-                className="guest-field"
-              />
+
+            <div className="guest-split" style={{ marginBottom: "0" }}>
+              <div>
+                <label className="field-label" htmlFor="guest-email">
+                  Email address <span>Optional</span>
+                </label>
+                <input
+                  id="guest-email"
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGuestEmail(val);
+                    if (wantsContact && contactPreference === "email") {
+                      setContactValue(val);
+                    }
+                  }}
+                  placeholder="e.g. guest@example.com"
+                  className="guest-field"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="guest-phone">
+                  Mobile number <span>Optional</span>
+                </label>
+                <input
+                  id="guest-phone"
+                  type="tel"
+                  value={guestPhone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGuestPhone(val);
+                    if (wantsContact && contactPreference === "phone") {
+                      setContactValue(val);
+                    }
+                  }}
+                  placeholder="e.g. +1 555 0192"
+                  className="guest-field"
+                  autoComplete="tel"
+                />
+              </div>
             </div>
           </div>
 
@@ -451,6 +569,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                             aria-pressed={isSelected}
                             onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: q.question_type==="multi_choice"?toggleMultiChoice(prev[q.id]||"",opt):isSelected ? "" : opt }))}
                           >
+                            {isSelected && <span style={{ marginRight: "6px", fontWeight: 700 }}>✓</span>}
                             {opt}
                           </button>
                         );
@@ -469,6 +588,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                             className={`guest-choice${isSelected ? " selected" : ""}`}
                             onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? "" : opt }))}
                           >
+                            {isSelected && <span style={{ marginRight: "6px", fontWeight: 700 }}>✓</span>}
                             {opt}
                           </button>
                         );
@@ -517,7 +637,15 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             id="comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Share a moment, a colleague who assisted you, or something we could improve…"
+            placeholder={
+              department === "Housekeeping"
+                ? "Share notes on room cleanliness, turn-down service, linen, or housekeeping staff…"
+                : department === "Spa & Wellness"
+                ? "Share your experience with spa treatments, relaxation facilities, or wellness therapists…"
+                : department === "Facilities & Room"
+                ? "Share notes on room fixtures, air conditioning, plumbing, or facility maintenance…"
+                : "Share a moment, a colleague who assisted you, or something we could improve…"
+            }
             rows={4}
           />
 
@@ -526,40 +654,85 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             <input
               type="checkbox"
               checked={wantsContact}
-              onChange={(e) => setWantsContact(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setWantsContact(checked);
+                if (checked) {
+                  if (contactPreference === "email" && guestEmail.trim()) {
+                    setContactValue(guestEmail.trim());
+                  } else if (contactPreference === "phone" && guestPhone.trim()) {
+                    setContactValue(guestPhone.trim());
+                  }
+                }
+              }}
             />
             <span>I’d like a manager to follow up with me regarding this feedback.</span>
           </label>
 
           {wantsContact && (
             <div className="guest-followup">
-              <div className="guest-choice-row">
-                <label className="guest-radio">
+              <label className="field-label" style={{ marginBottom: "8px", fontWeight: 600 }}>
+                Preferred follow-up channel
+              </label>
+              <div className="guest-choice-row" style={{ marginBottom: "14px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+                <label className="guest-radio" style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
                   <input
                     type="radio"
                     name="pref"
                     checked={contactPreference === "email"}
-                    onChange={() => setContactPreference("email")}
+                    onChange={() => {
+                      setContactPreference("email");
+                      if (guestEmail.trim()) {
+                        setContactValue(guestEmail.trim());
+                      }
+                    }}
                   />
-                  Follow up via Email
+                  <span>Follow-up via Email</span>
                 </label>
-                <label className="guest-radio">
+                <label className="guest-radio" style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
                   <input
                     type="radio"
                     name="pref"
                     checked={contactPreference === "phone"}
-                    onChange={() => setContactPreference("phone")}
+                    onChange={() => {
+                      setContactPreference("phone");
+                      if (guestPhone.trim()) {
+                        setContactValue(guestPhone.trim());
+                      }
+                    }}
                   />
-                  Follow up via Phone
+                  <span>Follow-up via Mobile number</span>
                 </label>
               </div>
-              <input
-                className="guest-field"
-                type={contactPreference === "email" ? "email" : "tel"}
-                value={contactValue}
-                onChange={(e) => setContactValue(e.target.value)}
-                placeholder={contactPreference === "email" ? "your.email@example.com" : "+65 9123 4567"}
-              />
+
+              <div>
+                <label className="field-label" htmlFor="followup-contact-input" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span>{contactPreference === "email" ? "Follow-up email address" : "Follow-up mobile number"}</span>
+                  {((contactPreference === "email" && guestEmail.trim() && contactValue === guestEmail.trim()) ||
+                    (contactPreference === "phone" && guestPhone.trim() && contactValue === guestPhone.trim())) && (
+                    <span style={{ color: "var(--sage-deep)", fontSize: "11px", fontWeight: 500 }}>
+                      ✓ Auto-filled from above
+                    </span>
+                  )}
+                </label>
+                <input
+                  id="followup-contact-input"
+                  className="guest-field"
+                  type={contactPreference === "email" ? "email" : "tel"}
+                  value={contactValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setContactValue(val);
+                    if (contactPreference === "email" && !guestEmail.trim()) {
+                      setGuestEmail(val);
+                    } else if (contactPreference === "phone" && !guestPhone.trim()) {
+                      setGuestPhone(val);
+                    }
+                  }}
+                  placeholder={contactPreference === "email" ? "your.email@example.com" : "+1 555 0192"}
+                  required={wantsContact}
+                />
+              </div>
             </div>
           )}
 
@@ -567,13 +740,21 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           {selectedPropertyId&&questionsProperty!==selectedPropertyId&&!questionsError&&<p role="status">Loading feedback questions…</p>}
           <button
             className="button button-dark submit-button"
-            disabled={!rating || !selectedPropertyId || submitting || questionsProperty!==selectedPropertyId}
+            disabled={!rating || !selectedPropertyId || !guestName.trim() || !roomNumber.trim() || submitting || questionsProperty!==selectedPropertyId}
           >
             {submitting ? "Submitting..." : "Send feedback"} <span>→</span>
           </button>
-          {(!selectedPropertyId || !rating) && (
+          {(!selectedPropertyId || !rating || !guestName.trim() || !roomNumber.trim()) && (
             <p className="guest-hint">
-              {!selectedPropertyId ? "Please select a hotel property location above to proceed." : "Please select an overall rating (1-5) above."}
+              {!selectedPropertyId
+                ? "Please select a hotel property location above to proceed."
+                : !rating
+                ? "Please select an overall rating (1-5) above."
+                : !guestName.trim()
+                ? "Please enter your name above (Required)."
+                : !roomNumber.trim()
+                ? "Please enter your room number or NR above (Required)."
+                : ""}
             </p>
           )}
         </form>
