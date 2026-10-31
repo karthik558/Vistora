@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Bell, Check, Clock, AlertTriangle, MessageSquare, Send, ExternalLink, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  getReadNotificationIds,
+  markAllNotificationsAsRead,
+  markNotificationIdsAsRead,
+  markComplaintsAsRead,
+} from "../lib/platform/notificationsStore";
 
 export interface SystemNotification {
   id: string;
@@ -29,11 +35,7 @@ export default function NotificationCenter() {
     async function fetchLiveNotifications() {
       try {
         setLoading(true);
-        let readIds: string[] = [];
-        try {
-          const stored = localStorage.getItem("vistora_read_notifications");
-          if (stored) readIds = JSON.parse(stored);
-        } catch {}
+        const readIds = getReadNotificationIds();
 
         // Fetch live feedback records
         const feedbackRes = await fetch("/api/feedback");
@@ -145,25 +147,44 @@ export default function NotificationCenter() {
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      const readIds = getReadNotificationIds();
+      setNotifications((prev) =>
+        prev.map((n) => {
+          if (readIds.includes(n.id)) return { ...n, read: true };
+          if (detail?.type === "mark_all_read") return { ...n, read: true };
+          if (
+            detail?.type === "complaints_read" &&
+            (n.type === "complaint" || n.type === "sla" || n.href.includes("/complaints"))
+          ) {
+            return { ...n, read: true };
+          }
+          return n;
+        })
+      );
+    };
+    window.addEventListener("vistora-notifications-change", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("vistora-notifications-change", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
+
   const markAllRead = () => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => ({ ...n, read: true }));
-      try {
-        localStorage.setItem("vistora_read_notifications", JSON.stringify(updated.map((n) => n.id)));
-      } catch {}
-      return updated;
-    });
+    const allIds = notifications.map((n) => n.id);
+    markAllNotificationsAsRead(allIds);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const markItemRead = (id: string) => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-      try {
-        const readIds = updated.filter((n) => n.read).map((n) => n.id);
-        localStorage.setItem("vistora_read_notifications", JSON.stringify(readIds));
-      } catch {}
-      return updated;
-    });
+  const markItemRead = (id: string, type?: string) => {
+    markNotificationIdsAsRead([id]);
+    if (type === "complaint" || type === "sla") {
+      markComplaintsAsRead();
+    }
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   return (
@@ -237,7 +258,7 @@ export default function NotificationCenter() {
                       key={item.id}
                       href={item.href}
                       onClick={() => {
-                        markItemRead(item.id);
+                        markItemRead(item.id, item.type);
                         setIsOpen(false);
                       }}
                       className={`notification-item ${isUnread ? "unread" : "read"}`}
@@ -269,7 +290,10 @@ export default function NotificationCenter() {
               <span>Hospitality Real-Time Dispatch</span>
               <Link
                 href="/dashboard/complaints"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  markComplaintsAsRead();
+                  setIsOpen(false);
+                }}
                 className="notification-footer-link"
               >
                 <span>View Complaints &amp; SLA</span>

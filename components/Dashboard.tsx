@@ -46,6 +46,7 @@ import { FeedbackStatus } from "../types/database";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
+import { useComplaintBadge } from "../lib/platform/notificationsStore";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
@@ -228,6 +229,13 @@ function StandaloneAppShell({
   const closeNavigationRef=useRef<HTMLButtonElement>(null);
   const desktopSidebarCollapsed=sidebarCollapsed&&!isMobile;
   const navigationKey=pathname+"?"+searchParams.toString();
+  const { badgeCount: unreadComplaints, clearBadge: markComplaintsRead } = useComplaintBadge(complaints);
+
+  useEffect(() => {
+    if (pathname?.includes("/complaints") || searchParams.get("section") === "complaints") {
+      markComplaintsRead();
+    }
+  }, [pathname, searchParams, markComplaintsRead]);
   useEffect(()=>{
     const viewport=window.matchMedia("(max-width: 768px)");
     const update=()=>{setIsMobile(viewport.matches);if(!viewport.matches)setMobileNavOpen(false);};
@@ -544,7 +552,12 @@ function StandaloneAppShell({
                   href={scopedHref(item.href)}
                   prefetch={isAdministration ? false : workspaceArea === "feedback" && feedbackSection(item.href) ? false : true}
                   className={`nav-item ${isActive ? "active" : ""}`}
-                  onClick={() => setMobileNavOpen(false)}
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    if (item.label === "Complaints & SLA" || item.label === "Complaints") {
+                      markComplaintsRead();
+                    }
+                  }}
                   title={item.label}
                 >
                   <Icon
@@ -554,9 +567,9 @@ function StandaloneAppShell({
                     aria-hidden="true"
                   />
                   <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
-                  {(item.label === "Complaints & SLA" || item.label === "Complaints") && complaints > 0 && (
-                    <span className="nav-count" style={{ background: "rgba(255, 255, 255, 0.16)", color: "#ffffff", border: "1px solid rgba(255, 255, 255, 0.25)" }}>
-                      {complaints}
+                  {(item.label === "Complaints & SLA" || item.label === "Complaints") && unreadComplaints > 0 && (
+                    <span className="nav-count" aria-label={`${unreadComplaints} unread update`}>
+                      {unreadComplaints}
                     </span>
                   )}
                 </Link>
@@ -827,7 +840,7 @@ export default function Dashboard({
   const satisfiedCount = filteredFeedback.filter((r) => r.rating >= 4).length;
   const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0";
   const openComplaintsCount = filteredFeedback.filter(
-    (r) => r.status !== "resolved"
+    (r) => r.status === "needs_attention" || r.status === "escalated" || (r.rating <= 2 && r.status !== "resolved")
   ).length;
 
   const distributionCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };

@@ -435,42 +435,133 @@ a {
 .sidebar-rail-toggle:hover { background: var(--canvas-alt); color: var(--ink); border-color: var(--line-strong); }
 
 .sidebar.collapsed .nav-item {
+  display: flex !important;
+  align-items: center !important;
   justify-content: center !important;
-  padding: 11px 0 !important;
-  gap: 0 !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  margin: 0 auto 4px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
   position: relative;
-  border-radius: 6px;
+  box-sizing: border-box;
 }
 
 .sidebar.collapsed .nav-count {
-  position: absolute;
-  top: 3px;
-  right: 5px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  font-size: 9px;
-  line-height: 14px;
-  border-radius: 7px;
+  position: absolute !important;
+  top: 1px !important;
+  left: calc(50% + 1px) !important;
+  right: auto !important;
+  margin: 0 !important;
+  min-width: 15px !important;
+  width: 15px !important;
+  height: 15px !important;
+  padding: 0 !important;
+  border-radius: 9999px !important;
+  aspect-ratio: 1 / 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #e05243 !important;
+  color: #ffffff !important;
+  font-family: var(--font-dm-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  box-shadow: 0 0 0 1.5px #183324, 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}
+
+.sidebar.collapsed .sidebar-bottom {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  padding: 10px 0 0 !important;
+  gap: 8px !important;
 }
 
 .sidebar.collapsed .sidebar-guest-link {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  margin: 0 auto 10px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
   justify-content: center !important;
-  padding: 10px 0 !important;
-  margin: 0 2px 10px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  box-sizing: border-box !important;
+}
+
+.sidebar.collapsed .sidebar-guest-link svg {
+  width: 14px !important;
+  height: 14px !important;
+  opacity: 0.9 !important;
 }
 
 .sidebar.collapsed .user-row {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
   justify-content: center !important;
-  padding: 8px 0 !important;
-  gap: 0 !important;
+  padding: 8px 0 0 !important;
+  margin: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
+  gap: 8px !important;
+}
+
+.sidebar.collapsed .user-avatar {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #274f3b !important;
+  color: #ffffff !important;
+  font-family: var(--font-dm-mono, monospace) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-sizing: border-box !important;
 }
 
 .sidebar.collapsed .signout-button {
-  margin-top: 8px;
-  padding: 6px !important;
-  width: 100%;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
   justify-content: center !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  box-sizing: border-box !important;
 }
 
 .main-content {
@@ -901,13 +992,22 @@ a {
 
 .nav-count {
   margin-left: auto;
-  padding: 2px 7px;
-  border-radius: 12px;
-  background: #faeae6;
-  color: #a45344;
-  font-family: var(--font-dm-mono);
-  font-size: 10px;
-  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5.5px;
+  border-radius: 9999px;
+  background: #e05243 !important;
+  color: #ffffff !important;
+  font-family: var(--font-dm-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-bottom {
@@ -3165,7 +3265,7 @@ body { background: var(--canvas); }
 .nav-item:hover { color: var(--ink); background: var(--sage-soft); transform: translateX(2px); }.nav-item:hover svg { color: var(--sage-deep); transform: scale(1.08); opacity: 1 !important; }
 .nav-item.active { color: var(--sage-deep); background: var(--sage-soft); font-weight: 650; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sage) 12%, transparent); }
 .nav-item.active::before { left: -13px; height: 20px; width: 3px; border-radius: 0 6px 6px 0; background: var(--sage); }
-.nav-item.active svg { color: var(--sage); opacity: 1 !important; }.nav-count { background: var(--red-soft) !important; color: var(--red) !important; border: 0 !important; }
+.nav-item.active svg { color: var(--sage); opacity: 1 !important; }.sidebar .nav-count { background: #e05243 !important; color: #ffffff !important; border: 0 !important; }
 .sidebar-guest-link { min-height: 40px; align-items: center; padding: 9px 11px; margin: 0 4px 12px; border-radius: 10px; background: var(--canvas); border-color: var(--line); }.sidebar-guest-link:hover { transform: translateY(-1px); background: var(--sage-soft); border-color: var(--sage); }
 .user-row { margin: 10px 4px 0; padding-top: 13px; }.user-avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--sage-soft); color: var(--sage-deep); }.signout-button { border-radius: 9px !important; min-height: 30px; }.signout-button:hover { background: var(--red-soft) !important; color: var(--red) !important; border-color: color-mix(in srgb, var(--red) 35%, transparent) !important; }
 .sidebar.collapsed { width: 74px !important; padding-inline: 10px !important; }.sidebar.collapsed .nav-item { border-radius: 11px; }.sidebar.collapsed .nav-item.active::before { left: -10px; }
@@ -4148,4 +4248,187 @@ html[data-theme="dark"] .brand-logo-light,
 /* Keep the shared property dropdown inside desktop heading bounds. Mobile uses the shared fixed popover. */
 @media (min-width: 769px) {
  .page-heading-actions .property-filter-popover { left: auto; right: 0; max-width: calc(100vw - 32px); }
+}
+
+/* ==============================================================================
+   COLLAPSED SIDEBAR RAIL & NOTIFICATION BADGE STANDARDIZATION
+   ============================================================================== */
+
+/* In expanded mode, luxury red pill on the right side of nav item */
+.sidebar:not(.collapsed) .nav-count {
+  margin-left: auto !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5.5px !important;
+  border-radius: 9999px !important;
+  background: #e05243 !important;
+  color: #ffffff !important;
+  font-family: var(--font-dm-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* In collapsed icon-rail mode: 36px x 36px uniform dimension across all rail items */
+@media (min-width: 769px) {
+  .sidebar.collapsed {
+    width: 68px !important;
+    padding: 16px 8px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  /* Nav rail buttons */
+  .sidebar.collapsed .nav-item {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    margin: 0 auto 4px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+  }
+
+  /* Flawless notification badge pip in collapsed mode */
+  .sidebar.collapsed .nav-count {
+    position: absolute !important;
+    top: 1px !important;
+    left: calc(50% + 2px) !important;
+    right: auto !important;
+    margin: 0 !important;
+    width: 15px !important;
+    min-width: 15px !important;
+    max-width: 15px !important;
+    height: 15px !important;
+    min-height: 15px !important;
+    max-height: 15px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    aspect-ratio: 1 / 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #e05243 !important;
+    color: #ffffff !important;
+    font-family: var(--font-dm-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    box-shadow: 0 0 0 1.5px #183324, 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    pointer-events: none !important;
+    z-index: 5 !important;
+  }
+
+  /* Bottom section container in collapsed mode */
+  .sidebar.collapsed .sidebar-bottom {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    width: 100% !important;
+    padding: 10px 0 0 !important;
+    margin-top: auto !important;
+    gap: 8px !important;
+  }
+
+  /* Link to guest feedback form in collapsed mode: exactly 36px x 36px */
+  .sidebar.collapsed .sidebar-guest-link {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    box-sizing: border-box !important;
+    transition: all 0.18s ease !important;
+  }
+
+  .sidebar.collapsed .sidebar-guest-link:hover {
+    background: rgba(255, 255, 255, 0.16) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+  }
+
+  .sidebar.collapsed .sidebar-guest-link svg {
+    width: 15px !important;
+    height: 15px !important;
+    opacity: 0.9 !important;
+  }
+
+  /* User profile container in collapsed mode */
+  .sidebar.collapsed .user-row {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 8px 0 0 !important;
+    margin: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
+    gap: 8px !important;
+  }
+
+  /* User avatar (KL) in collapsed mode: exactly 36px x 36px matching feedback link */
+  .sidebar.collapsed .user-avatar {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #274f3b !important;
+    color: #ffffff !important;
+    font-family: var(--font-dm-mono, monospace) !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Sign out button in collapsed mode: exactly 36px x 36px matching feedback link */
+  .sidebar.collapsed .signout-button {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.24) !important;
+    box-sizing: border-box !important;
+  }
 }

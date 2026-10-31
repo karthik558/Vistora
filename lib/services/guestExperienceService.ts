@@ -502,7 +502,7 @@ export async function getDashboardData(
   const satisfiedCount = feedbackRows.filter((r) => r.rating >= 4).length;
   const satisfactionRateVal = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : "0.0";
   const openComplaintsCount = feedbackRows.filter(
-    (r) => r.status !== "resolved"
+    (r) => r.status === "needs_attention" || r.status === "escalated" || (r.rating <= 2 && r.status !== "resolved")
   ).length;
 
   // Rating distribution counts (5 down to 1)

@@ -74,7 +74,7 @@ html[data-theme="dark"] .sidebar :is(.signout-button:hover, .signout-button:hove
   border-color: var(--red) !important;
   color: var(--red) !important;
 }
-html[data-theme="dark"] .sidebar .nav-count { background: var(--canvas) !important; color: var(--ink-light) !important; border-color: var(--line) !important; }
+html[data-theme="dark"] .sidebar .nav-count { background: #e05243 !important; color: #ffffff !important; border: none !important; }
 html[data-theme="dark"] :is(.mobile-bottom-navbar, .topbar-icon-btn, .mobile-menu-btn) {
   background: var(--panel) !important; border-color: var(--line) !important; color: var(--ink-light) !important;
 }
