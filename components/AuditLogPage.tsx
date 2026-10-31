@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import {
-  ShieldCheck,
   Search,
   Download,
   Clock,
@@ -142,7 +141,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
     const headerNotice = [
       `"# VISTORA AUDIT REPORT"`,
       `"# Generated At: ${timestampStr}"`,
-      `"# Workspace activity export"`,
+      `"# Audit log export"`,
       `"# Event digests are included where available"`,
       "",
     ].join("\r\n");
@@ -176,25 +175,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
       <div className="content-wrap">
         <div className="page-heading">
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <span className="eyebrow" style={{ margin: 0 }}>Enterprise Compliance &amp; Governance</span>
-              <span
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "6px",
-                  background: "var(--sage-soft)",
-                  color: "var(--sage-deep)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <ShieldCheck size={11} />
-                <span>Workspace activity</span>
-              </span>
-            </div>
+            <p className="eyebrow">Enterprise Compliance &amp; Governance</p>
             <h1>Workspace audit log</h1>
             <p className="subheading">
               Persisted history of staff access, data exports, service recovery and workspace changes.
@@ -203,7 +184,7 @@ export default function AuditLogPage({ initialUser }: { initialUser?: WorkspaceU
           <div className="page-heading-actions">
             <button
               type="button"
-              className="button button-outline"
+              className="button button-outline compact"
               onClick={exportAuditCsv}
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >

@@ -4712,3 +4712,59 @@ html[data-theme="dark"] .brand-logo-light,
   justify-content: flex-start !important;
   font-size: 11.5px !important;
 }
+
+/* ==============================================================================
+   DESKTOP HEADER FILTERS & ACTIONS ALIGNMENT (COMPACT SINGLE LINE)
+   ============================================================================== */
+
+@media (min-width: 769px) {
+  .page-heading {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    flex-wrap: nowrap !important;
+    gap: 18px !important;
+  }
+
+  .page-heading-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+    flex-shrink: 0 !important;
+    width: auto !important;
+    margin: 0 !important;
+  }
+
+  .page-heading-actions .property-filter-container,
+  .page-heading-actions .custom-datepicker-container {
+    display: inline-block !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+  }
+
+  .page-heading-actions .property-filter-trigger,
+  .page-heading-actions .custom-datepicker-trigger {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    max-width: 260px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 13px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+  }
+
+  .page-heading-actions .filter-label,
+  .page-heading-actions .datepicker-label {
+    max-width: 180px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    display: inline-block !important;
+  }
+}
+
