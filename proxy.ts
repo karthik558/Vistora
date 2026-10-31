@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { checkRateLimit, getClientIp } from "./lib/security/rateLimiter";
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request.headers);
 
@@ -85,6 +85,8 @@ export async function middleware(request: NextRequest) {
 
   return response;
 }
+
+export { proxy };
 
 export const config = {
   matcher: [
