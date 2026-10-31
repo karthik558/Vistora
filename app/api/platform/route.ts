@@ -13,8 +13,9 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  const views=checked(await db.from("saved_views").select("*").order("created_at",{ascending:false}));
  const organization=checked(await db.from("organizations").select("*").single());
  const result:any={success:true,properties,views,organization,isAdmin:user.isOrganizationAdmin};
-  const orgSettings=checked(await db.from("organization_settings").select("settings").eq("organization_id",user.organizationId).maybeSingle());
-  result.guestMessaging=orgSettings?.settings?.guestMessaging||{};
+  const orgSettings=await db.from("organization_settings").select("settings").eq("organization_id",user.organizationId).maybeSingle();
+  if(orgSettings.error)checked({data:null,error:orgSettings.error});
+  result.guestMessaging=orgSettings.data?.settings?.guestMessaging||{};
  if(user.isOrganizationAdmin)result.recovery=checked(await db.from("recovery_followups").select("id,feedback_id,rating,recommendation_score,responded_at,created_at").order("created_at",{ascending:false}).limit(100));
  if(user.isOrganizationAdmin||user.rights.includes("manage_complaints")) {
   result.cases=checked(await db.from("feedback").select("id,property_id,department,rating,status,assigned_to,priority,sla_deadline,category,created_at").neq("status","resolved").order("sla_deadline",{ascending:true,nullsFirst:false}).limit(200));
@@ -62,8 +63,9 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
    const triggers=["feedback_received","case_resolved"] as const,guestMessaging:Record<string,unknown>={};
    for(const trigger of triggers){const t=b.guestMessaging?.[trigger];if(!t)continue;guestMessaging[trigger]={enabled:t.enabled===true,subject:text(t.subject,"Message subject",160),body:text(t.body,"Message body",2000)};}
    if(!Object.keys(guestMessaging).length)throw new PlatformError("Configure at least one guest message.");
-   const current=checked(await db.from("organization_settings").select("settings").eq("organization_id",org).maybeSingle());
-   const settings={...(current?.settings||{}),guestMessaging};
+   const current=await db.from("organization_settings").select("settings").eq("organization_id",org).maybeSingle();
+   if(current.error)checked({data:null,error:current.error});
+   const settings={...(current.data?.settings||{}),guestMessaging};
    checked(await db.from("organization_settings").upsert({organization_id:org,settings,updated_at:new Date().toISOString()},{onConflict:"organization_id"}).select("organization_id").single());
    result={guestMessaging};
   } else if(b.action==="team_invitation") {
