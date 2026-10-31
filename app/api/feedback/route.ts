@@ -5,6 +5,7 @@ import { withWorkspace,errorResponse,text,number } from "../../../lib/platform/h
 import { checked,serviceDb,workspaceDb,workspaceUser,assertProperty,PlatformError } from "../../../lib/platform/db";
 import { hashToken } from "../../../lib/platform/secrets";
 import { logAuditEvent } from "../../../lib/services/auditLogService";
+import {queueGuestMessage} from "../../../lib/services/guestMessaging";
 export const GET=withWorkspace(async(request:NextRequest)=>{
   const params=request.nextUrl.searchParams;
   const list=await fetchFeedbackList({propertyId:params.get("propertyId")||undefined,status:(params.get("status")||"all") as any,search:params.get("search")||undefined});
@@ -13,7 +14,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
 export async function POST(request:NextRequest) {
  try {
   const body=await request.json(), db=serviceDb();
-  const property=checked(await db.from("properties").select("id,organization_id,is_active,organizations(is_demo)").eq("id",body.propertyId).eq("is_active",true).maybeSingle());
+   const property=checked(await db.from("properties").select("id,name,organization_id,is_active,organizations(is_demo)").eq("id",body.propertyId).eq("is_active",true).maybeSingle());
   const rating=number(body.rating,"Rating",1,5);
   const departments=["Front Desk","Housekeeping","Food & Beverage","Concierge","Facilities & Room","Spa & Wellness","Valet & Transfers"];
   if(!departments.includes(body.department))throw new PlatformError("Choose a valid department.");
@@ -62,6 +63,8 @@ export async function POST(request:NextRequest) {
     contactPreference:["email","phone","in_person"].includes(body.contactPreference)?body.contactPreference:undefined,
     ...validated
   });
+   try{await queueGuestMessage({organizationId:property.organization_id,propertyId:property.id,feedbackId:created.id,guestName:finalGuestName,guestEmail:finalGuestEmail,propertyName:property.name,trigger:"feedback_received",rating});}
+   catch(error){console.error("Could not queue guest acknowledgement:",error);}
   if(invitationId) {
     try {
       await db.from("guest_invitations").update({

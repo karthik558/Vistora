@@ -5,7 +5,8 @@ export function emailContent(kind:string,payload:any) {
  if(kind==="operations_alert")body="A hotel service job is overdue.\nJob: "+payload.jobId+"\nTitle: "+payload.title+"\nDeadline: "+payload.deadline;
  if(kind==="sla")body="A service case is overdue.\nCase: "+payload.feedbackId+"\nDepartment: "+payload.department+"\nDeadline: "+payload.deadline;
  if(kind==="report")body="Guest experience report\nPeriod: "+payload.summary.from+" to "+payload.summary.to+"\n\n"+Object.entries(payload.summary.current).map(([k,v])=>k+": "+(v??"No responses")).join("\n");
- return {subject:subjects[kind]||"Workspace notification",text:body};
+ if(kind==="guest_message")body=payload.body||"";
+ return {subject:payload.subject||subjects[kind]||"Workspace notification",text:body};
 }
 
 export async function sendEmail(kind:string,payload:any,id:string) {

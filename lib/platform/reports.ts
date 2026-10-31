@@ -16,7 +16,18 @@ export function managementReport(rows:ReportRow[],days:number,end=new Date()) {
  const current=rows.filter(r=>Date.parse(r.created_at)>=boundary&&Date.parse(r.created_at)<=end.getTime());
  const before=rows.filter(r=>Date.parse(r.created_at)>=previous&&Date.parse(r.created_at)<boundary);
  const group=(key:"property_id"|"assigned_to"|"category")=>Array.from(new Set(current.map(r=>r[key]||"Unassigned"))).map(name=>({name,...summarize(current.filter(r=>(r[key]||"Unassigned")===name))}));
- return {from:new Date(boundary).toISOString(),to:end.toISOString(),current:summarize(current),previous:summarize(before),properties:group("property_id"),workload:group("assigned_to"),categories:group("category")};
+ const currentSummary=summarize(current),previousSummary=summarize(before);
+ const recurring=Array.from(new Set(current.map(r=>r.category||r.department||"Other")))
+  .map(name=>({name,count:current.filter(r=>(r.category||r.department||"Other")===name).length,lowRatings:current.filter(r=>(r.category||r.department||"Other")===name&&r.rating<=2).length}))
+  .filter(item=>item.count>=2).sort((a,b)=>b.count-a.count).slice(0,5);
+ const actions=[
+  ...(currentSummary.overdue?[{title:`${currentSummary.overdue} overdue case${currentSummary.overdue===1?"":"s"}`,detail:"Review the SLA queue and assign an owner.",href:"/dashboard/complaints",count:currentSummary.overdue}]:[]),
+  ...(currentSummary.unassigned?[{title:`${currentSummary.unassigned} unassigned case${currentSummary.unassigned===1?"":"s"}`,detail:"Assign a team member to prevent delays.",href:"/dashboard/complaints",count:currentSummary.unassigned}]:[]),
+  ...recurring.slice(0,2).map(item=>({title:`Recurring issue: ${item.name}`,detail:`${item.count} reports in this period; ${item.lowRatings} rated 1–2 stars.`,href:"/dashboard/feedback",count:item.count})),
+  ...(currentSummary.averageRating!==null&&previousSummary.averageRating!==null&&currentSummary.averageRating<previousSummary.averageRating?[{title:"Satisfaction is trending down",detail:`${currentSummary.averageRating} now versus ${previousSummary.averageRating} in the previous period.`,href:"/dashboard/analytics",count:0}]:[]),
+ ];
+ const changes={responses:currentSummary.responses-previousSummary.responses,rating:currentSummary.averageRating===null||previousSummary.averageRating===null?null:Number((currentSummary.averageRating-previousSummary.averageRating).toFixed(2)),nps:currentSummary.nps===null||previousSummary.nps===null?null:currentSummary.nps-previousSummary.nps};
+ return {from:new Date(boundary).toISOString(),to:end.toISOString(),current:currentSummary,previous:previousSummary,changes,actions,recurring,properties:group("property_id"),workload:group("assigned_to"),categories:group("category")};
 }
 export const reportColumns="property_id,department,rating,recommendation_score,status,assigned_to,category,created_at,first_response_at,resolved_at,sla_deadline";
 export async function reportRows(db:any,org:string,days:number,property?:string|null,end=new Date()):Promise<ReportRow[]> {

@@ -2,6 +2,7 @@ import { NextRequest,NextResponse } from "next/server";
 import { withWorkspace, text } from "../../../../lib/platform/http";
 import { checked,workspaceDb,workspaceUser,PlatformError } from "../../../../lib/platform/db";
 import { toViewModel,invalidateDashboardCache } from "../../../../lib/services/guestExperienceService";
+import {queueGuestMessage} from "../../../../lib/services/guestMessaging";
 export const PATCH=withWorkspace(async(request:NextRequest,{params}:{params:Promise<{id:string}>})=>{
  const {id}=await params,body=await request.json(),db=workspaceDb();
  const current=checked(await db.from("feedback").select("*").eq("id",id).single());
@@ -24,6 +25,11 @@ export const PATCH=withWorkspace(async(request:NextRequest,{params}:{params:Prom
  if(body.deadline!==undefined) {if(body.deadline&&!Number.isFinite(Date.parse(body.deadline)))throw new PlatformError("Invalid deadline.");updates.sla_deadline=body.deadline||null;}
  if(!Object.keys(updates).length)throw new PlatformError("No changes supplied.");
  const row=checked(await db.from("feedback").update(updates).eq("id",current.id).select().single());
+ if(current.status!=="resolved"&&row.status==="resolved"){
+  const property=checked(await db.from("properties").select("name").eq("id",row.property_id).single());
+  try{await queueGuestMessage({organizationId:row.organization_id,propertyId:row.property_id,feedbackId:row.id,guestName:row.guest_name,guestEmail:row.guest_email,propertyName:property.name,trigger:"case_resolved",rating:row.rating});}
+  catch(error){console.error("Could not queue resolution check-in:",error);}
+ }
  invalidateDashboardCache();return NextResponse.json({success:true,data:toViewModel(row)});
 },"manage_complaints");
 export const DELETE=withWorkspace(async(_request:NextRequest,{params}:{params:Promise<{id:string}>})=>{

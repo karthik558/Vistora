@@ -80,7 +80,7 @@ export async function runWorker(org?:string) {
     }
     if(!payload.recipient){status="blocked";throw new Error("No delivery recipient configured.");}
    }
-   const directEmail=job.kind!=="webhook"&&(!payload.channel||payload.channel==="email")&&process.env.RESEND_API_KEY&&process.env.MAIL_FROM;
+    const directEmail=job.kind!=="webhook"&&(!payload.channel||payload.channel==="email")&&process.env.RESEND_API_KEY&&process.env.MAIL_FROM;
    if(!directEmail&&(!url||!secret)){status="blocked";throw new Error("Configure RESEND_API_KEY and MAIL_FROM for email, or DELIVERY_WEBHOOK_URL and DELIVERY_WEBHOOK_SECRET for a channel adapter.");}
    const code=directEmail?await sendEmail(job.kind,payload,job.id):await sendSigned(url!,{id:job.id,type:job.kind,organizationId:job.organization_id,createdAt:job.created_at,data:payload},secret!,job.id);
    if(code>=200&&code<300){status="delivered";detail="Endpoint acknowledged delivery ("+code+").";}
