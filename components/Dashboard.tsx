@@ -45,6 +45,7 @@ import { DashboardData, FeedbackViewModel, RatingBarItem } from "../types/experi
 import { FeedbackStatus } from "../types/database";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
+import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import FeedbackFilterDropdown, { FeedbackCommentFilter } from "./FeedbackFilterDropdown";
 import CustomSelect from "./CustomSelect";
 import NotificationCenter from "./NotificationCenter";
@@ -713,7 +714,12 @@ export default function Dashboard({
   initialUser?: WorkspaceUser | null;
 }) {
   const [user, setUser] = useState<WorkspaceUser | null>(initialUser || null);
-  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const {
+    selectedIds: selectedProperties,
+    setSelectedIds: setSelectedProperties,
+    isAll: isAllProperties,
+    singleSelectedId: selectedProperty,
+  } = useSharedPropertyFilter();
   const [npsFilter, setNpsFilter] = useState<"all" | "promoters" | "passives" | "detractors">("all");
   const [liveFeedback, setLiveFeedback] = useState<FeedbackViewModel[]>(() => initialData?.recentFeedback || []);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
@@ -790,9 +796,9 @@ export default function Dashboard({
         return false;
       }
     }
-    // 2. Selected property dropdown filter
-    if (selectedProperty !== "all") {
-      if (!item.propertyId || item.propertyId !== selectedProperty) {
+    // 2. Selected property dropdown filter (supports multi-property & single-property)
+    if (!isAllProperties) {
+      if (!item.propertyId || !selectedProperties.includes(item.propertyId)) {
         return false;
       }
     }
@@ -853,10 +859,11 @@ export default function Dashboard({
   const npsDetractorPct = npsTotal > 0 ? Math.round((npsDetractors / npsTotal) * 100) : 0;
   const npsScore = npsTotal > 0 ? Math.round(((npsPromoters - npsDetractors) / npsTotal) * 100) : 0;
 
-  const activePropertyName =
-    selectedProperty === "all"
-      ? "All Properties"
-      : (data?.properties || []).find((p) => p.id === selectedProperty)?.name || "Selected Property";
+  const activePropertyName = isAllProperties
+    ? "All Properties"
+    : selectedProperties.length === 1
+    ? (data?.properties || []).find((p) => p.id === selectedProperties[0])?.name || "Selected Property"
+    : `${selectedProperties.length} Properties Selected`;
 
   const npsTier =
     npsTotal === 0
@@ -907,7 +914,8 @@ export default function Dashboard({
                       : data?.properties || []
                   }
                   selectedId={selectedProperty}
-                  onChange={setSelectedProperty}
+                  selectedIds={selectedProperties}
+                  onChange={(_id, ids) => setSelectedProperties(ids || _id)}
                 />
                 <CustomDatePicker
                   value={dateFilter}
@@ -954,7 +962,7 @@ export default function Dashboard({
               <Metric
                 label="Feedback received"
                 value={total.toLocaleString()}
-                note={selectedProperty !== "all" || dateFilter.preset !== "all" ? "filtered records" : "verified submissions"}
+                note={!isAllProperties || dateFilter.preset !== "all" ? "filtered records" : "verified submissions"}
               />
               <Metric
                 label="Average rating"
@@ -984,7 +992,7 @@ export default function Dashboard({
               <div className="panel">
                 <PanelHeading
                   title="Rating distribution"
-                  detail={selectedProperty === "all" ? "All properties · live feedback" : "Filtered property view"}
+                  detail={isAllProperties ? "All properties · live feedback" : "Filtered property view"}
                   href="/dashboard/analytics"
                 />
                 <RatingBars bars={dynamicBars} />
@@ -1256,11 +1264,11 @@ export default function Dashboard({
               title={
                 npsFilter !== "all"
                   ? `Recent feedback (${npsFilter.charAt(0).toUpperCase() + npsFilter.slice(1)})`
-                  : selectedProperty !== "all"
+                  : !isAllProperties
                   ? `Recent feedback · ${activePropertyName}`
                   : "Recent feedback · All properties"
               }
-              onResetProperty={() => setSelectedProperty("all")}
+              onResetProperty={() => setSelectedProperties("all")}
               isDashboard={true}
             />
           </>

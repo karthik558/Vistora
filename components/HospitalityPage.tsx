@@ -9,6 +9,7 @@ import WorkspaceSelect from "./WorkspaceSelect";
 import WorkspaceDateField from "./WorkspaceDateField";
 import DashboardPageHeading from "./DashboardPageHeading";
 import PropertyFilter from "./PropertyFilter";
+import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import ComplaintBoard from "./ComplaintBoard";
 import OperationsSuite from "./OperationsSuite";
 import {operationTabs} from "../lib/omniops/types";
@@ -168,9 +169,12 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   }
  }
  const [data,setData]=useState<any>(null),[error,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
- const [property,setProperty]=useState(query.get("property")||"all"),[month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
- const propertyParam=query.get("property")||"all";
- useEffect(()=>{setProperty(propertyParam);},[propertyParam]);
+ const {
+   selectedIds: selectedProperties,
+   setSelectedIds: setSelectedProperties,
+   singleSelectedId: property,
+ } = useSharedPropertyFilter();
+ const [month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
  const [jobView,setJobView]=useState("active");
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
  const [showReserveModal,setShowReserveModal]=useState(false);
@@ -313,7 +317,19 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
 
  return <AppShell active={tab} user={user} module="operations"><div className="content-wrap platform-page hotel-page">
  <DashboardPageHeading eyebrow="Hotel operations" title={tab} description={descriptions[tab]}>
-  <PropertyFilter properties={data?.properties||[]} selectedId={property} onChange={id=>{setProperty(id);const params=new URLSearchParams(query.toString());params.set("property",id);window.history.replaceState(null,"","/dashboard/hospitality?"+params);}} manageHref="/dashboard/properties?workspace=operations"/>
+  <PropertyFilter
+    properties={data?.properties||[]}
+    selectedId={property}
+    selectedIds={selectedProperties}
+    onChange={(_id, ids) => {
+      setSelectedProperties(ids || _id);
+      const params = new URLSearchParams(query.toString());
+      if (_id !== "all") params.set("property", _id);
+      else params.delete("property");
+      window.history.replaceState(null, "", "/dashboard/hospitality?" + params);
+    }}
+    manageHref="/dashboard/properties?workspace=operations"
+  />
   {!suiteTabs.includes(tab)&&<button
    type="button"
    className="button button-ghost compact"

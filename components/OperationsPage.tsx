@@ -38,6 +38,7 @@ import { DashboardData, PropertyRow, FeedbackViewModel } from "../types/experien
 import { GuestInvitation } from "../lib/services/invitationsService";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
+import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
 import CustomSelect from "./CustomSelect";
 
@@ -51,7 +52,12 @@ export default function OperationsPage({
   initialUser?: WorkspaceUser | null;
 }) {
   const [query, setQuery] = useState("");
-  const [selectedProperty, setSelectedProperty] = useState<string | "all">("all");
+  const {
+    selectedIds: selectedProperties,
+    setSelectedIds: setSelectedProperties,
+    isAll: isAllProperties,
+    singleSelectedId: selectedProperty,
+  } = useSharedPropertyFilter();
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
     preset: "all",
     startDate: null,
@@ -123,11 +129,11 @@ export default function OperationsPage({
           return true;
         })
         .filter((item) => section !== "complaints" || item.rating <= 2 || item.status === "needs_attention")
-        .filter((item) => selectedProperty === "all" || (item.propertyId && item.propertyId === selectedProperty))
+        .filter((item) => isAllProperties || (item.propertyId && selectedProperties.includes(item.propertyId)))
         .filter((item) => isDateInRange(item.createdAt, dateFilter))
         .filter((item) => !userDeptScope || item.department === userDeptScope)
         .filter((item) => !query || `${item.name} ${item.roomNumber} ${item.department} ${item.comment || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [data.recentFeedback, query, section, selectedProperty, dateFilter, userAllowedPropIds, userDeptScope]
+    [data.recentFeedback, query, section, selectedProperty, selectedProperties, isAllProperties, dateFilter, userAllowedPropIds, userDeptScope]
   );
 
   const title =
@@ -206,7 +212,8 @@ export default function OperationsPage({
                         : data.properties
                     }
                     selectedId={selectedProperty}
-                    onChange={setSelectedProperty}
+                    selectedIds={selectedProperties}
+                    onChange={(_id, ids) => setSelectedProperties(ids || _id)}
                   />
                   <CustomDatePicker
                     value={dateFilter}

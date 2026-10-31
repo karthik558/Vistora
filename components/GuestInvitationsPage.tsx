@@ -27,6 +27,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
 import { PropertyRow } from "../types/experience";
 import CustomSelect from "./CustomSelect";
+import PropertyFilter from "./PropertyFilter";
+import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import { GuestInvitation } from "../lib/services/invitationsService";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import { TableLoadingRows } from "./TableLoadingRows";
@@ -66,7 +68,12 @@ export default function GuestInvitationsPage({
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
-  const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>("all");
+  const {
+    selectedIds: selectedProperties,
+    setSelectedIds: setSelectedProperties,
+    isAll: isAllProperties,
+    singleSelectedId: selectedPropertyFilter,
+  } = useSharedPropertyFilter();
 
   // Determine property access scope
   const allowedProperties = useMemo(() => {
@@ -246,7 +253,7 @@ export default function GuestInvitationsPage({
 
   const filtered = useMemo(() => {
     return invitations.filter((inv) => {
-      if (selectedPropertyFilter !== "all" && inv.propertyId !== selectedPropertyFilter) return false;
+      if (!isAllProperties && !selectedProperties.includes(inv.propertyId)) return false;
       if (statusFilter !== "all" && inv.status !== statusFilter) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -259,7 +266,7 @@ export default function GuestInvitationsPage({
       }
       return true;
     });
-  }, [invitations, selectedPropertyFilter, statusFilter, search]);
+  }, [invitations, selectedProperties, isAllProperties, statusFilter, search]);
 
   const total = invitations.length;
   const completedCount = invitations.filter((i) => i.status === "completed").length;
@@ -414,14 +421,11 @@ export default function GuestInvitationsPage({
             {/* Property Scoping in Filter Bar */}
             {allowedProperties.length > 1 ? (
               <div style={{ minWidth: "200px" }}>
-                <CustomSelect
-                  value={selectedPropertyFilter}
-                  onChange={(val) => setSelectedPropertyFilter(val)}
-                  placeholder="All Properties"
-                  options={[
-                    { value: "all", label: "All Properties" },
-                    ...allowedProperties.map((p) => ({ value: p.id, label: p.name })),
-                  ]}
+                <PropertyFilter
+                  properties={allowedProperties}
+                  selectedId={selectedPropertyFilter}
+                  selectedIds={selectedProperties}
+                  onChange={(_id, ids) => setSelectedProperties(ids || _id)}
                 />
               </div>
             ) : allowedProperties.length === 1 ? (
