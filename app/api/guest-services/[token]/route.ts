@@ -28,7 +28,7 @@ async function context(token: string) {
     );
   const stay = await db
     .from("stays")
-    .select("id,room_number,status")
+    .select("id,room_id,room_number,status,guest_id")
     .eq("id", link.data.stay_id)
     .eq("organization_id", link.data.organization_id)
     .eq("property_id", link.data.property_id)
@@ -68,11 +68,29 @@ export async function GET(
       .limit(10);
     if (requests.error)
       throw new PlatformError("Could not load service requests.", 503);
+
+    let guestName = "";
+    if (stay.guest_id) {
+      const guest = await db
+        .from("guests")
+        .select("full_name")
+        .eq("id", stay.guest_id)
+        .maybeSingle();
+      if (guest.data?.full_name) {
+        guestName = guest.data.full_name;
+      }
+    }
+
     return NextResponse.json(
       {
         room: stay.room_number,
         property: property.name,
+        guestName,
         requests: requests.data,
+        wifi: {
+          ssid: "Vistora-Guest-HighSpeed",
+          password: "vistora-luxury-stay",
+        },
       },
       { headers },
     );
@@ -92,8 +110,47 @@ export async function POST(
     )
       throw new PlatformError("Cross-origin requests are not allowed.", 403);
     const { token } = await params,
-      { db, hash } = await context(token),
+      { db, hash, link, stay } = await context(token),
       body = await request.json();
+
+    if (body.action === "pulse") {
+      const rating = Number(body.rating);
+      if (!rating || rating < 1 || rating > 5) {
+        throw new PlatformError("Rating must be between 1 and 5.", 400);
+      }
+      if (rating <= 3) {
+        const issues = Array.isArray(body.issues)
+          ? body.issues.slice(0, 5).join(", ")
+          : "";
+        const comment =
+          typeof body.comment === "string" ? body.comment.slice(0, 1000) : "";
+        await db.from("service_jobs").insert({
+          organization_id: link.organization_id,
+          property_id: link.property_id,
+          room_id: stay.room_id || null,
+          kind: "guest_request",
+          title: `In-Stay Concern (Room ${stay.room_number})`,
+          description: `Guest Rating: ${rating}/5.${issues ? " Tags: " + issues + "." : ""}${comment ? " Note: " + comment : ""}`,
+          department: "Front Desk",
+          location: String(stay.room_number),
+          priority: rating === 1 ? "critical" : "high",
+          intake_channel: "guest_request",
+          due_at: new Date(Date.now() + 15 * 60000).toISOString(),
+          source_key: `pulse:${stay.id}:${Date.now()}`,
+        });
+      }
+      return NextResponse.json(
+        {
+          success: true,
+          message:
+            rating <= 3
+              ? "Your concern has been escalated directly to the Duty Manager. A team member will attend to your room promptly."
+              : "Thank you for letting us know! We are delighted you are enjoying your stay.",
+        },
+        { headers },
+      );
+    }
+
     const id = uuid(body.requestId, "Request identifier");
     if (
       !["towels", "toiletries", "room_service", "baggage", "valet"].includes(
