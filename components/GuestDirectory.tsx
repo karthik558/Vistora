@@ -1,32 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { WorkspaceUser } from "./Dashboard";
 import type { PropertyRow } from "../types/experience";
-import type { InHouseGuest } from "../lib/feedback/guest-directory";
+import type { CollectionStatus, InHouseGuest } from "../lib/feedback/guest-directory";
 import { matchesPropertyFilter, useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
+import WorkspaceDateField from "./WorkspaceDateField";
+import WorkspaceSelect from "./WorkspaceSelect";
 import PropertyFilter from "./PropertyFilter";
 
-export default function GuestDirectory({ user, properties, history }: {
-  user: WorkspaceUser; properties: PropertyRow[]; history: React.ReactNode;
+export default function GuestDirectory({ user, properties, history, initialView = "pending" }: {
+  user: WorkspaceUser; properties: PropertyRow[]; history: React.ReactNode; initialView?: "pending" | "collected";
 }) {
-  const [view, setView] = useState<"in-house" | "history">("in-house");
+  const [view, setView] = useState<"directory" | "history">("directory");
+  const [status, setStatus] = useState<CollectionStatus>(initialView);
+  const [day, setDay] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; });
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [resolutionRequest, setResolutionRequest] = useState<string | null>(null);
+  useEffect(() => { setStatus(initialView); setView("directory"); }, [initialView]);
   const [search, setSearch] = useState("");
   const [opening, setOpening] = useState<string | null>(null);
   const [error, setError] = useState("");
   const allowed = user.isOrganizationAdmin ? null : user.propertyIds?.length ? user.propertyIds : user.propertyId ? [user.propertyId] : [];
   const { selectedIds, singleSelectedId, setSelectedIds } = useSharedPropertyFilter(allowed);
   const query = useQuery<{ guests: InHouseGuest[]; canTakeFeedback: boolean }>({
-    queryKey: ["in-house-feedback-directory", user.organizationId, user.id, user.rights],
+    queryKey: ["feedback-collection-directory", user.organizationId, user.id, user.rights, day, status],
     queryFn: async ({ signal }) => {
-      const response = await fetch("/api/guest-directory", { signal, cache: "no-store" });
+      const response = await fetch("/api/guest-directory?" + new URLSearchParams({ day, status }), { signal, cache: "no-store" });
       const json = await response.json();
       if (!response.ok || !json.success) throw new Error(json.error || "Could not load in-house guests.");
       return json;
     },
-    enabled: view === "in-house", refetchOnMount: "always", refetchInterval: 30_000,
+    enabled: view === "directory", refetchOnMount: "always", refetchOnWindowFocus: "always", refetchInterval: 30_000,
   });
   const guests = (query.data?.guests || []).filter(guest => matchesPropertyFilter(guest.propertyId, selectedIds) &&
     (!search.trim() || [guest.guestName, guest.roomNumber, guest.propertyName].some(value => value.toLowerCase().includes(search.trim().toLowerCase()))));
@@ -45,25 +54,60 @@ export default function GuestDirectory({ user, properties, history }: {
     } catch (error) { popup.close(); setError((error as Error).message); }
     finally { setOpening(null); }
   }
+  async function resolveFollowup(guest: InHouseGuest) {
+    if (!notes.trim() || saving) return;
+    setSaving(true); setError("");
+    try {
+      let jobId = guest.followup?.id;
+      if (!jobId) {
+        const response = await fetch("/api/guest-directory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "followup", stayId: guest.id }) });
+        const json = await response.json();
+        if (!response.ok || !json.success) throw new Error(json.error || "Could not create follow-up.");
+        jobId = json.jobId;
+      }
+      const response = await fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "job_resolve", requestId: resolutionRequest, data: { property_id: guest.propertyId, job_id: jobId, resolution_notes: notes.trim() } }) });
+      const json = await response.json();
+      if (!response.ok || !json.success) throw new Error(json.error || "Could not save follow-up.");
+      setReviewing(null); setNotes(""); await query.refetch();
+    } catch (error) { setError((error as Error).message); }
+    finally { setSaving(false); }
+  }
+  const dateLabel = status === "collected" ? "Feedback date" : ["missed", "reviewed"].includes(status) ? "Checkout date" : "Directory date";
+  const formatTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
   return <div className="platform-page">
-    <header className="page-heading"><div><h1>Guest directory</h1><p className="subheading">Collect feedback from current stays, or review past feedback and invitations.</p></div></header>
+    <header className="page-heading"><div><h1>Guest directory</h1><p className="subheading">Collect feedback once per stay and follow up on missed checkouts.</p></div></header>
     <nav className="platform-tabs" aria-label="Guest directory views">
-      <button aria-current={view === "in-house" ? "page" : undefined} onClick={() => setView("in-house")}>In-house guests</button>
+      {([['pending', 'In-house · Not taken'], ['collected', 'Feedback collected'], ['missed', 'Checked out · Missing feedback']] as const).map(([value, label]) => <button key={value} aria-current={view === "directory" && status === value ? "page" : undefined} onClick={() => { setStatus(value); setView("directory"); }}>{label}</button>)}
       <button aria-current={view === "history" ? "page" : undefined} onClick={() => setView("history")}>Feedback &amp; invitations</button>
     </nav>
     {view === "history" ? history : <section className="platform-card">
-      <div className="platform-actions" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginBottom: 18 }}>
-        <label style={{flex:"1 1 220px",maxWidth:320}}>Find a guest<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Guest, room, or property"/></label>
-        <PropertyFilter properties={allowed === null ? properties : properties.filter(property => allowed.includes(property.id))} selectedId={singleSelectedId} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)}/>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginBottom: 18 }}>
+        <label style={{flex:"1 1 200px",maxWidth:300}}>Find a guest<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Guest, room, or property"/></label>
         <button className="button button-outline compact" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw size={14}/>Refresh</button>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 12, marginLeft: "auto" }}>
+          <div style={{width:190}}><WorkspaceSelect label="Feedback status" value={status} onChange={value => setStatus(value as CollectionStatus)} options={[{value:"pending",label:"Not taken"},{value:"collected",label:"Already taken"},{value:"missed",label:"Checkout · Missing"},{value:"reviewed",label:"Checkout · Reviewed"},{value:"all",label:"All statuses"}]}/></div>
+          <div style={{width:180}}><WorkspaceDateField label={dateLabel} value={day} onChange={setDay}/></div>
+          <PropertyFilter properties={allowed === null ? properties : properties.filter(property => allowed.includes(property.id))} selectedId={singleSelectedId} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)}/>
+        </div>
       </div>
-      <p>Current stays from Hotel operations, including daily imports. Feedback is linked to the selected stay and property.</p>
+      <p>{status === "pending" ? "In-house guests awaiting their first feedback for this stay. The date filters check-ins." : status === "collected" ? (day ? "Guest feedback collected on the selected day." : "Stays with saved guest feedback.") : status === "all" ? "Current uncollected stays, feedback collected, and missed checkouts for the selected day." : "Guests who checked out without feedback. Record why it was missed and the follow-up outcome."} {!day && (["missed", "reviewed", "all"].includes(status) ? "Showing all dates, including older checkouts without a recorded checkout time." : "Showing all dates.")} {day && "Dates follow each property's timezone. Clear the date to see all dates."}</p>
       {(error || query.error) && <p role="alert" className="platform-notice">{error || query.error?.message}</p>}
-      {query.isPending ? <p role="status">Loading in-house guests…</p> : !query.error && <>
+      {query.isPending ? <p role="status">Loading guests…</p> : !query.error && <>
         {!query.data?.canTakeFeedback && <p>Guest names and personal feedback links require guest-data permission.</p>}
-        <div className="platform-table"><table><thead><tr><th>Guest</th><th>Property / room</th><th>Check-in</th><th>Scheduled check-out</th><th>Feedback for this stay</th><th>Action</th></tr></thead>
-          <tbody>{guests.map(guest => <tr key={guest.id}><td>{guest.guestName}</td><td>{guest.propertyName}<small>Room {guest.roomNumber}</small></td><td>{guest.checkIn}</td><td>{guest.checkOut}</td><td>{guest.feedbackCount ? `${guest.feedbackCount} response${guest.feedbackCount === 1 ? "" : "s"}` : "Awaiting feedback"}</td><td>{query.data?.canTakeFeedback && <button className="button button-outline compact" disabled={opening !== null} onClick={() => takeFeedback(guest)}><ExternalLink size={13}/>{opening === guest.id ? "Opening…" : "Take feedback"}</button>}</td></tr>)}</tbody></table></div>
-        {!guests.length && <p>No matching in-house stays. Imported reservations appear here after check-in.</p>}
+        <div className="platform-table"><table><thead><tr><th>Guest</th><th>Property / room</th><th>Check-in</th><th>Check-out</th><th>Feedback status</th><th>Action / follow-up</th></tr></thead>
+          <tbody>{guests.map(guest => <tr key={guest.id}>
+            <td>{guest.guestName}</td><td>{guest.propertyName}<small>Room {guest.roomNumber}</small></td><td>{guest.checkIn}</td>
+            <td>{(guest.checkedOutAt || ["missed", "reviewed"].includes(guest.collectionStatus)) ? formatTime(guest.checkedOutAt) : guest.checkOut}<small>{(guest.checkedOutAt || ["missed", "reviewed"].includes(guest.collectionStatus)) ? "Actual checkout" : "Scheduled"}</small></td>
+            <td>{guest.collectionStatus === "collected" ? <>Feedback collected<small>{formatTime(guest.latestFeedbackAt)}</small></> : guest.collectionStatus === "pending" ? "Not taken" : guest.collectionStatus === "reviewed" ? "Missing · Follow-up reviewed" : "Missing at checkout"}</td>
+            <td>{guest.collectionStatus === "pending" && query.data?.canTakeFeedback && <button className="button button-outline compact" disabled={opening !== null} onClick={() => takeFeedback(guest)}><ExternalLink size={13}/>{opening === guest.id ? "Opening…" : "Take feedback"}</button>}
+              {guest.followup && <><small>Assigned to {guest.followup.assignedName || "management"}</small>{guest.followup.resolutionNotes && <p style={{whiteSpace:"pre-wrap"}}>{guest.followup.resolutionNotes}</p>}</>}
+              {guest.collectionStatus === "missed" && (reviewing === guest.id ? <form onSubmit={event => { event.preventDefault(); void resolveFollowup(guest); }}>
+                <label>Why was feedback missed? Record follow-up outcome.<textarea required maxLength={2000} value={notes} disabled={saving} onChange={event => { setNotes(event.target.value); setResolutionRequest(crypto.randomUUID()); }}/></label>
+                <button className="button button-primary compact" disabled={saving || !notes.trim()}>{saving ? "Saving…" : "Save review"}</button>{" "}
+                <button type="button" className="button button-outline compact" disabled={saving} onClick={() => setReviewing(null)}>Cancel</button>
+              </form> : guest.canReviewFollowup ? <button className="button button-outline compact" onClick={() => { setReviewing(guest.id); setNotes(""); setResolutionRequest(crypto.randomUUID()); }}>Review missed feedback</button> : <small>Management or the assigned staff member must review this checkout.</small>)}
+            </td></tr>)}</tbody></table></div>
+        {!guests.length && <p>No guests match these filters.</p>}
       </>}
     </section>}
   </div>;

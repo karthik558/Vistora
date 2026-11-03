@@ -97,6 +97,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Follow-up queue", href: "/dashboard/follow-ups", group: "Guest experience", icon: History, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
+  { label: "Feedback already collected", href: "/dashboard/feedback-collected", group: "Guest experience", icon: Check, requiredRight: "view_feedback" },
   { label: "Guest invitations", href: "/dashboard/invitations", group: "Collection", icon: Send, requiredRight: "manage_questionnaire" },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText, requiredRight: "manage_questionnaire" },
   { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },

@@ -89,7 +89,7 @@ test("Guest link origins are identical during SSR and initial hydration", () => 
 });
 
 test("Feedback destinations share their data layout and retain per-page authorization", () => {
-  const rights = { overview: "view_feedback", feedback: "view_feedback", analytics: "view_feedback", directory: "view_feedback", complaints: "manage_complaints", forms: "manage_questionnaire", questionnaire: "manage_questionnaire", "qr-codes": "manage_questionnaire", invitations: "manage_questionnaire" };
+  const rights = { overview: "view_feedback", feedback: "view_feedback", analytics: "view_feedback", directory: "view_feedback", "feedback-collected": "view_feedback", complaints: "manage_complaints", forms: "manage_questionnaire", questionnaire: "manage_questionnaire", "qr-codes": "manage_questionnaire", invitations: "manage_questionnaire" };
   for (const [section, right] of Object.entries(rights)) {
     const page = read(`app/dashboard/(feedback)/${section}/page.tsx`);
     assert.ok(section === "overview" ? page.includes("feedbackSectionRights[section]") : page.includes(`requireFeedbackPage("${right}")`));

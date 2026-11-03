@@ -18,7 +18,14 @@ const rows = [
 ];
 function client() {
  const calls = [];
- return { calls, from(table) {
+ return { calls, async rpc(name, args) {
+   calls.push({rpc:name,args});
+   if (name !== 'feedback_collection_directory') return {data:'followup-job',error:null};
+   const user = db.workspaceUser();
+   const allowed = user.isOrganizationAdmin ? null : user.propertyIds;
+   const values = rows.filter(row => row.organization_id === user.organizationId && (!allowed || allowed.includes(row.property_id)) && (args.p_status === 'all' || args.p_status === 'pending' && row.status === 'active' && !row.feedback[0].count || args.p_status === 'collected' && row.feedback[0].count));
+   return {data:{success:true,guests:values.map(row=>({id:row.id,feedbackCount:row.feedback[0].count,guestName:user.isOrganizationAdmin || user.rights.includes('view_guest_pii') ? row.guests.full_name : 'Guest'})),canTakeFeedback:user.isOrganizationAdmin || user.rights.includes('view_guest_pii')},error:null};
+ }, from(table) {
    const filters = []; calls.push({ table, filters });
    let values = table === 'stays' ? rows : table === 'properties' ? [{ id: 'prop-1', organization_id: 'org-1', name: 'Hotel One', is_active: true }, { id: 'prop-2', organization_id: 'org-1', is_active: true }] : [];
    const data = () => values.filter(row => filters.every(([key, value]) => Array.isArray(value) ? value.includes(row[key]) : row[key] === value));
@@ -36,18 +43,18 @@ function client() {
 }
 const admin = { id: 'owner', organizationId: 'org-1', isOrganizationAdmin: true, fullName: 'Owner', email: 'owner@example.com', role: 'admin', rights: [] };
 const staff = { ...admin, id: 'staff', isOrganizationAdmin: false, role: 'staff', propertyIds: ['prop-1'], rights: ['module:feedback', 'module_access:configured', 'view_feedback', 'view_guest_pii'] };
-async function request(user, method = 'GET', body) {
+async function request(user, method = 'GET', body, params = '') {
  const mock = client(); const original = db.sessionDb; db.sessionDb = () => mock;
  try {
-   const response = await db.workspaceContext.run({ user, client: mock }, () => directory[method](new NextRequest('http://localhost/api/guest-directory', { method, ...(body ? { body: JSON.stringify(body) } : {}) })));
+   const response = await db.workspaceContext.run({ user, client: mock }, () => directory[method](new NextRequest('http://localhost/api/guest-directory' + params, { method, ...(body ? { body: JSON.stringify(body) } : {}) })));
    return { response, json: await response.json(), mock };
  } finally { db.sessionDb = original; }
 }
-test('Directory contains imported active stays before feedback, pages fully, and never exposes tokens', async () => {
+test('Directory defaults to uncollected stays and uses scoped collection RPC without exposing tokens', async () => {
  const { response, json } = await request(admin);
  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
- assert.deepEqual(json.guests.map(row => row.id), ['stay-1', 'stay-2']);
- assert.deepEqual(json.guests.map(row => row.feedbackCount), [0, 1]);
+ assert.deepEqual(json.guests.map(row => row.id), ['stay-1']);
+ assert.deepEqual(json.guests.map(row => row.feedbackCount), [0]);
  assert.ok(!JSON.stringify(json).includes('secret')); assert.ok(!JSON.stringify(json).includes('Outside'));
 });
 test('Directory enforces module, property and guest-data boundaries', async () => {
@@ -80,4 +87,14 @@ test('Public submission keeps canonical guest, room, property and stay identity;
    assert.equal((await submit({ publicToken: 'closed', propertyId: 'prop-1' })).status, 404);
    assert.equal(saved.length, 1);
  } finally { [db.serviceDb, service.createFeedback, audit.logAuditEvent, messaging.queueGuestMessage] = originals; }
+});
+
+test('Directory validates dates and collection states before database access', async () => {
+ for (const params of ['?day=2026-02-30', '?day=bad', '?day=2026-1-1', '?status=invalid']) {
+  const result = await request(admin, 'GET', undefined, params);
+  assert.equal(result.response.status, 400); assert.equal(result.mock.calls.length, 0);
+ }
+ const result = await request(admin, 'GET', undefined, '?day=2026-11-03&status=collected');
+ assert.deepEqual(result.mock.calls[0], {rpc:'feedback_collection_directory',args:{p_day:'2026-11-03',p_status:'collected'}});
+ assert.deepEqual(result.json.guests.map(row=>row.id), ['stay-2']);
 });

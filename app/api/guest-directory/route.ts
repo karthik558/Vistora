@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withWorkspace, text } from "../../../lib/platform/http";
 import { checked, PlatformError, workspaceDb, workspaceUser } from "../../../lib/platform/db";
 import { hasModuleAccess } from "../../../lib/auth/modules";
-import { pagedRows } from "../../../lib/platform/pagedRows";
-import { canTakeStayFeedback, type InHouseGuest } from "../../../lib/feedback/guest-directory";
+import { canTakeStayFeedback } from "../../../lib/feedback/guest-directory";
 import { logAuditEvent } from "../../../lib/services/auditLogService";
 
 function context() {
@@ -13,31 +12,30 @@ function context() {
   return { user, propertyIds, db: workspaceDb() };
 }
 const headers = { "Cache-Control": "private, no-store" };
-export const GET = withWorkspace(async () => {
-  const { user, propertyIds, db } = context();
+function rpcResult(result: { data: any; error: any }) {
+  if (["PGRST202", "42883"].includes(result.error?.code)) throw new PlatformError("Feedback collection setup is pending. Apply supabase/migrations/20261103_feedback_collection.sql.", 503);
+  return checked(result);
+}
+export const GET = withWorkspace(async (request: NextRequest) => {
+  const { propertyIds, db } = context();
+  const day = request.nextUrl.searchParams.get("day") || null;
+  const status = request.nextUrl.searchParams.get("status") || "pending";
+  if (day && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day)) throw new PlatformError("Choose a valid date.");
+  if (!["pending", "collected", "missed", "reviewed", "all"].includes(status)) throw new PlatformError("Choose a valid collection status.");
   if (propertyIds?.length === 0) return NextResponse.json({ success: true, guests: [], canTakeFeedback: false }, { headers });
-  let query = db.from("stays")
-    .select("id,property_id,room_number,check_in_date,check_out_date,guests(full_name),properties(name),feedback(count)")
-    .eq("organization_id", user.organizationId).eq("status", "active")
-    .order("room_number").order("id");
-  if (propertyIds) query = query.in("property_id", propertyIds);
-  const rows = await pagedRows<any>(query);
-  const guests: InHouseGuest[] = rows.map(row => {
-    const guest = Array.isArray(row.guests) ? row.guests[0] : row.guests;
-    const property = Array.isArray(row.properties) ? row.properties[0] : row.properties;
-    return { id: row.id, propertyId: row.property_id, propertyName: property?.name || "Property",
-      guestName: canTakeStayFeedback(user) ? guest?.full_name || "Guest" : "Guest", roomNumber: row.room_number,
-      checkIn: row.check_in_date, checkOut: row.check_out_date,
-      feedbackCount: row.feedback?.[0]?.count || 0 };
-  });
-  return NextResponse.json({ success: true, guests, canTakeFeedback: canTakeStayFeedback(user) }, { headers });
+  const result = rpcResult(await db.rpc("feedback_collection_directory", { p_day: day, p_status: status }));
+  return NextResponse.json(result, { headers });
 }, "view_feedback");
 
 export const POST = withWorkspace(async (request: NextRequest) => {
   const { user, propertyIds, db } = context();
-  if (!canTakeStayFeedback(user) || propertyIds?.length === 0) throw new PlatformError("Guest-data access is required to open a guest's feedback link.", 403);
   const body = await request.json();
   const stayId = text(body.stayId, "Stay", 36);
+  if (body.action === "followup") {
+    const jobId = rpcResult(await db.rpc("feedback_checkout_followup", { p_stay: stayId }));
+    return NextResponse.json({ success: true, jobId }, { headers });
+  }
+  if (!canTakeStayFeedback(user) || propertyIds?.length === 0) throw new PlatformError("Guest-data access is required to open a guest's feedback link.", 403);
   let query = db.from("stays").select("id,public_token,properties(is_active)")
     .eq("id", stayId).eq("organization_id", user.organizationId).eq("status", "active");
   if (propertyIds) query = query.in("property_id", propertyIds);

@@ -105,7 +105,7 @@ export default function OperationsPage({
       isSectionAuthorized = userRights.has("manage_questionnaire");
     } else if (section === "complaints") {
       isSectionAuthorized = userRights.has("manage_complaints");
-    } else if (section === "feedback" || section === "directory" || section === "analytics") {
+    } else if (section === "feedback" || section === "directory" || section === "feedback-collected" || section === "analytics") {
       isSectionAuthorized = userRights.has("view_feedback");
     }
   }
@@ -149,6 +149,8 @@ export default function OperationsPage({
       ? "All guest feedback"
       : section === "analytics"
       ? "Analytics"
+      : section === "feedback-collected"
+      ? "Feedback already collected"
       : section === "directory"
       ? "Guest directory"
       : section === "questionnaire"
@@ -177,6 +179,8 @@ export default function OperationsPage({
       ? "All feedback"
       : section === "analytics"
       ? "Analytics"
+      : section === "feedback-collected"
+      ? "Feedback already collected"
       : section === "directory"
       ? "Guest directory"
       : section === "questionnaire"
@@ -203,7 +207,7 @@ export default function OperationsPage({
           </div>
         ) : (
           <>
-            {section !== "directory" && (
+            {section !== "directory" && section !== "feedback-collected" && (
               <div className="page-heading">
                 <div>
                   <p className="eyebrow">Guest experience operations</p>
@@ -279,8 +283,8 @@ export default function OperationsPage({
               dateFilter={dateFilter}
               filteredFeedback={feedback}
             />
-          ) : section === "directory" ? (
-            user && <GuestDirectory user={user} properties={data.properties} history={<Directory data={data} query={query} setQuery={setQuery} canInvite={user.isOrganizationAdmin===true||user.rights?.includes("manage_questionnaire")===true} />}/>
+          ) : (section === "directory" || section === "feedback-collected") ? (
+            user && <GuestDirectory initialView={section === "feedback-collected" ? "collected" : "pending"} user={user} properties={data.properties} history={<Directory data={data} query={query} setQuery={setQuery} canInvite={user.isOrganizationAdmin===true||user.rights?.includes("manage_questionnaire")===true} />}/>
           ) : section === "forms" ? (
             <Forms />
           ) : section === "questionnaire" ? (

@@ -19,7 +19,7 @@ const FeedbackContext = createContext<{ data: DashboardData; user: WorkspaceUser
 
 const labels: Record<string, string> = {
   insights: "Analytics", "follow-ups": "Follow-up queue", overview: "Dashboard", feedback: "All feedback", analytics: "Analytics",
-  complaints: "Complaints & SLA", directory: "Guest directory", forms: "Feedback forms",
+  complaints: "Complaints & SLA", directory: "Guest directory", "feedback-collected": "Feedback already collected", forms: "Feedback forms",
   questionnaire: "Questionnaire", "qr-codes": "QR codes",
   invitations: "Guest invitations", "audit-log": "Audit log", reports: "Reports",
 };
