@@ -12,6 +12,7 @@ export interface ImportedGuestRecord {
   preferences?: string;
   property_id?: string;
   property_name?: string;
+  status?: "active" | "reserved" | string;
 }
 
 export function detectDelimiter(headerLine: string): string {

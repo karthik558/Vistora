@@ -394,6 +394,71 @@ test('Daily import API enforces property scoping and authorization', async () =>
    }))
   );
   assert.equal(noRight.status, 403);
+
+  // 3. Single property import strictly scopes stays to the selected property
+  const insertedStays = [];
+  const insertedRooms = [];
+  const trackClient = {
+   from(table) {
+    const q = {
+     select() { return q; },
+     in() { return q; },
+     eq() { return q; },
+     single() {
+      if (table === 'stays') return Promise.resolve({ data: { id: 's-1', property_id: 'prop-1' }, error: null });
+      if (table === 'guests') return Promise.resolve({ data: { id: 'g-1', full_name: 'Test' }, error: null });
+      if (table === 'hotel_rooms') return Promise.resolve({ data: { id: 'r-1', property_id: 'prop-1', room_number: '105' }, error: null });
+      return Promise.resolve({ data: {}, error: null });
+     },
+     insert(val) {
+      if (table === 'stays') insertedStays.push(val);
+      if (table === 'guests') return { select: () => ({ single: () => Promise.resolve({ data: { id: 'g-1', full_name: val.full_name }, error: null }) }) };
+      if (table === 'hotel_rooms') insertedRooms.push(val);
+      return q;
+     },
+     upsert(val) {
+      if (table === 'hotel_rooms') insertedRooms.push(val);
+      return { select: () => ({ single: () => Promise.resolve({ data: { id: 'r-1', property_id: val.property_id, room_number: val.room_number }, error: null }) }) };
+     },
+     then(resolve) {
+      if (table === 'properties') resolve({ data: [{ id: 'prop-1', name: 'Hotel One', is_active: true }, { id: 'prop-2', name: 'Hotel Two', is_active: true }], error: null });
+      else if (table === 'guests') resolve({ data: [], error: null });
+      else if (table === 'hotel_rooms') resolve({ data: [], error: null });
+      else if (table === 'stays') resolve({ data: [], error: null });
+      else resolve({ data: [], error: null });
+     }
+    };
+    return q;
+   }
+  };
+
+  const adminUser = { id: 'admin', fullName: 'Admin', email: 'admin@example.com', role: 'admin', organizationId: 'org', isOrganizationAdmin: true, rights: ['module:hospitality'] };
+  db.sessionDb = () => trackClient;
+  const singlePropRes = await db.workspaceContext.run({ user: adminUser, client: trackClient }, () =>
+   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
+    method: 'POST',
+    body: JSON.stringify({ property_ids: ['prop-1'], records: [{ guest_name: 'Single Prop Guest', room_number: '105' }] })
+   }))
+  );
+  if (singlePropRes.status !== 200) {
+    const err = await singlePropRes.json();
+    throw new Error('singlePropRes failed with: ' + JSON.stringify(err));
+  }
+  assert.equal(singlePropRes.status, 200);
+  assert.equal(insertedStays.length, 1);
+  assert.equal(insertedStays[0].property_id, 'prop-1');
+
+  // 4. Multi-property import allocates to all selected properties
+  insertedStays.length = 0;
+  const multiPropRes = await db.workspaceContext.run({ user: adminUser, client: trackClient }, () =>
+   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
+    method: 'POST',
+    body: JSON.stringify({ property_ids: ['prop-1', 'prop-2'], records: [{ guest_name: 'Multi Prop Guest', room_number: '202' }] })
+   }))
+  );
+  assert.equal(multiPropRes.status, 200);
+  assert.equal(insertedStays.length, 2);
+  assert.deepEqual(insertedStays.map(s => s.property_id).sort(), ['prop-1', 'prop-2']);
  } finally {
   db.sessionDb = original;
  }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, ChangeEvent, FormEvent } from "react";
+import { useState, useRef, useMemo, useEffect, ChangeEvent, FormEvent } from "react";
 import {
   X,
   Upload,
@@ -13,8 +13,9 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-  HelpCircle,
   AlertTriangle,
+  UserPlus,
+  Check,
 } from "lucide-react";
 import WorkspaceSelect from "./WorkspaceSelect";
 import WorkspaceDateField from "./WorkspaceDateField";
@@ -29,12 +30,24 @@ Aarav Sharma,aarav.sharma@example.com,+91 98765 43210,101,Standard Room,${new Da
 Priya Patel,priya.patel@acme-corp.com,+91 91234 56789,204,Deluxe Room,${new Date().toISOString().slice(0, 10)},${new Date(Date.now() + 86400000 * 4).toISOString().slice(0, 10)},1,Standard,Quiet room away from elevator
 Vikram Malhotra,v.malhotra@techventures.io,+91 98111 22334,305,Executive Suite,${new Date().toISOString().slice(0, 10)},${new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10)},2,NC / Complimentary,VIP management courtesy amenity`;
 
+interface DirectoryGuest {
+  id: string;
+  full_name: string;
+  email?: string;
+  phone?: string;
+  vip_tier?: string;
+  preferences?: string;
+}
+
 interface DailyImportModalProps {
   open: boolean;
   onClose: () => void;
   properties: { id: string; name: string; is_active?: boolean }[];
   user: WorkspaceUser;
   onImportCompleted?: () => void;
+  initialTab?: "file" | "manual";
+  initialPropertyId?: string;
+  directoryGuests?: DirectoryGuest[];
 }
 
 export default function DailyImportModal({
@@ -43,8 +56,11 @@ export default function DailyImportModal({
   properties = [],
   user,
   onImportCompleted,
+  initialTab = "file",
+  initialPropertyId,
+  directoryGuests = [],
 }: DailyImportModalProps) {
-  // Determine user property scope
+  // Determine authorized properties for the logged-in user
   const allowedProperties = useMemo(() => {
     if (!properties || properties.length === 0) return [];
     if (user.isOrganizationAdmin) return properties.filter((p) => p.is_active !== false);
@@ -55,22 +71,32 @@ export default function DailyImportModal({
     return properties.filter((p) => p.is_active !== false && userPropIds.includes(p.id));
   }, [properties, user]);
 
-  const hasSingleProperty = allowedProperties.length === 1;
+  const hasSingleProperty = allowedProperties.length <= 1;
 
   // Selected property IDs for import
   const [selectedPropIds, setSelectedPropIds] = useState<string[]>(() => {
-    if (hasSingleProperty && allowedProperties[0]) return [allowedProperties[0].id];
+    if (initialPropertyId && allowedProperties.some((p) => p.id === initialPropertyId)) {
+      return [initialPropertyId];
+    }
     return allowedProperties[0] ? [allowedProperties[0].id] : [];
   });
 
-  // Track mode: file upload or manual/NC entry
-  const [activeTab, setActiveTab] = useState<"file" | "manual">("file");
+  // Multi-property toggle state
+  const [isMultiPropertyMode, setIsMultiPropertyMode] = useState(false);
+  const [multiPropertyConfirmed, setMultiPropertyConfirmed] = useState(false);
 
-  // Records queue for import
+  // Active tab: file upload or manual/NC entry
+  const [activeTab, setActiveTab] = useState<"file" | "manual">(initialTab);
+
+  // Records queue for batch import
   const [records, setRecords] = useState<ImportedGuestRecord[]>([]);
   const [fileName, setFileName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Quick Add Mode: new vs from directory
+  const [quickMode, setQuickMode] = useState<"new" | "directory">("new");
+  const [selectedDirectoryId, setSelectedDirectoryId] = useState("");
 
   // Manual guest entry state
   const [manualName, setManualName] = useState("");
@@ -81,18 +107,69 @@ export default function DailyImportModal({
     new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10)
   );
   const [manualTier, setManualTier] = useState("Standard");
+  const [manualStatus, setManualStatus] = useState<"active" | "reserved">("active");
   const [manualEmail, setManualEmail] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [manualCount, setManualCount] = useState(1);
   const [manualPref, setManualPref] = useState("");
 
-  // Status & communication
+  // Status & feedback
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resultNotice, setResultNotice] = useState<any>(null);
-  const [multiPropertyConfirmed, setMultiPropertyConfirmed] = useState(false);
 
-  // Reset when dialog opens/closes
+  // Sync state whenever modal opens
+  useEffect(() => {
+    if (open) {
+      if (initialTab) setActiveTab(initialTab);
+      if (initialPropertyId && allowedProperties.some((p) => p.id === initialPropertyId)) {
+        setSelectedPropIds([initialPropertyId]);
+        setIsMultiPropertyMode(false);
+      } else if (allowedProperties.length > 0 && selectedPropIds.length === 0) {
+        setSelectedPropIds([allowedProperties[0].id]);
+      }
+      setMultiPropertyConfirmed(false);
+      setError("");
+      setResultNotice(null);
+    }
+  }, [open, initialTab, initialPropertyId, allowedProperties]);
+
+  // Handle single vs multi-property selection
+  const handleSelectProperty = (propId: string) => {
+    if (hasSingleProperty) return;
+    setError("");
+    if (!isMultiPropertyMode) {
+      // In single property mode, clicking a property button selects ONLY that property
+      setSelectedPropIds([propId]);
+      setMultiPropertyConfirmed(false);
+    } else {
+      // In multi-property mode, clicking toggles inclusion
+      setSelectedPropIds((prev) => {
+        if (prev.includes(propId)) {
+          if (prev.length === 1) return prev; // keep at least one
+          return prev.filter((id) => id !== propId);
+        } else {
+          return [...prev, propId];
+        }
+      });
+    }
+  };
+
+  const handleToggleMultiMode = (enabled: boolean) => {
+    setIsMultiPropertyMode(enabled);
+    setMultiPropertyConfirmed(false);
+    if (!enabled && selectedPropIds.length > 1) {
+      setSelectedPropIds([selectedPropIds[0]]);
+    }
+  };
+
+  const handleSelectAllProperties = () => {
+    setSelectedPropIds(allowedProperties.map((p) => p.id));
+  };
+
+  const isMultiPropertySelected = selectedPropIds.length > 1;
+
+  // Reset when dialog closes
   const handleClose = () => {
     setError("");
     setResultNotice(null);
@@ -160,13 +237,30 @@ export default function DailyImportModal({
     if (file) processFile(file);
   };
 
-  const handleAddManualRecord = (e: FormEvent) => {
-    e.preventDefault();
-    if (!manualName.trim() || !manualRoom.trim()) {
-      setError("Guest name and room number are required.");
-      return;
+  // Populate from directory guest
+  const handleDirectoryGuestSelect = (guestId: string) => {
+    setSelectedDirectoryId(guestId);
+    const found = directoryGuests.find((g) => g.id === guestId);
+    if (found) {
+      setManualName(found.full_name || "");
+      if (found.email) setManualEmail(found.email);
+      if (found.phone) setManualPhone(found.phone);
+      if (found.vip_tier) setManualTier(found.vip_tier);
+      if (found.preferences) setManualPref(found.preferences);
     }
-    const newRec: ImportedGuestRecord = {
+  };
+
+  // Build current manual record
+  const buildCurrentManualRecord = (): ImportedGuestRecord | null => {
+    if (!manualName.trim()) {
+      setError("Guest name is required.");
+      return null;
+    }
+    if (!manualRoom.trim()) {
+      setError("Room number is required.");
+      return null;
+    }
+    return {
       id: "manual-" + Math.random().toString(36).slice(2, 8),
       guest_name: manualName.trim(),
       email: manualEmail.trim() || undefined,
@@ -178,13 +272,21 @@ export default function DailyImportModal({
       guest_count: Number(manualCount) || 1,
       vip_tier: manualTier,
       preferences: manualPref.trim() || undefined,
+      status: manualStatus,
     };
+  };
+
+  const handleAddManualRecord = (e: FormEvent) => {
+    e.preventDefault();
+    const newRec = buildCurrentManualRecord();
+    if (!newRec) return;
     setRecords((prev) => [newRec, ...prev]);
     setManualName("");
     setManualRoom("");
     setManualEmail("");
     setManualPhone("");
     setManualPref("");
+    setSelectedDirectoryId("");
     setError("");
   };
 
@@ -193,23 +295,9 @@ export default function DailyImportModal({
     setRecords((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const handleToggleProperty = (propId: string) => {
-    if (hasSingleProperty) return; // Locked to single property
-    setError("");
-    setSelectedPropIds((prev) => {
-      if (prev.includes(propId)) {
-        if (prev.length === 1) return prev; // Keep at least one
-        return prev.filter((id) => id !== propId);
-      } else {
-        return [...prev, propId];
-      }
-    });
-  };
-
-  const isMultiPropertySelected = selectedPropIds.length > 1;
-
-  const handleExecuteImport = async () => {
-    if (records.length === 0) {
+  // Core execution engine
+  const executeImport = async (recordsToImport: ImportedGuestRecord[]) => {
+    if (recordsToImport.length === 0) {
       setError("Please add or upload guest records before importing.");
       return;
     }
@@ -217,10 +305,8 @@ export default function DailyImportModal({
       setError("Please choose a destination property.");
       return;
     }
-
-    // Multi-property confirmation check
     if (isMultiPropertySelected && !multiPropertyConfirmed) {
-      setError("Please confirm the multi-property reminder below before importing.");
+      setError("Please confirm the multi-property reminder before proceeding.");
       return;
     }
 
@@ -232,7 +318,7 @@ export default function DailyImportModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           property_ids: selectedPropIds,
-          records: records.map((r) => ({
+          records: recordsToImport.map((r) => ({
             guest_name: r.guest_name,
             email: r.email,
             phone: r.phone,
@@ -243,6 +329,7 @@ export default function DailyImportModal({
             guest_count: r.guest_count,
             vip_tier: r.vip_tier,
             preferences: r.preferences,
+            status: r.status,
           })),
         }),
       });
@@ -260,6 +347,24 @@ export default function DailyImportModal({
       setBusy(false);
     }
   };
+
+  // Direct 1-click check in from Quick Add form
+  const handleQuickAddInstantSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const rec = buildCurrentManualRecord();
+    if (!rec) return;
+    await executeImport([rec]);
+  };
+
+  // Batch import trigger
+  const handleExecuteImport = () => {
+    executeImport(records);
+  };
+
+  const selectedPropertyNames = selectedPropIds
+    .map((id) => allowedProperties.find((p) => p.id === id)?.name)
+    .filter(Boolean)
+    .join(" and ");
 
   if (!open) return null;
 
@@ -287,7 +392,7 @@ export default function DailyImportModal({
           border: "1px solid var(--line)",
           borderRadius: "8px",
           width: "100%",
-          maxWidth: "780px",
+          maxWidth: "800px",
           padding: "24px",
           boxShadow: "0 24px 54px rgba(0,0,0,0.22)",
           maxHeight: "92vh",
@@ -307,10 +412,12 @@ export default function DailyImportModal({
         >
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "18px", color: "var(--ink)" }}>
-              Import for the day
+              {activeTab === "manual" ? "Quick Add & Check In Guest" : "Daily Guest Arrivals Import"}
             </h3>
             <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>
-              Upload daily guest arrivals and stays in CSV or Excel format with smart profile deduplication.
+              {activeTab === "manual"
+                ? "Instantly check in or reserve a guest, VIP, or NC / complimentary house guest."
+                : "Upload daily guest arrivals and stays in CSV or Excel format with smart profile deduplication."}
             </p>
           </div>
           <button
@@ -349,10 +456,10 @@ export default function DailyImportModal({
               <CheckCircle2 size={28} />
             </div>
             <h4 style={{ margin: "0 0 8px 0", fontSize: "17px", color: "var(--ink)" }}>
-              Import Completed Successfully
+              {resultNotice.message || "Guest Stays Successfully Processed"}
             </h4>
             <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: "var(--muted)" }}>
-              {resultNotice.message || "Guest stays and profiles have been scheduled."}
+              Target property: <strong>{selectedPropertyNames}</strong>
             </p>
 
             <div
@@ -380,8 +487,10 @@ export default function DailyImportModal({
                 <strong>{resultNotice.imported?.guestsReused || 0}</strong>
               </article>
               <article className="platform-stat">
-                <span>Stays created</span>
-                <strong>{resultNotice.imported?.staysCreated || 0}</strong>
+                <span>Stays processed</span>
+                <strong>
+                  {(resultNotice.imported?.staysCreated || 0) + (resultNotice.imported?.staysUpdated || 0)}
+                </strong>
               </article>
               <article className="platform-stat">
                 <span>Rooms configured</span>
@@ -423,16 +532,28 @@ export default function DailyImportModal({
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <Building2 size={15} style={{ color: "var(--muted)" }} />
                   <strong style={{ fontSize: "13px", color: "var(--ink)" }}>
-                    Target Property Allocation
+                    Target Property
                   </strong>
                 </div>
-                <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                  {user.isOrganizationAdmin
-                    ? "Super Admin access (all properties available)"
-                    : hasSingleProperty
-                    ? "Single property right assigned"
-                    : `${allowedProperties.length} authorized properties`}
-                </span>
+                {!hasSingleProperty && (
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isMultiPropertyMode}
+                      onChange={(e) => handleToggleMultiMode(e.target.checked)}
+                    />
+                    <span>Import to multiple properties</span>
+                  </label>
+                )}
               </div>
 
               {hasSingleProperty ? (
@@ -448,45 +569,79 @@ export default function DailyImportModal({
                     fontSize: "12px",
                   }}
                 >
-                  <span style={{ color: "var(--sage-deep)", fontWeight: 600 }}>● Locked:</span>
+                  <span style={{ color: "var(--sage-deep)", fontWeight: 600 }}>● Active Property:</span>
                   <strong>{allowedProperties[0]?.name}</strong>
                   <span style={{ color: "var(--muted)", marginLeft: "auto", fontSize: "11px" }}>
-                    Import automatically assigned to your assigned property
+                    Scoped strictly to your assigned property
                   </span>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  {allowedProperties.map((prop) => {
-                    const isSelected = selectedPropIds.includes(prop.id);
-                    return (
-                      <button
-                        key={prop.id}
-                        type="button"
-                        onClick={() => handleToggleProperty(prop.id)}
-                        className={`button ${isSelected ? "button-dark" : "button-outline"} compact`}
-                        style={{
-                          fontSize: "12px",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <span
+                <div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+                    {allowedProperties.map((prop) => {
+                      const isSelected = selectedPropIds.includes(prop.id);
+                      return (
+                        <button
+                          key={prop.id}
+                          type="button"
+                          onClick={() => handleSelectProperty(prop.id)}
+                          className={`button ${isSelected ? "button-dark" : "button-outline"} compact`}
                           style={{
-                            width: "8px",
-                            height: "8px",
-                            borderRadius: "50%",
-                            background: isSelected ? "#ffffff" : "var(--muted)",
+                            fontSize: "12px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
                           }}
-                        />
-                        <span>{prop.name}</span>
+                        >
+                          <span
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              background: isSelected ? "#ffffff" : "var(--muted)",
+                            }}
+                          />
+                          <span>{prop.name}</span>
+                          {isSelected && !isMultiPropertyMode && (
+                            <Check size={12} style={{ marginLeft: "2px" }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                    {isMultiPropertyMode && (
+                      <button
+                        type="button"
+                        className="button button-ghost compact"
+                        onClick={handleSelectAllProperties}
+                        style={{ fontSize: "11px", color: "var(--muted)" }}
+                      >
+                        Select All ({allowedProperties.length})
                       </button>
-                    );
-                  })}
+                    )}
+                  </div>
+
+                  {/* Scoping Confirmation Indicator */}
+                  {!isMultiPropertySelected && selectedPropIds.length === 1 && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        fontSize: "11px",
+                        color: "var(--sage-deep)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <CheckCircle2 size={12} />
+                      <span>
+                        Import target locked: <strong>{selectedPropertyNames}</strong> (Only this property will receive the imported stays).
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Multi-Property Allocation Reminder (as explicitly requested) */}
+              {/* Multi-Property Allocation Reminder */}
               {isMultiPropertySelected && (
                 <div
                   style={{
@@ -505,13 +660,7 @@ export default function DailyImportModal({
                     <strong>Multi-Property Import Notice:</strong>
                     <p style={{ margin: "3px 0 6px 0", lineHeight: 1.4 }}>
                       Are you sure you want to import to both{" "}
-                      <strong>
-                        {selectedPropIds
-                          .map((id) => allowedProperties.find((p) => p.id === id)?.name)
-                          .filter(Boolean)
-                          .join(" and ")}
-                      </strong>
-                      ? Stays in your report will be allocated across these properties. Please verify before proceeding.
+                      <strong>{selectedPropertyNames}</strong>? Stays will be allocated across these properties. Please verify before proceeding.
                     </p>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontWeight: 600 }}>
                       <input
@@ -556,6 +705,15 @@ export default function DailyImportModal({
               <nav className="platform-tabs" style={{ borderBottom: "none", margin: 0, padding: 0 }}>
                 <button
                   type="button"
+                  aria-current={activeTab === "manual" ? "page" : undefined}
+                  onClick={() => setActiveTab("manual")}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <UserPlus size={13} />
+                  <span>Quick Add &amp; Check-In / NC Guest</span>
+                </button>
+                <button
+                  type="button"
                   aria-current={activeTab === "file" ? "page" : undefined}
                   onClick={() => setActiveTab("file")}
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -563,30 +721,243 @@ export default function DailyImportModal({
                   <FileSpreadsheet size={13} />
                   <span>Upload Report (.CSV / Excel)</span>
                 </button>
-                <button
-                  type="button"
-                  aria-current={activeTab === "manual" ? "page" : undefined}
-                  onClick={() => setActiveTab("manual")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-                >
-                  <Plus size={13} />
-                  <span>Quick Add / NC Guests</span>
-                </button>
               </nav>
 
-              <button
-                type="button"
-                className="button button-ghost compact"
-                onClick={handleDownloadTemplate}
-                style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
-                title="Download default CSV template"
-              >
-                <Download size={13} />
-                <span>Download Template (.CSV)</span>
-              </button>
+              {activeTab === "file" && (
+                <button
+                  type="button"
+                  className="button button-ghost compact"
+                  onClick={handleDownloadTemplate}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px" }}
+                  title="Download default CSV template"
+                >
+                  <Download size={13} />
+                  <span>Download Template (.CSV)</span>
+                </button>
+              )}
             </div>
 
-            {/* TAB 1: File Upload */}
+            {/* TAB 1: Quick Add & Check-In / NC Guest Entry */}
+            {activeTab === "manual" && (
+              <form
+                onSubmit={handleQuickAddInstantSubmit}
+                className="platform-fields"
+                style={{
+                  padding: "16px",
+                  background: "var(--canvas)",
+                  borderRadius: "6px",
+                  border: "1px solid var(--line)",
+                  marginBottom: "16px",
+                }}
+              >
+                {/* Mode Selector if directory guests exist */}
+                {directoryGuests.length > 0 && (
+                  <div
+                    className="hotel-wide-field"
+                    style={{ display: "flex", gap: "8px", marginBottom: "6px" }}
+                  >
+                    <button
+                      type="button"
+                      className={`button ${quickMode === "new" ? "button-dark" : "button-outline"} compact`}
+                      onClick={() => {
+                        setQuickMode("new");
+                        setSelectedDirectoryId("");
+                      }}
+                      style={{ fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                    >
+                      <Plus size={13} />
+                      <span>New Guest</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`button ${quickMode === "directory" ? "button-dark" : "button-outline"} compact`}
+                      onClick={() => setQuickMode("directory")}
+                      style={{ fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                    >
+                      <Users size={13} />
+                      <span>Choose from Central Directory ({directoryGuests.length})</span>
+                    </button>
+                  </div>
+                )}
+
+                {quickMode === "directory" && directoryGuests.length > 0 && (
+                  <label className="hotel-wide-field">
+                    Existing guest profile
+                    <WorkspaceSelect
+                      label="Select existing guest"
+                      value={selectedDirectoryId}
+                      onChange={handleDirectoryGuestSelect}
+                      options={directoryGuests.map((g) => ({
+                        value: g.id,
+                        label: `${g.full_name}${g.vip_tier && g.vip_tier !== "Standard" ? ` · ${g.vip_tier}` : ""}${g.phone ? ` · ${g.phone}` : ""}`,
+                      }))}
+                    />
+                  </label>
+                )}
+
+                <label>
+                  Guest name *
+                  <input
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    placeholder="e.g. Eleanor Vance"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Room number *
+                  <input
+                    value={manualRoom}
+                    onChange={(e) => setManualRoom(e.target.value)}
+                    placeholder="e.g. 101, 204, Suite A"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Guest tier
+                  <WorkspaceSelect
+                    label="Guest tier"
+                    value={manualTier}
+                    onChange={setManualTier}
+                    options={[
+                      { value: "Standard", label: "Standard" },
+                      { value: "VIP", label: "VIP" },
+                      { value: "Returning", label: "Returning" },
+                      { value: "NC / Complimentary", label: "NC / Complimentary (House Guest)" },
+                      { value: "Corporate", label: "Corporate" },
+                      { value: "Long Stay", label: "Long Stay" },
+                    ]}
+                  />
+                </label>
+
+                <label>
+                  Stay status
+                  <WorkspaceSelect
+                    label="Stay status"
+                    value={manualStatus}
+                    onChange={(v: string) => setManualStatus(v as "active" | "reserved")}
+                    options={[
+                      { value: "active", label: "Check in immediately (In-House Guest)" },
+                      { value: "reserved", label: "Upcoming Reservation" },
+                    ]}
+                  />
+                </label>
+
+                <label>
+                  Room type
+                  <input
+                    value={manualRoomType}
+                    onChange={(e) => setManualRoomType(e.target.value)}
+                    placeholder="e.g. Deluxe, Executive Suite"
+                  />
+                </label>
+
+                <label>
+                  Number of guests
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={manualCount}
+                    onChange={(e) => setManualCount(Number(e.target.value))}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Arrival date
+                  <WorkspaceDateField
+                    label="Arrival date"
+                    value={manualCheckIn}
+                    onChange={setManualCheckIn}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Departure date
+                  <WorkspaceDateField
+                    label="Departure date"
+                    value={manualCheckOut}
+                    onChange={setManualCheckOut}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Email · optional
+                  <input
+                    type="email"
+                    value={manualEmail}
+                    onChange={(e) => setManualEmail(e.target.value)}
+                    placeholder="guest@example.com"
+                  />
+                </label>
+
+                <label>
+                  Phone · optional
+                  <input
+                    value={manualPhone}
+                    onChange={(e) => setManualPhone(e.target.value)}
+                    placeholder="+1 555-0199"
+                  />
+                </label>
+
+                <label className="hotel-wide-field">
+                  Special preferences / NC instructions
+                  <input
+                    value={manualPref}
+                    onChange={(e) => setManualPref(e.target.value)}
+                    placeholder="e.g. Complimentary fruit basket, late check-out, high floor"
+                  />
+                </label>
+
+                <div
+                  style={{
+                    gridColumn: "span 2",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: "8px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="button button-outline compact"
+                    onClick={handleAddManualRecord}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                  >
+                    <Plus size={13} />
+                    <span>+ Add to Batch Queue</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="button button-dark compact"
+                    disabled={busy || (isMultiPropertySelected && !multiPropertyConfirmed)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  >
+                    {busy ? (
+                      <>
+                        <RefreshCw size={13} className="spin" />
+                        <span>Saving…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={13} />
+                        <span>
+                          {manualStatus === "active" ? "Check In Guest Now" : "Confirm Reservation"}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: File Upload */}
             {activeTab === "file" && (
               <div>
                 <div
@@ -629,113 +1000,6 @@ export default function DailyImportModal({
               </div>
             )}
 
-            {/* TAB 2: Manual / NC Guest Quick Entry */}
-            {activeTab === "manual" && (
-              <form
-                onSubmit={handleAddManualRecord}
-                className="platform-fields"
-                style={{
-                  padding: "16px",
-                  background: "var(--canvas)",
-                  borderRadius: "6px",
-                  border: "1px solid var(--line)",
-                  marginBottom: "16px",
-                }}
-              >
-                <label>
-                  Guest name *
-                  <input
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                    placeholder="e.g. Eleanor Vance"
-                    required
-                  />
-                </label>
-                <label>
-                  Room number *
-                  <input
-                    value={manualRoom}
-                    onChange={(e) => setManualRoom(e.target.value)}
-                    placeholder="e.g. 101, 204, Suite A"
-                    required
-                  />
-                </label>
-                <label>
-                  Guest tier
-                  <WorkspaceSelect
-                    label="Guest tier"
-                    value={manualTier}
-                    onChange={setManualTier}
-                    options={[
-                      { value: "Standard", label: "Standard" },
-                      { value: "VIP", label: "VIP" },
-                      { value: "Returning", label: "Returning" },
-                      { value: "NC / Complimentary", label: "NC / Complimentary (House Guest)" },
-                      { value: "Corporate", label: "Corporate" },
-                      { value: "Long Stay", label: "Long Stay" },
-                    ]}
-                  />
-                </label>
-                <label>
-                  Room type
-                  <input
-                    value={manualRoomType}
-                    onChange={(e) => setManualRoomType(e.target.value)}
-                    placeholder="e.g. Deluxe, Executive Suite"
-                  />
-                </label>
-                <label>
-                  Arrival date
-                  <WorkspaceDateField
-                    label="Arrival date"
-                    value={manualCheckIn}
-                    onChange={setManualCheckIn}
-                    required
-                  />
-                </label>
-                <label>
-                  Departure date
-                  <WorkspaceDateField
-                    label="Departure date"
-                    value={manualCheckOut}
-                    onChange={setManualCheckOut}
-                    required
-                  />
-                </label>
-                <label>
-                  Email · optional
-                  <input
-                    type="email"
-                    value={manualEmail}
-                    onChange={(e) => setManualEmail(e.target.value)}
-                    placeholder="guest@example.com"
-                  />
-                </label>
-                <label>
-                  Phone · optional
-                  <input
-                    value={manualPhone}
-                    onChange={(e) => setManualPhone(e.target.value)}
-                    placeholder="+1 555-0199"
-                  />
-                </label>
-                <label className="hotel-wide-field">
-                  Special preferences / NC instructions
-                  <input
-                    value={manualPref}
-                    onChange={(e) => setManualPref(e.target.value)}
-                    placeholder="e.g. Complimentary fruit basket, VIP airport transfer, late check-out"
-                  />
-                </label>
-                <div style={{ gridColumn: "span 2", display: "flex", justifyContent: "flex-end" }}>
-                  <button type="submit" className="button button-outline compact" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                    <Plus size={13} />
-                    <span>+ Add to Import Batch</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
             {/* Smart Deduplication Information Pill */}
             <div
               style={{
@@ -765,7 +1029,7 @@ export default function DailyImportModal({
                   }}
                 >
                   <strong style={{ fontSize: "13px", color: "var(--ink)" }}>
-                    Ready for Import ({records.length} guest{records.length === 1 ? "" : "s"})
+                    Batch Queue ({records.length} guest{records.length === 1 ? "" : "s"})
                   </strong>
                   <button
                     type="button"
@@ -878,27 +1142,29 @@ export default function DailyImportModal({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="button button-dark"
-                onClick={handleExecuteImport}
-                disabled={busy || records.length === 0 || (isMultiPropertySelected && !multiPropertyConfirmed)}
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-              >
-                {busy ? (
-                  <>
-                    <RefreshCw size={14} className="spin" />
-                    <span>Processing daily import…</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={14} />
-                    <span>
-                      Import {records.length > 0 ? `${records.length} Records` : "for the Day"}
-                    </span>
-                  </>
-                )}
-              </button>
+              {records.length > 0 && (
+                <button
+                  type="button"
+                  className="button button-dark"
+                  onClick={handleExecuteImport}
+                  disabled={busy || records.length === 0 || (isMultiPropertySelected && !multiPropertyConfirmed)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  {busy ? (
+                    <>
+                      <RefreshCw size={14} className="spin" />
+                      <span>Processing batch import…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      <span>
+                        Import {records.length} Queued Records
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </>
         )}

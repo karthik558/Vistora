@@ -60,7 +60,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
   if (!dbProps || dbProps.length === 0) {
     throw new PlatformError("None of the selected properties were found.");
   }
-  const activeProps = dbProps.filter((p: any) => p.is_active);
+  const activeProps = dbProps.filter((p: any) => p.is_active && targetPropertyIds.includes(p.id));
   if (activeProps.length === 0) {
     throw new PlatformError("All selected properties are inactive.");
   }
@@ -129,7 +129,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     roomsConfigured: 0,
   };
 
-  const defaultPropertyId = validPropIds[0];
+  const today = new Date().toISOString().slice(0, 10);
 
   for (let i = 0; i < records.length; i++) {
     const row = records[i];
@@ -140,10 +140,21 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     const vipTier = text(row.vip_tier || row.tier || "Standard", "Guest tier", 30);
     const preferences = row.preferences ? String(row.preferences).slice(0, 2000) : "";
 
-    // Determine target property for this row
-    let rowPropId = defaultPropertyId;
+    // Determine target properties for this row:
+    // If a specific property is specified in row, match it; otherwise use the selected property/properties
+    let targetPropsForRow: string[] = [];
     if (row.property_id && validPropIds.includes(row.property_id)) {
-      rowPropId = row.property_id;
+      targetPropsForRow = [row.property_id];
+    } else if (row.property || row.property_name) {
+      const matchName = String(row.property || row.property_name).toLowerCase().trim();
+      const matched = activeProps.find((p: any) => p.name.toLowerCase().trim() === matchName);
+      if (matched && validPropIds.includes(matched.id)) {
+        targetPropsForRow = [matched.id];
+      }
+    }
+    if (targetPropsForRow.length === 0) {
+      // Use selected property (if single) or all selected properties (if multi)
+      targetPropsForRow = validPropIds;
     }
 
     // Guest Deduplication: Match by Email -> Phone -> Full Name
@@ -198,85 +209,95 @@ export const POST = withWorkspace(async (request: NextRequest) => {
       guestByName.set(guestName.toLowerCase().trim(), newGuest);
     }
 
-    // Room Verification: Ensure room exists at the property
-    const roomNumber = text(row.room_number || row.room || row.room_no || "General", "Room number in row " + (i + 1), 30);
-    const roomKey = `${rowPropId}:${roomNumber.toLowerCase().trim()}`;
-    let roomObj = roomMap.get(roomKey);
-
-    const guestCount = Math.max(1, Math.min(20, Number(row.guest_count || row.pax || 1)));
-
-    if (!roomObj) {
-      // Auto-create room for target property
-      const createdRoom = checked(
-        await db
-          .from("hotel_rooms")
-          .upsert(
-            {
-              organization_id: user.organizationId,
-              property_id: rowPropId,
-              room_number: roomNumber,
-              floor: text(row.floor || "", "Floor", 30, false),
-              room_type: text(row.room_type || "Standard", "Room type", 60),
-              capacity: Math.max(2, guestCount),
-              status: ["dirty", "clean", "out_of_service"].includes(row.room_status) ? row.room_status : "clean",
-              notes: "Imported via daily PMS import",
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "property_id,room_number" }
-          )
-          .select("id, property_id, room_number, capacity, status")
-          .single()
-      );
-      roomObj = createdRoom;
-      roomMap.set(roomKey, roomObj);
-      stats.roomsConfigured++;
-    }
-
     // Dates
-    const today = new Date().toISOString().slice(0, 10);
     const arrival = cleanDate(row.check_in_date || row.arrival || today, "Arrival date");
     const departure = cleanDate(row.check_out_date || row.departure || new Date(Date.now() + 86400000).toISOString().slice(0, 10), "Departure date");
     if (departure < arrival) {
       throw new PlatformError("Row " + (i + 1) + ": Departure (" + departure + ") must not precede arrival (" + arrival + ").");
     }
 
-    // Stay Deduplication: Check if stay already exists
-    const stayKey = `${rowPropId}:${guestId}:${roomNumber.toLowerCase().trim()}:${arrival}`;
-    const existingStay = stayMap.get(stayKey);
+    // Determine stay status: explicit status or active if arrival is today/past
+    let stayStatus: "active" | "reserved" = "reserved";
+    if (row.status === "active" || row.status === "reserved") {
+      stayStatus = row.status;
+    } else if (arrival <= today && departure >= today) {
+      stayStatus = "active";
+    }
 
-    if (existingStay) {
-      // Update existing stay without creating duplicates
-      await db
-        .from("stays")
-        .update({
-          check_out_date: departure,
-          guest_count: guestCount,
-          room_id: roomObj.id,
-        })
-        .eq("id", existingStay.id);
-      stats.staysUpdated++;
-    } else {
-      // Create new stay
-      const createdStay = checked(
+    const roomNumber = text(row.room_number || row.room || row.room_no || "General", "Room number in row " + (i + 1), 30);
+    const guestCount = Math.max(1, Math.min(20, Number(row.guest_count || row.pax || 1)));
+
+    // Allocate stays to each target property (usually 1, or multiple if multi-property confirmed)
+    for (const rowPropId of targetPropsForRow) {
+      const roomKey = `${rowPropId}:${roomNumber.toLowerCase().trim()}`;
+      let roomObj = roomMap.get(roomKey);
+
+      if (!roomObj) {
+        // Auto-create room for target property
+        const createdRoom = checked(
+          await db
+            .from("hotel_rooms")
+            .upsert(
+              {
+                organization_id: user.organizationId,
+                property_id: rowPropId,
+                room_number: roomNumber,
+                floor: text(row.floor || "", "Floor", 30, false),
+                room_type: text(row.room_type || "Standard", "Room type", 60),
+                capacity: Math.max(2, guestCount),
+                status: ["dirty", "clean", "out_of_service"].includes(row.room_status) ? row.room_status : "clean",
+                notes: "Imported via daily arrivals report",
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "property_id,room_number" }
+            )
+            .select("id, property_id, room_number, capacity, status")
+            .single()
+        );
+        roomObj = createdRoom;
+        roomMap.set(roomKey, roomObj);
+        stats.roomsConfigured++;
+      }
+
+      // Stay Deduplication: Check if stay already exists
+      const stayKey = `${rowPropId}:${guestId}:${roomNumber.toLowerCase().trim()}:${arrival}`;
+      const existingStay = stayMap.get(stayKey);
+
+      if (existingStay) {
+        // Update existing stay without creating duplicates
         await db
           .from("stays")
-          .insert({
-            organization_id: user.organizationId,
-            property_id: rowPropId,
-            room_id: roomObj.id,
-            guest_id: guestId,
-            room_number: roomObj.room_number,
-            guest_count: guestCount,
-            check_in_date: arrival,
+          .update({
             check_out_date: departure,
-            public_token: newToken(),
-            status: "reserved",
+            guest_count: guestCount,
+            room_id: roomObj.id,
+            status: stayStatus,
           })
-          .select("id, property_id, guest_id, room_id, room_number, check_in_date, check_out_date, status")
-          .single()
-      );
-      stayMap.set(stayKey, createdStay);
-      stats.staysCreated++;
+          .eq("id", existingStay.id);
+        stats.staysUpdated++;
+      } else {
+        // Create new stay
+        const createdStay = checked(
+          await db
+            .from("stays")
+            .insert({
+              organization_id: user.organizationId,
+              property_id: rowPropId,
+              room_id: roomObj.id,
+              guest_id: guestId,
+              room_number: roomObj.room_number,
+              guest_count: guestCount,
+              check_in_date: arrival,
+              check_out_date: departure,
+              public_token: newToken(),
+              status: stayStatus,
+            })
+            .select("id, property_id, guest_id, room_id, room_number, check_in_date, check_out_date, status")
+            .single()
+        );
+        stayMap.set(stayKey, createdStay);
+        stats.staysCreated++;
+      }
     }
   }
 

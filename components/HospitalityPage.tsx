@@ -178,12 +178,10 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const [month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
  const [jobView,setJobView]=useState("active");
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
- const [showReserveModal,setShowReserveModal]=useState(false);
- const [reserveGuestMode,setReserveGuestMode]=useState<"new"|"existing">("new");
- const [modalPropertyId,setModalPropertyId]=useState("");
  const [showRoomManagerModal,setShowRoomManagerModal]=useState(false);
  const [roomManagerPropertyId,setRoomManagerPropertyId]=useState("");
  const [showDailyImportModal,setShowDailyImportModal]=useState(false);
+ const [dailyImportTab,setDailyImportTab]=useState<"file"|"manual">("file");
  const [qrModalData,setQrModalData]=useState<{title:string;roomNumber?:string;propertyName?:string;url:string}|null>(null);
  const sequence=useRef(0);
 
@@ -307,12 +305,6 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const propertySelect=(name="property_id")=><WorkspaceSelect label="Property" name={name} defaultValue={property==="all"?"":property} placeholder="Choose property" options={(data?.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}/>;
  const nameOf=(id:string)=>data?.properties?.find((p:any)=>p.id===id)?.name||"—";
  const roomOf=(id:string)=>data?.rooms?.find((r:any)=>r.id===id)?.room_number||"—";
- const activeReserveProp=modalPropertyId||(property!=="all"?property:(data?.properties?.[0]?.id||""));
- const modalRooms=(data?.rooms||[]).filter((r:any)=>!activeReserveProp||r.property_id===activeReserveProp);
- const modalRoomOptions=modalRooms.map((r:any)=>({
-  value:r.id,
-  label:`Room ${r.room_number}${r.room_type?` · ${r.room_type}`:""}${r.floor?` · Floor ${r.floor}`:""}${r.status!=="clean"?` · (${label(r.status)})`:""}`
- }));
  const roomOptions=(data?.rooms||[]).map((r:any)=>({value:r.id,label:`Room ${r.room_number}${r.room_type?` · ${r.room_type}`:""} · ${nameOf(r.property_id)} · ${label(r.status)}`}));
  const submit=(action:string)=>(e:FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget,fields=Object.fromEntries(new FormData(form));
@@ -340,16 +332,30 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     }}
     manageHref="/dashboard/properties?workspace=operations"
   />
-  {!suiteTabs.includes(tab)&&(canManage||canAttend)&&<button
-   type="button"
-   className="button button-outline compact"
-   onClick={()=>setShowDailyImportModal(true)}
-   style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
-   title="Import daily arrivals from CSV or Excel report"
-  >
-   <Upload size={14}/>
-   <span>Import for the day</span>
-  </button>}
+  {!suiteTabs.includes(tab)&&(canManage||canAttend)&&(
+   <>
+    <button
+     type="button"
+     className="button button-outline compact"
+     onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}
+     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+     title="Import daily arrivals from CSV or Excel report"
+    >
+     <Upload size={14}/>
+     <span>Import for the day</span>
+    </button>
+    <button
+     type="button"
+     className="button button-outline compact"
+     onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}
+     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+     title="Quick add & check in guest"
+    >
+     <UserPlus size={14}/>
+     <span>+ Quick Add Guest</span>
+    </button>
+   </>
+  )}
   {!suiteTabs.includes(tab)&&<button
    type="button"
    className="button button-ghost compact"
@@ -409,7 +415,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {(canManage||canAttend)&&<button
      type="button"
      className="button button-dark compact"
-     onClick={()=>setShowDailyImportModal(true)}
+     onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}
      style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
      title="Import daily arrivals from CSV or Excel report"
     >
@@ -419,15 +425,12 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {canManage&&<button
      type="button"
      className="button button-outline compact"
-     onClick={()=>{
-      setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));
-      setReserveGuestMode("new");
-      setShowReserveModal(true);
-     }}
+     onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}
      style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+     title="Quick add & check in a guest or NC visitor"
     >
-     <Calendar size={13}/>
-     <span>+ Reserve / Check-In</span>
+     <UserPlus size={13}/>
+     <span>+ Quick Add / NC Guest</span>
     </button>}
    </div>
   </div>
@@ -443,7 +446,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {activeStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in{property!=="all"?` at ${nameOf(property)}`:""}. Checked-out guests have been cleared from this view.</p>
-      {canManage&&<button className="button button-outline compact" onClick={()=>{setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));setReserveGuestMode("new");setShowReserveModal(true);}}>Check in a guest</button>}
+      {canManage&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Check In Guest</button>}
      </div>
     ):(
      <div className="platform-table">
@@ -544,7 +547,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {reservedStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No upcoming reservations{property!=="all"?` for ${nameOf(property)}`:""}. Booked reservations will appear here awaiting guest arrival.</p>
-      {canManage&&<button className="button button-outline compact" onClick={()=>{setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));setReserveGuestMode("new");setShowReserveModal(true);}}>+ Reserve / Check-In</button>}
+      {canManage&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Reserve Guest</button>}
      </div>
     ):(
      <div className="platform-table">
@@ -808,113 +811,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  </>}
  </>}
 
- {/* RESERVE STAY MODAL */}
- <Modal
-  open={showReserveModal}
-  title="Reserve / Check In a Stay"
-  subtitle="Assign a guest to a room and schedule check-in / departure dates."
-  onClose={()=>setShowReserveModal(false)}
-  maxWidth={620}
- >
-  {data?(
-   <form className="platform-fields" onSubmit={async e=>{
-    e.preventDefault();const form=e.currentTarget,fields=Object.fromEntries(new FormData(form));
-    if(reserveGuestMode==="new"&&!fields.guest_name){
-     setError("Please enter the guest full name.");return;
-    }
-    if(reserveGuestMode==="existing"&&!fields.guest_id){
-     setError("Please select a guest from the directory.");return;
-    }
-    if(!fields.room_id){
-     setError("Please select a room.");return;
-    }
-    if(await save({action:"stay",...fields})){
-     form.reset();
-     setShowReserveModal(false);
-    }
-   }}>
-    {property==="all"?(
-     <label className="hotel-wide-field">
-      Property
-      <WorkspaceSelect
-       label="Property"
-       value={activeReserveProp}
-       onChange={setModalPropertyId}
-       options={(data.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}
-      />
-     </label>
-    ):(
-     <div className="hotel-wide-field" style={{padding:"8px 12px",background:"var(--canvas)",borderRadius:"6px",border:"1px solid var(--line)",fontSize:"12px",color:"var(--ink)",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
-      <span>Property: <strong>{nameOf(property)}</strong></span>
-      <span style={{color:"var(--muted)",fontSize:"11px"}}>Rooms strictly scoped to this property</span>
-     </div>
-    )}
 
-    {/* Guest Profile Mode Selector */}
-    <div className="hotel-wide-field" style={{display:"flex",gap:"8px",marginTop:"4px",marginBottom:"2px"}}>
-     <button
-      type="button"
-      className={`button ${reserveGuestMode==="new"?"button-dark":"button-outline"} compact`}
-      onClick={()=>setReserveGuestMode("new")}
-      style={{display:"inline-flex",alignItems:"center",gap:"5px",fontSize:"12px"}}
-     >
-      <UserPlus size={13}/>
-      <span>+ New Custom Guest</span>
-     </button>
-     <button
-      type="button"
-      className={`button ${reserveGuestMode==="existing"?"button-dark":"button-outline"} compact`}
-      onClick={()=>setReserveGuestMode("existing")}
-      style={{display:"inline-flex",alignItems:"center",gap:"5px",fontSize:"12px"}}
-     >
-      <Users size={13}/>
-      <span>Choose from Central Directory ({data.guests?.length||0})</span>
-     </button>
-    </div>
-
-    {reserveGuestMode==="new"?(
-     <>
-      <label>Guest full name<input name="guest_name" required maxLength={100} placeholder="e.g. John Doe"/></label>
-      <label>Guest tier<WorkspaceSelect label="Guest tier" name="vip_tier" defaultValue="Standard" options={stateOptions(["Standard","Returning","VIP"])}/></label>
-      <label>Email · optional<input name="email" type="email" placeholder="guest@example.com"/></label>
-      <label>Phone · optional<input name="phone" maxLength={40} placeholder="+1 555-0199"/></label>
-     </>
-    ):(
-     <label className="hotel-wide-field">
-      Choose existing guest profile
-      <WorkspaceSelect
-       label="Reservation guest"
-       name="guest_id"
-       placeholder="Choose guest from directory"
-       required={reserveGuestMode==="existing"}
-       options={(data.guests||[]).map((g:any)=>({
-        value:g.id,
-        label:`${g.full_name}${g.vip_tier&&g.vip_tier!=="Standard"?` · ${g.vip_tier}`:""}${g.phone?` · ${g.phone}`:""}`
-       }))}
-      />
-     </label>
-    )}
-
-    <label className="hotel-wide-field">
-     Room {modalRooms.length>0?`(${modalRooms.length} rooms in ${nameOf(activeReserveProp)})`:"(No rooms configured)"}
-     {modalRooms.length>0?(
-      <WorkspaceSelect label="Reservation room" name="room_id" placeholder="Choose room" required options={modalRoomOptions}/>
-     ):(
-      <input disabled value="No rooms configured for this property. Add rooms in Rooms tab." style={{color:"var(--muted)",fontSize:"12px"}}/>
-     )}
-    </label>
-    <label>Number of guests<input name="guest_count" type="number" min={1} max={20} defaultValue={1} required/></label>
-    <label>Arrival<WorkspaceDateField name="check_in_date" label="Arrival" required/></label>
-    <label>Departure<WorkspaceDateField name="check_out_date" label="Departure" required/></label>
-    <div style={{display:"flex",justifyContent:"flex-end",gap:"8px",marginTop:"14px",gridColumn:"span 2"}}>
-     <button type="button" className="button button-outline" onClick={()=>setShowReserveModal(false)}>Cancel</button>
-     <button className="button button-dark" disabled={busy||modalRooms.length===0}>Confirm reservation</button>
-    </div>
-   </form>
-  ):(
-   <p>Loading...</p>
-  )}
- </Modal>
 
  {/* FEEDBACK CODE / QR MODAL */}
  <QrModal
@@ -931,12 +828,15 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   onRoomsUpdated={load}
  />
 
- {/* DAILY PMS GUEST & STAY IMPORT MODAL */}
+ {/* DAILY GUEST ARRIVALS IMPORT & QUICK ADD MODAL */}
  <DailyImportModal
   open={showDailyImportModal}
   onClose={()=>setShowDailyImportModal(false)}
   properties={data?.properties||[]}
   user={user}
+  initialTab={dailyImportTab}
+  initialPropertyId={property!=="all"?property:undefined}
+  directoryGuests={data?.guests||[]}
   onImportCompleted={load}
  />
 
