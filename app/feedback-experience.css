@@ -84,8 +84,6 @@
 .vp-feature-grid h3{font-size:16px;font-weight:600;margin-bottom:12px;letter-spacing:-.3px}
 .vp-feature-grid p{font-size:12px;color:#617067;line-height:1.9}
 .vp-trust{padding:80px 9%;display:grid;grid-template-columns:1fr 1fr;gap:100px;background:#213633;color:#fff}
-.vp-trust>div>svg{color:#b2d2bd;margin-bottom:22px}
-.vp-trust .vp-kicker{font-size:9px;color:#b2d2bd;margin-bottom:20px}
 .vp-trust>div>p:last-child{font-size:13px;color:#bfd3c5;max-width:360px;margin-top:20px;line-height:1.9}
 .vp-trust ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;justify-content:center;gap:28px}
 .vp-trust li{display:flex;gap:17px;font-size:12px;color:#bfd3c5}
