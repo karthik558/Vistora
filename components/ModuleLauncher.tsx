@@ -10,7 +10,7 @@ import WorkspaceAccount from "./WorkspaceAccount";
 import {useAppearance} from "./AppearanceProvider";
 import {themedAccentTokens} from "../lib/hospitality/config";
 import {hasModuleAccess} from "../lib/auth/modules";
-import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,canOpenReports,canOpenAuditLog} from "../lib/auth/administration";
+import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,canOpenReports,canOpenAuditLog,canOpenRoleMapping} from "../lib/auth/administration";
 
 export default function ModuleLauncher({user}:{user:WorkspaceUser}){
  const {config}=useAppearance(),router=useRouter();
@@ -33,13 +33,13 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
     {hotelAccess&&<Link href="/dashboard/hospitality" className="module-launcher-card" style={themedAccentTokens(config.colors.property)}><div className="module-card-visual"><Building2 size={36} strokeWidth={1.5}/><span>PROPERTY &amp; SERVICE</span></div><div className="module-card-copy"><h2>Hotel operations</h2><p>Guest stays, room readiness, service jobs and inspections.</p><span className="module-card-action">Open hotel operations<ArrowRight size={17}/></span></div></Link>}
    </div>
    {!feedbackAccess&&!hotelAccess&&<p className="platform-notice">No modules are assigned to your account. Contact your administrator.</p>}
-   {(canOpenSettings(user)||canOpenTeam(user)||canOpenProperties(user)||canOpenWorkspace(user)||canOpenAuditLog(user))&&<section className="launcher-administration" aria-labelledby="launcher-administration-title">
+   {(canOpenSettings(user)||canOpenTeam(user)||canOpenProperties(user)||canOpenWorkspace(user)||canOpenAuditLog(user)||canOpenRoleMapping(user))&&<section className="launcher-administration" aria-labelledby="launcher-administration-title">
     <h2 id="launcher-administration-title">Workspace administration</h2>
     <div className="launcher-administration-grid">
      {canOpenWorkspace(user)&&<Link href="/dashboard/workspace" className="launcher-administration-card"><LayoutGrid size={21} strokeWidth={1.75}/><div><h3>Workspace</h3><p>Company overview, automation and integrations.</p></div><ArrowRight size={16}/></Link>}
      {canOpenProperties(user)&&<Link href="/dashboard/properties" className="launcher-administration-card"><Building2 size={21} strokeWidth={1.75}/><div><h3>Properties</h3><p>Manage locations and property assignments.</p></div><ArrowRight size={16}/></Link>}
      {canOpenTeam(user)&&<Link href="/dashboard/users" className="launcher-administration-card"><Users size={21} strokeWidth={1.75}/><div><h3>Team &amp; users</h3><p>Members, module access and property permissions.</p></div><ArrowRight size={16}/></Link>}
-     {user.isOrganizationAdmin&&<Link href="/dashboard/role-mapping" className="launcher-administration-card"><Users size={21}/><div><h3>Department &amp; role mapping</h3><p>Automatic owners by property, country and department.</p></div><ArrowRight size={16}/></Link>}
+     {canOpenRoleMapping(user)&&<Link href="/dashboard/role-mapping" className="launcher-administration-card"><Users size={21}/><div><h3>Department &amp; role mapping</h3><p>Automatic owners by property, country and department.</p></div><ArrowRight size={16}/></Link>}
      {canOpenSettings(user)&&<Link href="/dashboard/settings" className="launcher-administration-card"><Settings size={21} strokeWidth={1.75}/><div><h3>Settings</h3><p>Company preferences, branding and module configuration.</p></div><ArrowRight size={16}/></Link>}
      {canOpenAuditLog(user)&&<Link href="/dashboard/administration?adminSection=audit-log" className="launcher-administration-card"><History size={21} strokeWidth={1.75}/><div><h3>Audit log</h3><p>Security, account access and workspace activity history.</p></div><ArrowRight size={16}/></Link>}
     </div>
