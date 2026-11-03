@@ -331,3 +331,70 @@ test('Paged feedback reads survive a server row cap and fail rather than returni
  assert.deepEqual(result,records);assert.equal(offsets.at(-1),1203);
  await assert.rejects(()=>pagedRows({range:async()=>({data:null,error:{message:'denied'}})}),/denied/);
 });
+
+test('Daily guest report parser extracts records and normalizes arrival dates', () => {
+ const { parseGuestReportCsv } = require('../lib/hospitality/guestReportParser.ts');
+ const csv = `Guest Name,Email,Phone,Room No,Check-in,Check-out,Pax,VIP Tier,Preferences
+"Doe, John",john@example.com,+1 555-0199,101,2026-11-03,2026-11-06,2,VIP,Sea view
+Eleanor Vance,eleanor@example.co.uk,+44 7700 900111,204,04/11/2026,08/11/2026,1,NC / Complimentary,VIP amenity`;
+ const records = parseGuestReportCsv(csv);
+ assert.equal(records.length, 2);
+ assert.equal(records[0].guest_name, "Doe, John");
+ assert.equal(records[0].room_number, "101");
+ assert.equal(records[0].guest_count, 2);
+ assert.equal(records[0].vip_tier, "VIP");
+ assert.equal(records[1].guest_name, "Eleanor Vance");
+ assert.equal(records[1].room_number, "204");
+ assert.equal(records[1].vip_tier, "NC / Complimentary");
+});
+
+test('Daily import API enforces property scoping and authorization', async () => {
+ const db = require('../lib/platform/db.ts');
+ const importRoute = require('../app/api/hospitality/import/route.ts');
+ const { NextRequest } = require('next/server');
+ const original = db.sessionDb;
+
+ const client = {
+  from(table) {
+   const q = {
+    select() { return q; },
+    in() { return q; },
+    eq() { return q; },
+    then(resolve) {
+     if (table === 'properties') resolve({ data: [{ id: 'prop-1', name: 'Hotel One', is_active: true }], error: null });
+     else if (table === 'guests') resolve({ data: [], error: null });
+     else if (table === 'hotel_rooms') resolve({ data: [], error: null });
+     else if (table === 'stays') resolve({ data: [], error: null });
+     else resolve({ data: [], error: null });
+    }
+   };
+   return q;
+  }
+ };
+
+ const unauthStaff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality'], propertyIds: ['prop-1'] };
+ const authStaff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality', 'manage_service_jobs'], propertyIds: ['prop-1'] };
+
+ db.sessionDb = () => client;
+ try {
+  // 1. Rejects if user lacks property right to prop-2
+  const unauthProp = await db.workspaceContext.run({ user: authStaff, client }, () =>
+   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
+    method: 'POST',
+    body: JSON.stringify({ property_ids: ['prop-2'], records: [{ guest_name: 'Test', room_number: '101' }] })
+   }))
+  );
+  assert.equal(unauthProp.status, 403);
+
+  // 2. Rejects if user lacks management rights
+  const noRight = await db.workspaceContext.run({ user: unauthStaff, client }, () =>
+   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
+    method: 'POST',
+    body: JSON.stringify({ property_ids: ['prop-1'], records: [{ guest_name: 'Test', room_number: '101' }] })
+   }))
+  );
+  assert.equal(noRight.status, 403);
+ } finally {
+  db.sessionDb = original;
+ }
+});

@@ -4,6 +4,7 @@ import Link from "next/link";
 import {useSearchParams} from "next/navigation";
 import QRCode from "qrcode";
 import RoomManagerModal from "./RoomManagerModal";
+import DailyImportModal from "./DailyImportModal";
 import {AppShell,WorkspaceUser} from "./Dashboard";
 import WorkspaceSelect from "./WorkspaceSelect";
 import WorkspaceDateField from "./WorkspaceDateField";
@@ -182,6 +183,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const [modalPropertyId,setModalPropertyId]=useState("");
  const [showRoomManagerModal,setShowRoomManagerModal]=useState(false);
  const [roomManagerPropertyId,setRoomManagerPropertyId]=useState("");
+ const [showDailyImportModal,setShowDailyImportModal]=useState(false);
  const [qrModalData,setQrModalData]=useState<{title:string;roomNumber?:string;propertyName?:string;url:string}|null>(null);
  const sequence=useRef(0);
 
@@ -338,6 +340,16 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     }}
     manageHref="/dashboard/properties?workspace=operations"
   />
+  {!suiteTabs.includes(tab)&&(canManage||canAttend)&&<button
+   type="button"
+   className="button button-outline compact"
+   onClick={()=>setShowDailyImportModal(true)}
+   style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+   title="Import daily arrivals from CSV or Excel report"
+  >
+   <Upload size={14}/>
+   <span>Import for the day</span>
+  </button>}
   {!suiteTabs.includes(tab)&&<button
    type="button"
    className="button button-ghost compact"
@@ -393,19 +405,31 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
      Directory ({data.guests?.length||0})
     </button>
    </nav>
-   {canManage&&<button
-    type="button"
-    className="button button-outline compact"
-    onClick={()=>{
-     setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));
-     setReserveGuestMode("new");
-     setShowReserveModal(true);
-    }}
-    style={{display:"inline-flex",alignItems:"center",gap:"5px",marginBottom:"2px"}}
-   >
-    <Calendar size={13}/>
-    <span>+ Reserve / Check-In</span>
-   </button>}
+   <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"2px"}}>
+    {(canManage||canAttend)&&<button
+     type="button"
+     className="button button-dark compact"
+     onClick={()=>setShowDailyImportModal(true)}
+     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+     title="Import daily arrivals from CSV or Excel report"
+    >
+     <Upload size={13}/>
+     <span>Import for the day</span>
+    </button>}
+    {canManage&&<button
+     type="button"
+     className="button button-outline compact"
+     onClick={()=>{
+      setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));
+      setReserveGuestMode("new");
+      setShowReserveModal(true);
+     }}
+     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
+    >
+     <Calendar size={13}/>
+     <span>+ Reserve / Check-In</span>
+    </button>}
+   </div>
   </div>
 
   {/* IN-HOUSE GUESTS: Active stays only */}
@@ -905,6 +929,15 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   properties={data?.properties||[]}
   selectedPropertyId={roomManagerPropertyId||(property!=="all"?property:"")}
   onRoomsUpdated={load}
+ />
+
+ {/* DAILY PMS GUEST & STAY IMPORT MODAL */}
+ <DailyImportModal
+  open={showDailyImportModal}
+  onClose={()=>setShowDailyImportModal(false)}
+  properties={data?.properties||[]}
+  user={user}
+  onImportCompleted={load}
  />
 
  </div></AppShell>;

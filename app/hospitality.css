@@ -17,7 +17,7 @@ html[data-theme="dark"] .module-launcher-header img:not([src*="white"]){filter:b
 .module-launcher-content>.eyebrow{font-size:10px;letter-spacing:.16em;color:var(--muted);margin:0 0 14px}
 .module-launcher-content h1{font-size:clamp(28px,4vw,38px);font-weight:500;letter-spacing:-1.1px;margin:0 0 12px}
 .module-launcher-intro{font-size:14px;color:var(--muted);margin:0 0 34px}
-.module-launcher-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.module-launcher-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px}
 .module-launcher-card{display:flex;flex-direction:column;border:1px solid var(--line);border-top:3px solid var(--module-accent);background:var(--panel);color:var(--ink);border-radius:6px;text-decoration:none;overflow:hidden;transition:transform .18s,border-color .18s,box-shadow .18s}
 .module-launcher-card:hover{border-color:var(--module-accent);transform:translateY(-3px);box-shadow:var(--shadow-md)}
 .module-launcher-card:focus-visible{outline:2px solid var(--module-accent);outline-offset:4px}
