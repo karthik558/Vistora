@@ -30,11 +30,11 @@ function client() {
     feedback_questions: [{ id: 'q-a', organization_id: 'org-a', property_id: propA, is_active: true, question_type: 'text', question_text: 'A question', is_required: false }, { id: 'q-b', organization_id: 'org-b', property_id: propB, is_active: true, question_text: 'Private B question' }],
   };
   return { calls, tables, from(table) {
-    calls.push(table); const filters = []; let inserted = null;
+    calls.push(table); const filters = []; let inserted = null, upserted = false;
     const values = () => (tables[table] || []).filter(row => filters.every(([key, value]) => (row[key] ?? null) === value));
-    const q = { insert(value) { inserted = { id: 'new-link', is_active: true, ...value }; (tables[table] ||= []).push(inserted); return q; }, select() { return q; }, is(key, value) { filters.push([key, value]); return q; }, eq(key, value) { filters.push([key, value]); return q; }, or() { return q; }, order() { return q; },
+    const q = { upsert(value) { upserted=true; if (!(tables[table] || []).some(row=>row.token_hash===value.token_hash)) (tables[table] ||= []).push({id:'new-link',is_active:true,...value});return q; }, insert(value) { inserted = { id: 'new-link', is_active: true, ...value }; (tables[table] ||= []).push(inserted); return q; }, select() { return q; }, is(key, value) { filters.push([key, value]); return q; }, eq(key, value) { filters.push([key, value]); return q; }, or() { return q; }, order() { return q; },
       async maybeSingle() { return { data: values()[0] || null, error: null }; }, async single() { return { data: values()[0] || null, error: null }; },
-      then(resolve) { resolve({ data: values(), error: null }); } };
+      then(resolve) { resolve({ data: upserted ? null : values(), error: null }); } };
     return q;
   } };
 }
@@ -52,7 +52,8 @@ test('Property links are bound by authenticated encryption; metadata and questio
     const result = await questions.GET(new NextRequest('http://localhost/api/questions?public=true&token=' + encodeURIComponent(token) + '&propertyId=' + propB));
     assert.equal(result.status, 200); assert.deepEqual((await result.json()).questions.map(q => q.id), ['q-a']);
     assert.equal((await questions.GET(new NextRequest('http://localhost/api/questions?public=true&propertyId=' + propA))).status, 403);
-    for (const legacy of [stayToken, inviteToken]) assert.equal((await resolvePublicFeedbackLink(legacy)).property.id, propA);
+    mock.tables.stays.push({...mock.tables.stays[0],public_token:propB});
+    for (const legacy of [stayToken, inviteToken, propB]) assert.equal((await resolvePublicFeedbackLink(legacy)).property.id, propA);
     await assert.rejects(resolvePublicFeedbackLink(expiredToken), error => error.status === 410);
   } finally { db.serviceDb = original; }
 });
@@ -154,7 +155,10 @@ test('Short property links retain tenant binding and load only the selected prop
  mock.tables.feedback_questions.push({id:'custom-a',questionnaire_id:'form-a',property_id:propA,organization_id:'org-a',is_active:true,question_type:'text',question_text:'Was the meal good?',is_required:false});
  try{
   const token=await createShortFeedbackLink(mock,mock.tables.properties[0],{room:'Table 4',department:'Food & Beverage',demo:false});
-  assert.match(token,/^a-[A-Za-z0-9_-]{24}$/);assert.ok(token.length<45);
+  assert.match(token,/^a-table-4-[A-Za-z0-9_-]{22}$/);assert.ok(token.length<45);
+  assert.equal(await createShortFeedbackLink(mock,mock.tables.properties[0],{room:'Table 4',department:'Food & Beverage',demo:false}),token);
+  assert.equal(mock.tables.guest_feedback_links.length,1);
+  const other=await createShortFeedbackLink(mock,mock.tables.properties[0],{room:'Table 5',department:'Food & Beverage',demo:false});assert.notEqual(other,token);
   assert.equal(mock.tables.guest_feedback_links[0].token_hash,hashToken(token));assert.ok(!JSON.stringify(mock.tables.guest_feedback_links).includes(token));
   const resolved=await resolvePublicFeedbackLink(token);
   assert.equal(resolved.property.id,propA);assert.equal(resolved.details.questionnaireTitle,formA.title);assert.equal(resolved.details.accentColor,formA.accent_color);
@@ -162,6 +166,10 @@ test('Short property links retain tenant binding and load only the selected prop
   assert.deepEqual((await response.json()).questions.map(q=>q.id),['custom-a']);
   await assert.rejects(resolvePublicFeedbackLink('b-'+token.slice(2)),error=>error.status===404);
   mock.tables.guest_feedback_links[0].is_active=false;await assert.rejects(resolvePublicFeedbackLink(token),error=>error.status===404);
+  await assert.rejects(createShortFeedbackLink(mock,mock.tables.properties[0],{room:'Table 4',department:'Food & Beverage',demo:false}),error=>error.status===410);
+  assert.equal(mock.tables.guest_feedback_links[0].is_active,false);
+  const legacy='a-'+'x'.repeat(24);mock.tables.guest_feedback_links.push({token_hash:hashToken(legacy),property_id:propA,organization_id:'org-a',is_active:true,room:'301',department:'Front Desk',demo:false});
+  assert.equal((await resolvePublicFeedbackLink(legacy)).property.id,propA);
  }finally{db.serviceDb=original;}
 });
 
@@ -174,13 +182,15 @@ test('Question edits validate type, options and translations without accepting p
  assert.equal(questionFields({questionText:'Text',questionType:'long_text',options:[]},false).question_type,'long_text');
 });
 
-test('Published links use the canonical site or actual live origin, never a stale localhost setting', () => {
+test('Published links use the current live deployment, never a stale configured domain or localhost', () => {
  const {appOrigin}=require('../lib/platform/appOrigin.ts');
  const prior={APP_URL:process.env.APP_URL,NEXT_PUBLIC_APP_URL:process.env.NEXT_PUBLIC_APP_URL,NODE_ENV:process.env.NODE_ENV};
  try{
   process.env.NODE_ENV='production';process.env.APP_URL='http://localhost:3000';delete process.env.NEXT_PUBLIC_APP_URL;
   assert.equal(appOrigin('https://vistora.example'),'https://vistora.example');
-  process.env.APP_URL='https://guests.vistora.example/path';assert.equal(appOrigin('https://vistora.example'),'https://guests.vistora.example');
+  process.env.APP_URL='https://guests.vistora.example/path';assert.equal(appOrigin('https://vistora.example'),'https://vistora.example');
+  assert.equal(appOrigin('https://vistora-preview.vercel.app'),'https://vistora-preview.vercel.app');
+  assert.equal(appOrigin('http://localhost:3000'),'https://guests.vistora.example');
   process.env.APP_URL='http://localhost:3000';assert.throws(()=>appOrigin('http://localhost:3000'));
   process.env.NODE_ENV='development';assert.equal(appOrigin('http://localhost:3000'),'http://localhost:3000');
  }finally{for(const [key,value]of Object.entries(prior)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}

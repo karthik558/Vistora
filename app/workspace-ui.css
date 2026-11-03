@@ -240,3 +240,9 @@ button:disabled{cursor:not-allowed}
 .questionnaire-settings p { font-size: 12px; color: var(--muted); line-height: 1.6; }
 .questionnaire-design input[type="color"] { width: 64px; height: 40px; padding: 3px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
 @media(max-width:700px) { .questionnaire-scope, .questionnaire-design { grid-template-columns:minmax(0,1fr); } }
+
+/* QR Studio: property first, compact touchpoint buttons. */
+.qr-studio-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.qr-touchpoints { display:flex; flex-wrap:wrap; gap:8px; }
+.qr-touchpoints .qr-touchpoint { min-height:40px; padding:9px 12px; border-radius:6px; font-size:12px; }
+.qr-touchpoints .qr-touchpoint[aria-pressed="true"] { color:var(--sage-deep); border-color:var(--sage-deep); font-weight:700; background:transparent; }

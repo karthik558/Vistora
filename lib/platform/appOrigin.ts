@@ -4,6 +4,8 @@ export function appOrigin(requestOrigin: string) {
  const configured = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
  const actual = new URL(requestOrigin);
  const local = (url: URL) => ["localhost","127.0.0.1","[::1]"].includes(url.hostname);
+ // Share the deployment actually being used, including Vercel previews.
+ if (!local(actual) && actual.protocol === "https:") return actual.origin;
  if (configured) {
   let url: URL;
   try { url = new URL(configured); } catch { throw new PlatformError("Configure APP_URL with your website address.",503); }

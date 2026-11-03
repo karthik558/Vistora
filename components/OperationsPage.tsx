@@ -1524,51 +1524,37 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
 
   return (
     <>
-      {/* Form Builder Integration Banner */}
-      <div
-        style={{
-          padding: "14px 20px",
-          background: "var(--canvas-alt)",
-          border: "1px solid var(--line)",
-          borderRadius: "8px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "10px",
-          marginBottom: "20px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <FileText size={16} style={{ color: "var(--sage)" }} />
-          <span style={{ fontSize: "12px", color: "var(--ink)" }}>
-            Looking to configure custom questions, translations, or design styles for your QR touchpoints?
-          </span>
-        </div>
-        <Link
-          href="/dashboard/forms"
-          className="button button-outline"
-          style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-        >
-          <span>Open Form Builder</span>
-          <ExternalLink size={12} />
-        </Link>
-      </div>
-
       <div className="qr-layout">
         <div className="panel qr-card">
-          <p className="eyebrow">Enterprise Touchpoint &amp; QR Studio</p>
-          <h2>Physical QR &amp; guest touchpoint studio</h2>
-          <p>
-            Generate high-resolution QR codes mapped to specific rooms, dining tables, and hotel facilities. When the guest scans or opens the link, the property and touchpoint are locked to the shared link.
-          </p>
+          <div className="qr-studio-heading">
+            <h2>QR Studio</h2>
+            <Link href="/dashboard/questionnaire" className="panel-action">Edit questionnaire ↗</Link>
+          </div>
 
+          {/* Target Property */}
+          <div style={{ marginBottom: "20px" }}>
+            <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
+              Property
+            </label>
+            <CustomSelect
+              value={selectedPropertyId}
+              onChange={onPropertyChange}
+              placeholder="Select property"
+              options={properties.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${p.code})`,
+                detail: `${p.location} · ${p.total_rooms || 0} rooms`,
+              }))}
+            />
+          </div>
+
+          <p style={{fontSize:12,color:"var(--muted)",marginBottom:16}}>Guest questionnaire: <strong>{guestFormName}</strong></p>
           {/* QR Touchpoint / Context Selector */}
           <div style={{ marginTop: "20px", marginBottom: "18px" }}>
             <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>
-              Touchpoint Type / Context
+              Touchpoint
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+            <div className="qr-touchpoints" role="group" aria-label="Touchpoint">
               {[
                 { id: "room", label: "In-Room Keycard", defaultId: "Room 302", defaultLabel: "Guest Room Nightstand" },
                 { id: "dining", label: "Dining Table", defaultId: "Table 14", defaultLabel: "Restaurant Acrylic Stand" },
@@ -1585,17 +1571,7 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
                     setIdentifier(item.defaultId);
                     setLabel(item.defaultLabel);
                   }}
-                  style={{
-                    padding: "10px 8px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    fontSize: "11px",
-                    fontWeight: qrType === item.id ? 700 : 500,
-                    cursor: "pointer",
-                    textAlign: "center",
-                  }}
+                  className="button button-outline qr-touchpoint"
                 >
                   {item.label}
                 </button>
@@ -1624,30 +1600,12 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
             </div>
             <div>
               <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-                Placement Campaign Label
+                Display label
               </label>
               <input className="auth-input" value={label} onChange={(e) => setLabel(e.target.value)} />
             </div>
           </div>
 
-          {/* Target Property */}
-          <div style={{ marginBottom: "20px" }}>
-            <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-              Property for this feedback link
-            </label>
-            <CustomSelect
-              value={selectedPropertyId}
-              onChange={onPropertyChange}
-              placeholder="Select property"
-              options={properties.map((p) => ({
-                value: p.id,
-                label: `${p.name} (${p.code})`,
-                detail: `${p.location} · ${p.total_rooms || 0} rooms`,
-              }))}
-            />
-          </div>
-
-          <p style={{fontSize:12,color:"var(--muted)",marginBottom:16}}>Guest questionnaire: <strong>{guestFormName}</strong>. <Link href="/dashboard/questionnaire">Edit questions and design</Link></p>
           {/* Generated URL Box */}
           <div style={{ marginBottom: "20px" }}>
             <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
@@ -1683,7 +1641,7 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
               <ExternalLink size={14} />
-              <span>Walk Over to Form ↗</span>
+              <span>Open feedback form</span>
             </a>
 
             <button
@@ -1715,7 +1673,7 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
               <Printer size={14} />
-              <span>Print Display Card (PDF)</span>
+              <span>Print QR card</span>
             </button>
           </div>
         </div>
@@ -1785,9 +1743,6 @@ function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties
               </span>
             )}
           </div>
-          <p style={{ margin: "10px 0 0", color: "var(--muted)", fontSize: "11px" }}>
-            Guests can review only the property attached to this link.
-          </p>
         </div>
       </div>
 

@@ -6,9 +6,9 @@ Apply `supabase/migrations/20261103_questionnaires_and_short_links.sql` after th
 
 The migration copies existing shared/property questions into independent default questionnaires for each relevant property. It preserves the original questions and historical answers and can be applied again safely. Existing encrypted `pf.*`, invitation and stay links remain supported.
 
-Set `APP_URL` to the actual public HTTPS website origin. Generated links use that origin; stale localhost settings are ignored when accessed on a live website. In local development, links can use the current localhost origin.
+Set `APP_URL` to the actual public HTTPS website origin. Generated links automatically use the current public HTTPS deployment origin, including Vercel preview domains. APP_URL is a fallback when the server sees an internal origin; stale localhost settings are ignored on a live website. In local development, links can use the current localhost origin.
 
-New links look like `/feedback/property-code-<24 random characters>`. Only the token hash is stored. The server resolves the property and touchpoint; changing or removing the token cannot open another property's form or a property directory. New link generation requires the migration.
+New links look like `/feedback/property-code-room-302-<22-character signature>`. The same property, location and department reuse the same link while WORKSPACE_ENCRYPTION_KEY remains stable. Keep that key unchanged across deployments. The signature has 128 bits and prevents guessing another property’s link; only the token hash is stored. Previously generated 24-character short tokens remain valid. The server resolves the property and touchpoint; changing or removing the token cannot open another property's form or a property directory. New link generation requires the migration.
 
 ## Use
 

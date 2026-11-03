@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { PlatformError } from "./db";
@@ -34,6 +34,11 @@ function encryptionKey(): Buffer {
     throw new PlatformError("Configure WORKSPACE_ENCRYPTION_KEY with a 32-byte hex key before using encrypted invitations or webhooks.", 503);
   }
   return Buffer.from(value, "hex");
+}
+
+// Domain-separated signatures keep reusable public tokens unpredictable.
+export function signToken(value: string) {
+  return createHmac("sha256", encryptionKey()).update(value).digest().subarray(0, 16).toString("base64url");
 }
 
 export function encryptSecret(value: string) {
