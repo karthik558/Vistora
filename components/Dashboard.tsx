@@ -93,11 +93,10 @@ const nav: readonly NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "Reports", href: "/dashboard/reports", group: "Overview", icon: FileSpreadsheet, requiredRight: "export_reports" },
-  { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
-  { label: "Follow-up queue", href: "/dashboard/follow-ups", group: "Guest experience", icon: History, requiredRight: "view_feedback" },
+  { label: "Feedback", href: "/dashboard/feedback", group: "Guest experience", icon: Check, requiredRight: "view_feedback" },
+  { label: "Actions", href: "/dashboard/follow-ups", group: "Guest experience", icon: History, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
-  { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
-  { label: "Feedback already collected", href: "/dashboard/feedback-collected", group: "Guest experience", icon: Check, requiredRight: "view_feedback" },
+  { label: "Collect feedback", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
   { label: "Guest invitations", href: "/dashboard/invitations", group: "Collection", icon: Send, requiredRight: "manage_questionnaire" },
   { label: "Feedback forms", href: "/dashboard/forms", group: "Collection", icon: FileText, requiredRight: "manage_questionnaire" },
   { label: "Questionnaire", href: "/dashboard/questionnaire", group: "Collection", icon: HelpCircle, requiredRight: "manage_questionnaire" },
@@ -390,7 +389,7 @@ function StandaloneAppShell({
 
     // Strict organizational role restrictions:
     if (isAnalyst) {
-      return ["Dashboard", "Analytics", "Follow-up queue", "All feedback", "Workspace"].includes(item.label);
+      return ["Dashboard", "Analytics", "Actions", "Feedback", "Workspace"].includes(item.label);
     }
     if (isReport) {
       return ["Dashboard", "Reports", "Workspace"].includes(item.label);
@@ -561,7 +560,7 @@ function StandaloneAppShell({
             visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive = isAdministration&&searchParams.get("adminSection")?searchParams.get("adminSection")===item.href.split("/")[2]:workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?
-                searchParams.get("section")===feedbackSection(item.href):item.href.startsWith("/dashboard/hospitality")?
+                (searchParams.get("section")==="feedback-collected"?"feedback":searchParams.get("section"))===feedbackSection(item.href):item.href.startsWith("/dashboard/hospitality")?
                 pathname==="/dashboard/hospitality"&&(searchParams.get("section")||"Overview")===(item.href.includes("?")?decodeURIComponent(item.href.split("section=")[1]):"Overview"):
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
@@ -569,7 +568,7 @@ function StandaloneAppShell({
                 (active && item.label.toLowerCase() === active.toLowerCase()) ||
                 ((item.label === "Complaints & SLA" || item.label === "Complaints") &&
                   (active?.toLowerCase().includes("complaint") || active?.toLowerCase().includes("sla") || pathname?.includes("/complaints"))) ||
-                (item.label === "All feedback" && (active === "All feedback" || pathname === "/dashboard/feedback"));
+                (item.label === "Feedback" && (active === "Feedback" || pathname === "/dashboard/feedback-collected"));
               return (
                 <Link
                   key={item.href}
@@ -709,9 +708,9 @@ function StandaloneAppShell({
 
       {/* Mobile navigation stays inside the selected workspace. */}
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
-        {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","All feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
+        {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","Feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
-          const selected=workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?searchParams.get("section")===feedbackSection(item.href):pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
+          const selected=workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?(searchParams.get("section")==="feedback-collected"?"feedback":searchParams.get("section"))===feedbackSection(item.href):(item.href==="/dashboard/feedback"&&pathname==="/dashboard/feedback-collected")||pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
           return <Link key={item.href} href={scopedHref(item.href)} prefetch={workspaceArea === "feedback" && feedbackSection(item.href) ? false : true} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>
@@ -2297,6 +2296,13 @@ export function FeedbackTable({
                 )}
               </div>
 
+              <section className="feedback-followup-summary" aria-label="Action and follow-up">
+                <h3>Action &amp; follow-up</h3>
+                <p>{selected.status === "resolved" ? "Feedback collected. Follow-up resolved." : selected.rating <= 2 ? "Low rating collected. Review this feedback in Complaints & SLA." : selected.rating <= 3 ? "Feedback collected. Review the guest’s concerns and arrange follow-up if needed." : selected.wantsContact ? "Feedback collected. The guest requested a response." : "Feedback collected. No rating-based action required."}</p>
+                <Link className="button button-outline compact" href={selected.rating <= 2 ? "/dashboard/complaints" : "/dashboard/follow-ups"}>
+                  {selected.rating <= 2 ? "Complaints & SLA" : "View actions"}
+                </Link>
+              </section>
               {userRole !== "visitor" && <CasePanel key={selected.id} id={selected.id} onUpdate={() => router.refresh()} />}
               {/* Resolution Section (RBAC protected) */}
               <div className="drawer-resolution-section">

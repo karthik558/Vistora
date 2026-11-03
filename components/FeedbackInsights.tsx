@@ -47,7 +47,7 @@ export default function FeedbackInsights({ data, user }: { data: DashboardData; 
   const comments = rows.filter(row => row.comment?.trim()).length;
   const resolved = rows.filter(row => row.status === "resolved").length;
   return <div className="content-wrap feedback-intelligence">
-    <DashboardPageHeading eyebrow="Guest experience operations" title="Follow-up queue" description="Prioritize guest contact requests and feedback that needs a response.">
+    <DashboardPageHeading eyebrow="Guest experience operations" title="Actions" description="Prioritize guest contact requests and feedback that needs a response.">
     <div className="fi-toolbar"><PropertyFilter properties={userAllowedPropIds ? data.properties.filter(p => userAllowedPropIds.includes(p.id)) : data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || [id])} isGlobalAdmin={isSuperAdminUser} /><CustomDatePicker value={date} onChange={setDate} /><button className="button button-outline" onClick={() => { setSelectedIds(["all"]); setDate({ preset: "all", startDate: null, endDate: null }); setView("all"); setQuery(""); }}>Reset filters</button></div>
     </DashboardPageHeading>
     <div className="fi-summary">
@@ -58,6 +58,6 @@ export default function FeedbackInsights({ data, user }: { data: DashboardData; 
     <section className="fi-panel"><h2>Make the next response count</h2><p>Overdue first, then escalations and contact requests; oldest first within each group. Resolved feedback stays out of every queue.</p><div className="fi-chips" aria-label="Follow-up queues">{views.map(item => <button key={item.id} aria-pressed={view === item.id} onClick={() => setView(item.id)}>{item.label}<span>{now === null ? "—" : rows.filter(row => needsFollowUp(row, item.id, now)).length}</span></button>)}</div></section>
 
     <p className="fi-results" aria-live="polite">{visible.length} matching responses. Open a record to review the guest’s feedback.</p>
-    <FeedbackTable onRecordUpdate={record => setUpdates(previous => ({ ...previous, [record.id]: record }))} feedback={visible} title="Follow-up queue" searchQuery={query} onSearchChange={setQuery} />
+    <FeedbackTable onRecordUpdate={record => setUpdates(previous => ({ ...previous, [record.id]: record }))} feedback={visible} title="Actions" searchQuery={query} onSearchChange={setQuery} />
   </div>;
 }

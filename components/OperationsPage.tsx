@@ -146,13 +146,13 @@ export default function OperationsPage({
     section === "complaints"
       ? "Complaints & SLA recovery"
       : section === "feedback"
-      ? "All guest feedback"
+      ? "Feedback"
       : section === "analytics"
       ? "Analytics"
       : section === "feedback-collected"
-      ? "Feedback already collected"
+      ? "Feedback"
       : section === "directory"
-      ? "Guest directory"
+      ? "Collect feedback"
       : section === "questionnaire"
       ? "Questionnaire"
       : section === "forms"
@@ -165,7 +165,8 @@ export default function OperationsPage({
     complaints: "SLA response tracking, emergency escalations, and hospitality guest service recovery.",
     feedback: "Review every guest submission captured across the workspace.",
     analytics: "Understand satisfaction and response patterns across properties.",
-    directory: "A searchable guest view derived from recorded stays and feedback.",
+    directory: "Collect feedback from current guests and review missed checkouts.",
+    "feedback-collected": "Review every guest submission captured across the workspace.",
     forms: "Manage public feedback forms and configure questionnaire questions.",
     questionnaire: "Design and customize questions asked to guests on the feedback form.",
     "qr-codes": "Create trackable QR codes for rooms, departments, and guest touchpoints.",
@@ -176,13 +177,13 @@ export default function OperationsPage({
     section === "complaints"
       ? "Complaints & SLA"
       : section === "feedback"
-      ? "All feedback"
+      ? "Feedback"
       : section === "analytics"
       ? "Analytics"
       : section === "feedback-collected"
-      ? "Feedback already collected"
+      ? "Feedback"
       : section === "directory"
-      ? "Guest directory"
+      ? "Collect feedback"
       : section === "questionnaire"
       ? "Questionnaire"
       : section === "forms"
@@ -207,7 +208,7 @@ export default function OperationsPage({
           </div>
         ) : (
           <>
-            {section !== "directory" && section !== "feedback-collected" && (
+            {section !== "directory" && (
               <div className="page-heading">
                 <div>
                   <p className="eyebrow">Guest experience operations</p>
@@ -226,10 +227,14 @@ export default function OperationsPage({
                     onChange={(_id, ids) => setSelectedProperties(ids || _id)}
                     isGlobalAdmin={isSuperAdminUser}
                   />
-                  <CustomDatePicker
+                  <div className="feedback-date-range"><span>Date range</span><CustomDatePicker
+                    floating
                     value={dateFilter}
                     onChange={setDateFilter}
-                  />
+                  /></div>
+                  {(section === "feedback" || section === "feedback-collected") && (
+                    <button className="button button-outline filter-reset" onClick={() => { setDateFilter({ preset: "all", startDate: null, endDate: null }); setSelectedProperties("all"); setQuery(""); }}>Clear filters</button>
+                  )}
                   {section === "reports" && (
                     <button
                       className="button button-outline compact"
@@ -283,8 +288,8 @@ export default function OperationsPage({
               dateFilter={dateFilter}
               filteredFeedback={feedback}
             />
-          ) : (section === "directory" || section === "feedback-collected") ? (
-            user && <GuestDirectory initialView={section === "feedback-collected" ? "collected" : "pending"} user={user} properties={data.properties} history={<Directory data={data} query={query} setQuery={setQuery} canInvite={user.isOrganizationAdmin===true||user.rights?.includes("manage_questionnaire")===true} />}/>
+          ) : section === "directory" ? (
+            user && <GuestDirectory user={user} properties={data.properties} history={<Directory data={data} query={query} setQuery={setQuery} canInvite={user.isOrganizationAdmin===true||user.rights?.includes("manage_questionnaire")===true} />}/>
           ) : section === "forms" ? (
             <Forms />
           ) : section === "questionnaire" ? (
@@ -541,6 +546,8 @@ function Directory({
   canInvite: boolean;
 }) {
   const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
+  const [activityRange, setActivityRange] = useState<DateRangeFilter>({ preset: "all", startDate: null, endDate: null });
+  const { selectedIds, setSelectedIds, matches } = useSharedPropertyFilter();
   const [filterTab, setFilterTab] = useState<"all" | "provided" | "awaiting" | "recovery" | "promoters">("all");
   const [selectedGuest, setSelectedGuest] = useState<CrmGuestProfile | null>(null);
 
@@ -580,7 +587,7 @@ function Directory({
     }
 
     // Process feedback items
-    data.recentFeedback.forEach((f) => {
+    data.recentFeedback.filter(f => matches(f.propertyId) && isDateInRange(f.createdAt, activityRange)).forEach((f) => {
       const propertyName = data.properties.find(property=>property.id===f.propertyId)?.name || "Property unavailable";
       const key = (f.guestEmail?.trim().toLowerCase()) || (f.guestPhone?.trim()) || f.name.trim().toLowerCase();
       if (!map.has(key)) {
@@ -621,7 +628,7 @@ function Directory({
     });
 
     // Process invitations
-    invitations.forEach((inv) => {
+    invitations.filter(inv => matches(inv.propertyId) && isDateInRange(inv.createdAt, activityRange)).forEach((inv) => {
       const key = (inv.guestEmail?.trim().toLowerCase()) || (inv.guestPhone?.trim()) || inv.guestName.trim().toLowerCase();
       if (!map.has(key)) {
         const isCompleted = inv.status === "completed";
@@ -683,7 +690,7 @@ function Directory({
     });
 
     return result.sort((a, b) => new Date(b.lastActivityDate).getTime() - new Date(a.lastActivityDate).getTime());
-  }, [data.recentFeedback, data.properties, invitations]);
+  }, [data.recentFeedback, data.properties, invitations, matches, activityRange]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -763,6 +770,12 @@ function Directory({
     <div style={{ display: "grid", gap: "20px" }}>
       <p>Profiles from recorded feedback and invitations. To collect feedback for a current stay, use In-house guests.</p>
 
+      <div className="guest-collection-filters">
+        <PropertyFilter properties={data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)}/>
+        <div className="feedback-date-range"><span>Date range</span><CustomDatePicker label="Feedback and invitation date range" value={activityRange} onChange={setActivityRange} floating/></div>
+        <button type="button" className="button button-outline filter-reset" onClick={() => { setActivityRange({ preset: "all", startDate: null, endDate: null }); setSelectedIds("all"); setQuery(""); setFilterTab("all"); }}>Clear filters</button>
+      </div>
+      <p>Dates filter when feedback was received or an invitation was created.</p>
       {/* CRM Metric Cards */}
       <section className="metric-grid">
         <div className="metric-card">

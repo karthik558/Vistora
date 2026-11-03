@@ -18,8 +18,8 @@ import { hasModuleAccess } from "../lib/auth/modules";
 const FeedbackContext = createContext<{ data: DashboardData; user: WorkspaceUser } | null>(null);
 
 const labels: Record<string, string> = {
-  insights: "Analytics", "follow-ups": "Follow-up queue", overview: "Dashboard", feedback: "All feedback", analytics: "Analytics",
-  complaints: "Complaints & SLA", directory: "Guest directory", "feedback-collected": "Feedback already collected", forms: "Feedback forms",
+  insights: "Analytics", "follow-ups": "Actions", overview: "Dashboard", feedback: "Feedback", analytics: "Analytics",
+  complaints: "Complaints & SLA", directory: "Collect feedback", "feedback-collected": "Feedback", forms: "Feedback forms",
   questionnaire: "Questionnaire", "qr-codes": "QR codes",
   invitations: "Guest invitations", "audit-log": "Audit log", reports: "Reports",
 };

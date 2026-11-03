@@ -24,6 +24,25 @@ export default function PropertyFilter({
 }: PropertyFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
+  useEffect(() => {
+    if (!isOpen) return;
+    const place = () => {
+      const trigger = containerRef.current;
+      if (!trigger) return;
+      const anchor = trigger.getBoundingClientRect();
+      const boundary = trigger.closest(".platform-card, .panel, .content-wrap")?.getBoundingClientRect();
+      const leftEdge = Math.max(8, (boundary?.left ?? 0) + 8);
+      const rightEdge = Math.min(window.innerWidth - 8, (boundary?.right ?? window.innerWidth) - 8);
+      const width = Math.min(300, Math.max(0, rightEdge - leftEdge));
+      const left = Math.max(leftEdge, Math.min(anchor.left, rightEdge - width));
+      setPopoverStyle({ left: left - anchor.left, right: "auto", width, minWidth: 0, maxWidth: width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [isOpen]);
 
   // Normalize selected IDs
   const activeIds: string[] = selectedIds !== undefined
@@ -171,6 +190,7 @@ export default function PropertyFilter({
         {isOpen && (
           <motion.div
             className="property-filter-popover"
+            style={popoverStyle}
             initial={{ opacity: 0, y: 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}

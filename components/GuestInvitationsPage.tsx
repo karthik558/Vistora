@@ -28,6 +28,7 @@ import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Da
 import { PropertyRow } from "../types/experience";
 import CustomSelect from "./CustomSelect";
 import PropertyFilter from "./PropertyFilter";
+import CustomDatePicker, { isDateInRange, type DateRangeFilter } from "./CustomDatePicker";
 import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import { GuestInvitation } from "../lib/services/invitationsService";
 import { ConfirmDrawer } from "./ConfirmDrawer";
@@ -67,6 +68,7 @@ export default function GuestInvitationsPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeFilter>({ preset: "all", startDate: null, endDate: null });
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
   const userAllowedPropIds = user?.isOrganizationAdmin
     ? null
@@ -265,6 +267,7 @@ export default function GuestInvitationsPage({
   const filtered = useMemo(() => {
     return invitations.filter((inv) => {
       if (!isAllProperties && !selectedProperties.includes(inv.propertyId)) return false;
+      if (!isDateInRange(inv.createdAt, dateRange)) return false;
       if (statusFilter !== "all" && inv.status !== statusFilter) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -277,7 +280,7 @@ export default function GuestInvitationsPage({
       }
       return true;
     });
-  }, [invitations, selectedProperties, isAllProperties, statusFilter, search]);
+  }, [invitations, selectedProperties, isAllProperties, statusFilter, search, dateRange]);
 
   const total = invitations.length;
   const completedCount = invitations.filter((i) => i.status === "completed").length;
@@ -429,6 +432,8 @@ export default function GuestInvitationsPage({
               </div>
             </div>
 
+            <div className="feedback-date-range"><span>Date range</span><CustomDatePicker label="Invitation date range" value={dateRange} onChange={setDateRange} floating/></div>
+            <button type="button" className="button button-outline filter-reset" onClick={() => { setDateRange({ preset: "all", startDate: null, endDate: null }); setSearch(""); setStatusFilter("all"); setSelectedProperties("all"); }}>Clear filters</button>
             {/* Property Scoping in Filter Bar */}
             {allowedProperties.length > 1 ? (
               <div style={{ minWidth: "200px" }}>

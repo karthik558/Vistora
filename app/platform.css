@@ -2,8 +2,8 @@
 .platform-heading,.platform-actions,.platform-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .platform-heading{margin-bottom:20px}.platform-heading h1{font-size:24px;letter-spacing:-.5px;margin:4px 0}.platform-page h2{font-size:15px;margin:0 0 14px}.platform-page h3,.case-panel h3{font-size:13px;margin:20px 0 10px}
 .platform-tabs{display:flex;gap:5px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:20px;padding-bottom:6px}
-.platform-tabs button{background:transparent;color:var(--muted);border:1px solid transparent;border-radius:4px;padding:8px 12px;white-space:nowrap;cursor:pointer;font:inherit;font-size:12px;transition:background .15s}
-.platform-tabs button:hover,.platform-tabs button[aria-current]{background:var(--canvas-alt);color:var(--ink);border-color:var(--line)}
+.platform-tabs :is(button,a){background:transparent;color:var(--muted);border:1px solid transparent;border-radius:4px;padding:8px 12px;white-space:nowrap;cursor:pointer;font:inherit;font-size:12px;transition:background .15s}
+.platform-tabs :is(button,a):hover,.platform-tabs :is(button,a)[aria-current]{background:var(--canvas-alt);color:var(--ink);border-color:var(--line)}
 .platform-card{padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:5px;margin-bottom:20px;min-width:0}
 .platform-page p,.case-panel p{font-size:12px;line-height:1.55;overflow-wrap:anywhere}.platform-page p:not([role]),.case-panel small{color:var(--muted)}
 .platform-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
