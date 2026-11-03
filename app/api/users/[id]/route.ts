@@ -11,6 +11,13 @@ export const DELETE=withWorkspace(async(_request:NextRequest,{params}:{params:Pr
  if((targetProfile.role === "super_admin" || targetRights.includes("org_role:super_admin")) && !callerIsSuperAdmin) {
   throw new PlatformError("You cannot remove super administrator accounts.", 403);
  }
+ if(!callerIsSuperAdmin) {
+  const callerRights = new Set(Array.isArray(user.rights) ? user.rights : []);
+  const cleanTargetRights = targetRights.filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+  if (cleanTargetRights.some((r: string) => !callerRights.has(r))) {
+   throw new PlatformError("You cannot remove a user who holds permissions beyond your own authority.", 403);
+  }
+ }
  const member=checked(await serviceDb().from("organization_members").select("*").eq("user_id",id).eq("organization_id",user.organizationId).single());
  if(member.role==="owner")throw new PlatformError("Company owner access cannot be revoked.",403);
  checked(await serviceDb().from("organization_members").update({is_active:false}).eq("user_id",id).eq("organization_id",user.organizationId).select().single());

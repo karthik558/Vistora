@@ -293,7 +293,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
 
  const config=hospitalityConfig(data?.config||appearance.config);
  const canManage=user.isOrganizationAdmin===true||(user.rights||[]).includes("manage_properties");
- const canImport=user.isOrganizationAdmin===true||(user.rights||[]).includes("import_guests")||(user.rights||[]).includes("manage_properties");
+ const canImport=user.isOrganizationAdmin===true||(user.rights||[]).includes("import_guests");
  const canAttend=canManageServiceJobs(user)&&data?.complaintsReady===true;
  const descriptions:Record<Tab,string>={
   Overview:"A clear view of guest stays, room readiness, and immediate service requests.",
@@ -505,17 +505,19 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
           </td>
           <td style={{textAlign:"right"}}>
            <div className="platform-actions" style={{justifyContent:"flex-end",gap:"6px"}}>
-            <button
-             type="button"
-             className="button button-outline compact"
-             disabled={busy}
-             onClick={()=>save({action:"stay",id:s.id,status:"checked_out"},"PATCH")}
-             title="Check out guest now (moves stay to history and marks room dirty for cleaning)"
-             style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
-            >
-             <LogOut size={12}/>
-             <span>Check out</span>
-            </button>
+            {canImport&&(
+             <button
+              type="button"
+              className="button button-outline compact"
+              disabled={busy}
+              onClick={()=>save({action:"stay",id:s.id,status:"checked_out"},"PATCH")}
+              title="Check out guest now (moves stay to history and marks room dirty for cleaning)"
+              style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
+             >
+              <LogOut size={12}/>
+              <span>Check out</span>
+             </button>
+            )}
             <button
              type="button"
              className="button button-ghost compact"
@@ -585,7 +587,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
           <td>{s.check_in_date} → {s.check_out_date}</td>
           <td>{s.guest_count} guest{s.guest_count===1?"":"s"}</td>
           <td style={{textAlign:"right"}}>
-           {canManage&&<div className="platform-actions" style={{justifyContent:"flex-end",gap:"6px"}}>
+           {canImport&&<div className="platform-actions" style={{justifyContent:"flex-end",gap:"6px"}}>
             <button
              type="button"
              className="button button-outline compact"

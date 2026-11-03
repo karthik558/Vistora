@@ -89,7 +89,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  }else if(b.action==="room"){
   if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
  }else if(b.action==="stay"||b.action==="guest"){
-  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests")&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or guest management access required.",403);
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests"))throw new PlatformError("Company administrator or guest management access required.",403);
  }else{
   admin();
  }
@@ -193,7 +193,7 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
  }else if(b.action==="room"){
   if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
  }else if(b.action==="stay"||b.action==="guest"){
-  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests")&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or guest management access required.",403);
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests"))throw new PlatformError("Company administrator or guest management access required.",403);
  }else{
   admin();
  }

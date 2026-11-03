@@ -20,7 +20,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     throw new PlatformError("Hotel operations module access required.", 403);
   }
 
-  const canImport = user.isOrganizationAdmin || user.rights?.includes("import_guests") || user.rights?.includes("manage_properties");
+  const canImport = user.isOrganizationAdmin || user.rights?.includes("import_guests");
   if (!canImport) {
     throw new PlatformError("Permission required to import guest stay reports.", 403);
   }

@@ -229,12 +229,14 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     activeUser?.orgRole === "super_admin" ||
     (activeUser?.rights || []).includes("org_role:super_admin");
   const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
+  const callerRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
   const canManageUsers = isSuperAdminUser || userRights.has("manage_users");
   const canViewUsers = canManageUsers || userRights.has("view_users");
   const availableRoles = isSuperAdminUser ? ORGANIZATIONAL_ROLES : ORGANIZATIONAL_ROLES.filter((r) => r.id !== "super_admin");
 
   function toggleRight(currentRights: string[], id: string, checked: boolean): string[] {
     if (checked) {
+      if (!isSuperAdminUser && !callerRights.has(id)) return currentRights;
       const next = [...currentRights, id];
       if (id === "manage_properties" && !next.includes("view_properties")) next.push("view_properties");
       if (id === "manage_settings" && !next.includes("view_settings")) next.push("view_settings");
@@ -490,6 +492,16 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
     e.preventDefault();
     if (!editAccessUser) return;
 
+    if (!isSuperAdminUser && editAccessUser.id === activeUser?.id) {
+      setError("You cannot modify your own permissions, role, or property scope.");
+      return;
+    }
+    const targetClean = (editAccessUser.rights || []).filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+    if (!isSuperAdminUser && targetClean.some((r: string) => !callerRights.has(r))) {
+      setError("You cannot modify a user who holds permissions beyond your authority.");
+      return;
+    }
+
     setError(null);
     setSuccess(null);
     setSavingAccess(true);
@@ -555,6 +567,17 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
 
   async function handleDeleteUser() {
     if (!pendingDelete) return;
+
+    if (!isSuperAdminUser && pendingDelete.id === activeUser?.id) {
+      setError("You cannot remove your own account.");
+      return;
+    }
+    const targetClean = (pendingDelete.rights || []).filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+    if (!isSuperAdminUser && targetClean.some((r: string) => !callerRights.has(r))) {
+      setError("You cannot remove a user who holds permissions beyond your authority.");
+      return;
+    }
+
     setDeletingUser(true);
     setError(null);
     setSuccess(null);
@@ -925,82 +948,147 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                               </div>
                             </td>
                             <td style={{ textAlign: "right" }}>
-                              {canManageUsers ? (
-                                <div style={{ display: "inline-flex", gap: "6px" }}>
-                                  <button
-                                    type="button"
-                                    className="button button-outline compact"
-                                    style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => {
-                                      const org = getUserOrgRole(user);
-                                      const dept = getUserDepartment(user);
-                                      setEditAccessUser(user);
-                                      setEditName(user.full_name || "");
-                                      setEditRole(org);
-                                      setEditDepartment(dept);
-                                      setEditPropertyId(user.property_id || "");
-                                      const initialPropIds = user.property_ids && user.property_ids.length > 0
-                                        ? user.property_ids
-                                        : user.property_id
-                                        ? [user.property_id]
-                                        : [];
-                                      setEditPropertyIds(initialPropIds);
-                                      const isSuper = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
-                                      setEditRights(
-                                        isSuper
+                              {(() => {
+                                const isSelf = user.id === activeUser?.id;
+                                const org = getUserOrgRole(user);
+                                const isSuperAdminTarget = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
+                                const targetCleanRights = (user.rights || []).filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+                                const hasHigherOrUnheldRights = !isSuperAdminUser && targetCleanRights.some((r: string) => !callerRights.has(r));
+
+                                if (!canManageUsers) {
+                                  return (
+                                    <span
+                                      style={{
+                                        fontSize: "10px",
+                                        fontFamily: "var(--font-dm-mono)",
+                                        padding: "3px 8px",
+                                        background: "var(--canvas-alt)",
+                                        color: "var(--muted)",
+                                        borderRadius: "3px",
+                                        border: "1px solid var(--line)",
+                                      }}
+                                    >
+                                      Read-only
+                                    </span>
+                                  );
+                                }
+
+                                if (isSelf) {
+                                  return (
+                                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                      <span
+                                        style={{
+                                          fontSize: "10px",
+                                          fontWeight: 600,
+                                          color: "var(--sage, #4e6f5b)",
+                                          padding: "3px 8px",
+                                          background: "rgba(78, 111, 91, 0.1)",
+                                          borderRadius: "3px",
+                                          border: "1px solid var(--sage-soft)",
+                                        }}
+                                        title="You cannot edit your own permissions or role"
+                                      >
+                                        Your Account (Self)
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="button button-outline compact"
+                                        style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                        onClick={() => {
+                                          setShowPasswordModal(user);
+                                          setNewPassword("");
+                                          setError(null);
+                                          setSuccess(null);
+                                        }}
+                                        title="Change password"
+                                      >
+                                        <Key size={12} strokeWidth={1.75} />
+                                        Password
+                                      </button>
+                                    </div>
+                                  );
+                                }
+
+                                if (isSuperAdminTarget || hasHigherOrUnheldRights) {
+                                  return (
+                                    <span
+                                      style={{
+                                        fontSize: "10px",
+                                        fontFamily: "var(--font-dm-mono)",
+                                        padding: "3px 8px",
+                                        background: "var(--canvas-alt)",
+                                        color: "var(--muted)",
+                                        borderRadius: "3px",
+                                        border: "1px solid var(--line)",
+                                      }}
+                                      title="This user holds permissions beyond your authority"
+                                    >
+                                      Protected
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <div style={{ display: "inline-flex", gap: "6px" }}>
+                                    <button
+                                      type="button"
+                                      className="button button-outline compact"
+                                      style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                      onClick={() => {
+                                        const dept = getUserDepartment(user);
+                                        setEditAccessUser(user);
+                                        setEditName(user.full_name || "");
+                                        setEditRole(org);
+                                        setEditDepartment(dept);
+                                        setEditPropertyId(user.property_id || "");
+                                        const initialPropIds = user.property_ids && user.property_ids.length > 0
+                                          ? user.property_ids
+                                          : user.property_id
+                                          ? [user.property_id]
+                                          : [];
+                                        setEditPropertyIds(initialPropIds);
+                                        const isSuper = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
+                                        const rawRights = isSuper
                                           ? SYSTEM_RIGHTS.map((r) => r.id)
                                           : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
                                           ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:"))
-                                          : ROLE_DEFAULT_RIGHTS[org] || ROLE_DEFAULT_RIGHTS.admin || []
-                                      );
-                                      setError(null);
-                                      setSuccess(null);
-                                    }}
-                                    title="Edit role, rights and property access"
-                                  >
-                                    <Settings2 size={12} strokeWidth={1.75} />
-                                    Access & Rights
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button button-outline compact"
-                                    style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => {
-                                      setShowPasswordModal(user);
-                                      setNewPassword("");
-                                      setError(null);
-                                      setSuccess(null);
-                                    }}
-                                    title="Change password"
-                                  >
-                                    <Key size={12} strokeWidth={1.75} />
-                                    Password
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button compact"
-                                    style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
-                                    onClick={() => setPendingDelete(user)}
-                                    title="Remove user"
-                                  >
-                                    <Trash2 size={12} strokeWidth={1.75} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <span
-                                  style={{
-                                    fontSize: "10px",
-                                    fontFamily: "var(--font-dm-mono)",
-                                    padding: "3px 8px",
-                                    background: "var(--canvas-alt)",
-                                    color: "var(--muted)",
-                                    borderRadius: "3px",
-                                    border: "1px solid var(--line)",
-                                  }}
-                                >
-                                  Read-only
-                                </span>
-                              )}
+                                          : ROLE_DEFAULT_RIGHTS[org] || ROLE_DEFAULT_RIGHTS.admin || [];
+                                        setEditRights(rawRights.filter((r) => isSuperAdminUser || callerRights.has(r)));
+                                        setError(null);
+                                        setSuccess(null);
+                                      }}
+                                      title="Edit role, rights and property access"
+                                    >
+                                      <Settings2 size={12} strokeWidth={1.75} />
+                                      Access & Rights
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button button-outline compact"
+                                      style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                      onClick={() => {
+                                        setShowPasswordModal(user);
+                                        setNewPassword("");
+                                        setError(null);
+                                        setSuccess(null);
+                                      }}
+                                      title="Change password"
+                                    >
+                                      <Key size={12} strokeWidth={1.75} />
+                                      Password
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button compact"
+                                      style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
+                                      onClick={() => setPendingDelete(user)}
+                                      title="Remove user"
+                                    >
+                                      <Trash2 size={12} strokeWidth={1.75} />
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );
@@ -1076,18 +1164,20 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(val) => {
                             const newRole = val as string;
                             setAddRole(newRole);
+                            const raw = newRole === "super_admin"
+                              ? SYSTEM_RIGHTS.map((r) => r.id)
+                              : ROLE_DEFAULT_RIGHTS[newRole] || [];
+                            const filtered = raw.filter((r) => isSuperAdminUser || callerRights.has(r));
+                            setAddRights(filtered);
                             if (newRole === "super_admin") {
-                              setAddRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setAddPropertyIds(properties.map((p) => p.id));
                               setAddDepartment("All Departments");
                             } else if (newRole === "admin") {
-                              setAddRights(ROLE_DEFAULT_RIGHTS.admin || []);
                               setAddDepartment("All Departments");
                               if (addPropertyIds.length === 0 && properties.length > 0) {
                                 setAddPropertyIds([properties[0].id]);
                               }
                             } else {
-                              setAddRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
                               if (addPropertyIds.length === 0 && properties.length > 0) {
                                 setAddPropertyIds([properties[0].id]);
                               }
@@ -1287,7 +1377,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setAddRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...SYSTEM_RIGHTS.map(r=>r.id)])}
+                                onClick={() => setAddRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...(isSuperAdminUser ? SYSTEM_RIGHTS.map(r=>r.id) : SYSTEM_RIGHTS.map(r=>r.id).filter(id=>callerRights.has(id)))])}
                               >
                                 All
                               </button>
@@ -1315,6 +1405,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             }}
                           >
                             {SYSTEM_RIGHTS.map((right) => {
+                              const isGrantable = isSuperAdminUser || callerRights.has(right.id);
                               const checked = addRights.includes(right.id);
                               return (
                                 <label
@@ -1324,20 +1415,29 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     alignItems: "flex-start",
                                     gap: "10px",
                                     fontSize: "12px",
-                                    cursor: "pointer",
+                                    cursor: isGrantable ? "pointer" : "not-allowed",
+                                    opacity: isGrantable ? 1 : 0.45,
                                   }}
+                                  title={isGrantable ? undefined : "You cannot grant this permission because your account does not possess it"}
                                 >
                                   <input
                                     type="checkbox"
                                     checked={checked}
+                                    disabled={!isGrantable}
                                     onChange={(e) => {
+                                      if (!isGrantable) return;
                                       setAddRights(toggleRight(addRights, right.id, e.target.checked));
                                     }}
-                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
+                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)", cursor: isGrantable ? "pointer" : "not-allowed" }}
                                   />
                                   <div>
-                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
-                                      {right.name}
+                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <span>{right.name}</span>
+                                      {!isGrantable && (
+                                        <span style={{ fontSize: "9px", fontWeight: 600, color: "var(--muted)", background: "var(--line)", padding: "1px 5px", borderRadius: "3px" }}>
+                                          Locked
+                                        </span>
+                                      )}
                                     </div>
                                     <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
                                       {right.description}
@@ -1401,6 +1501,30 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                     <h2>Edit member access</h2>
                     <p className="drawer-meta">Updating settings for <strong>{editAccessUser.full_name}</strong> ({editAccessUser.email})</p>
 
+                    {/* Safeguard banner for self-editing or higher authority editing */}
+                    {(() => {
+                      const isEditingSelf = editAccessUser.id === activeUser?.id;
+                      const targetClean = (editAccessUser.rights || []).filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+                      const isEditingHigher = !isSuperAdminUser && targetClean.some((r: string) => !callerRights.has(r));
+                      const isTargetSuperAdmin = getUserOrgRole(editAccessUser) === "super_admin" || (editAccessUser.rights || []).includes("org_role:super_admin");
+
+                      if (!isSuperAdminUser && isEditingSelf) {
+                        return (
+                          <div style={{ padding: "10px 14px", borderRadius: "6px", background: "rgba(220, 53, 69, 0.08)", border: "1px solid rgba(220, 53, 69, 0.25)", color: "#c53030", fontSize: "12px", lineHeight: 1.4, marginTop: "12px" }}>
+                            <strong>Self-modification blocked:</strong> You cannot modify your own permissions, role, or property scope.
+                          </div>
+                        );
+                      }
+                      if (!isSuperAdminUser && (isTargetSuperAdmin || isEditingHigher)) {
+                        return (
+                          <div style={{ padding: "10px 14px", borderRadius: "6px", background: "rgba(220, 53, 69, 0.08)", border: "1px solid rgba(220, 53, 69, 0.25)", color: "#c53030", fontSize: "12px", lineHeight: 1.4, marginTop: "12px" }}>
+                            <strong>Protected Account:</strong> This user holds permissions beyond your authority. You cannot modify their settings.
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     <form onSubmit={handleUpdateAccess} style={{ marginTop: "24px", display: "flex", flexDirection: "column" }}>
                       <div style={{ marginBottom: "18px" }}>
                         <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
@@ -1426,17 +1550,18 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                           onChange={(val) => {
                             const newRole = val as string;
                             setEditRole(newRole);
+                            const raw = newRole === "super_admin"
+                              ? SYSTEM_RIGHTS.map((r) => r.id)
+                              : ROLE_DEFAULT_RIGHTS[newRole] || [];
+                            const filtered = raw.filter((r) => isSuperAdminUser || callerRights.has(r));
+                            setEditRights(filtered);
                             if (newRole === "super_admin") {
-                              setEditRights(SYSTEM_RIGHTS.map((r) => r.id));
                               setEditDepartment("All Departments");
                               setEditPropertyIds(properties.map((p) => p.id));
                             } else if (newRole === "admin") {
-                              setEditRights(ROLE_DEFAULT_RIGHTS.admin || []);
                               if (editPropertyIds.length === 0 && properties.length > 0) {
                                 setEditPropertyIds([properties[0].id]);
                               }
-                            } else {
-                              setEditRights(ROLE_DEFAULT_RIGHTS[newRole] || []);
                             }
                           }}
                           header="Assign Role"
@@ -1620,7 +1745,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                 type="button"
                                 className="button button-outline compact"
                                 style={{ padding: "2px 7px", fontSize: "10px" }}
-                                onClick={() => setEditRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...SYSTEM_RIGHTS.map(r=>r.id)])}
+                                onClick={() => setEditRights(current=>[...withModuleAssignments(current).filter(r=>r.startsWith("module:")||r.startsWith("module_access:")),...(isSuperAdminUser ? SYSTEM_RIGHTS.map(r=>r.id) : SYSTEM_RIGHTS.map(r=>r.id).filter(id=>callerRights.has(id)))])}
                               >
                                 All
                               </button>
@@ -1648,6 +1773,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             }}
                           >
                             {SYSTEM_RIGHTS.map((right) => {
+                              const isGrantable = isSuperAdminUser || callerRights.has(right.id);
                               const checked = editRights.includes(right.id);
                               return (
                                 <label
@@ -1657,20 +1783,29 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     alignItems: "flex-start",
                                     gap: "10px",
                                     fontSize: "12px",
-                                    cursor: "pointer",
+                                    cursor: isGrantable ? "pointer" : "not-allowed",
+                                    opacity: isGrantable ? 1 : 0.45,
                                   }}
+                                  title={isGrantable ? undefined : "You cannot grant this permission because your account does not possess it"}
                                 >
                                   <input
                                     type="checkbox"
                                     checked={checked}
+                                    disabled={!isGrantable}
                                     onChange={(e) => {
+                                      if (!isGrantable) return;
                                       setEditRights(toggleRight(editRights, right.id, e.target.checked));
                                     }}
-                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
+                                    style={{ marginTop: "2px", accentColor: "var(--module-accent)", cursor: isGrantable ? "pointer" : "not-allowed" }}
                                   />
                                   <div>
-                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px" }}>
-                                      {right.name}
+                                    <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <span>{right.name}</span>
+                                      {!isGrantable && (
+                                        <span style={{ fontSize: "9px", fontWeight: 600, color: "var(--muted)", background: "var(--line)", padding: "1px 5px", borderRadius: "3px" }}>
+                                          Locked
+                                        </span>
+                                      )}
                                     </div>
                                     <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>
                                       {right.description}
@@ -1695,7 +1830,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         <button
                           type="submit"
                           className="button button-dark"
-                          disabled={savingAccess}
+                          disabled={savingAccess || (!isSuperAdminUser && (editAccessUser.id === activeUser?.id || (editAccessUser.rights || []).filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured").some((r: string) => !callerRights.has(r))))}
                           style={{ padding: "10px 18px" }}
                         >
                           {savingAccess ? "Saving changes…" : "Save Permissions →"}

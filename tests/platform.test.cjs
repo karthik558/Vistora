@@ -707,3 +707,145 @@ test("Single-property users automatically default to their assigned property and
     db.sessionDb = orig;
   }
 });
+
+test("Self-modification is blocked, subordinate delegation enforced, and guest import rights strictly isolated", async () => {
+  const db = require("../lib/platform/db.ts");
+  const { NextRequest } = require("next/server");
+  const usersRoute = require("../app/api/users/route.ts");
+  const userDeleteRoute = require("../app/api/users/[id]/route.ts");
+  const hospRoute = require("../app/api/hospitality/route.ts");
+  const importRoute = require("../app/api/hospitality/import/route.ts");
+
+  const orig = db.sessionDb;
+
+  const staffUser = {
+    id: "staff-caller",
+    fullName: "Staff Caller",
+    email: "staff@hotel.com",
+    role: "staff",
+    orgRole: "staff",
+    organizationId: "org-1",
+    isOrganizationAdmin: false,
+    propertyIds: ["prop-1"],
+    propertyId: "prop-1",
+    rights: ["module:hospitality", "manage_users", "view_users", "manage_properties"], // Has hospitality module, but NOT import_guests or manage_settings!
+    accessToken: "verified",
+  };
+
+  const targetSubordinate = {
+    id: "sub-1",
+    full_name: "Subordinate Staff",
+    email: "sub@hotel.com",
+    role: "staff",
+    rights: ["view_users"],
+    organization_id: "org-1",
+    property_ids: ["prop-1"],
+  };
+
+  const targetHigher = {
+    id: "higher-1",
+    full_name: "Higher Admin",
+    email: "higher@hotel.com",
+    role: "admin",
+    rights: ["manage_users", "manage_settings"], // Has manage_settings, which caller lacks
+    organization_id: "org-1",
+    property_ids: ["prop-1"],
+  };
+
+  const mockClient = {
+    rpc(fn) {
+      if (fn === "workspace_module") return Promise.resolve({ data: true, error: null });
+      return Promise.resolve({ data: true, error: null });
+    },
+    from(table) {
+      const q = {
+        select() { return q; },
+        eq(col, val) {
+          q._eqCol = col;
+          q._eqVal = val;
+          return q;
+        },
+        single() {
+          if (table === "profiles") {
+            if (q._eqVal === "staff-caller") return Promise.resolve({ data: { id: "staff-caller", full_name: "Staff Caller", email: "staff@hotel.com", role: "staff", rights: staffUser.rights }, error: null });
+            if (q._eqVal === "sub-1") return Promise.resolve({ data: targetSubordinate, error: null });
+            if (q._eqVal === "higher-1") return Promise.resolve({ data: targetHigher, error: null });
+          }
+          if (table === "organization_members") {
+            return Promise.resolve({ data: { user_id: q._eqVal, role: "member", organization_id: "org-1" }, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        },
+        maybeSingle() { return q.single(); },
+      };
+      return q;
+    },
+  };
+
+  db.sessionDb = () => mockClient;
+  try {
+    // 1. Self-editing rights prevention: staff caller CANNOT modify their own permissions or role
+    const selfEditRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "staff-caller", rights: ["manage_users", "manage_settings"] }),
+      }))
+    );
+    assert.equal(selfEditRes.status, 403);
+    const selfJson = await selfEditRes.json();
+    assert.match(selfJson.error, /cannot modify your own permissions/i);
+
+    // 2. Subordinate delegation: caller CANNOT grant rights that they do not possess (e.g. manage_settings)
+    const grantForbiddenRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "sub-1", rights: ["view_users", "manage_settings"] }),
+      }))
+    );
+    assert.equal(grantForbiddenRes.status, 403);
+    const grantForbiddenJson = await grantForbiddenRes.json();
+    assert.match(grantForbiddenJson.error, /can only grant permissions that your own account possesses/i);
+
+    // 3. Target hierarchy protection: caller CANNOT edit a user holding higher/unheld rights
+    const editHigherRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "higher-1", rights: ["view_users"] }),
+      }))
+    );
+    assert.equal(editHigherRes.status, 403);
+    const editHigherJson = await editHigherRes.json();
+    assert.match(editHigherJson.error, /permissions beyond your own authority/i);
+
+    // 4. Target hierarchy on delete: caller CANNOT delete a user with higher rights
+    const deleteHigherRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      userDeleteRoute.DELETE(new NextRequest("http://localhost/api/users/higher-1", { method: "DELETE" }), { params: Promise.resolve({ id: "higher-1" }) })
+    );
+    assert.equal(deleteHigherRes.status, 403);
+    const deleteHigherJson = await deleteHigherRes.json();
+    assert.match(deleteHigherJson.error, /permissions beyond your own authority/i);
+
+    // 5. Hospitality Import & Guest Creation strictly requires import_guests; manage_properties alone does NOT grant it
+    const importRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      importRoute.POST(new NextRequest("http://localhost/api/hospitality/import", {
+        method: "POST",
+        body: JSON.stringify({ property_ids: ["prop-1"], records: [{ guest_name: "Test", room_number: "101" }] }),
+      }))
+    );
+    assert.equal(importRes.status, 403);
+    const importJson = await importRes.json();
+    assert.match(importJson.error, /Permission required to import/i);
+
+    const stayRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
+      hospRoute.POST(new NextRequest("http://localhost/api/hospitality", {
+        method: "POST",
+        body: JSON.stringify({ action: "stay", room_id: "room-1", check_in_date: "2026-11-04", check_out_date: "2026-11-06" }),
+      }))
+    );
+    assert.equal(stayRes.status, 403);
+    const stayJson = await stayRes.json();
+    assert.match(stayJson.error, /guest management access required/i);
+  } finally {
+    db.sessionDb = orig;
+  }
+});

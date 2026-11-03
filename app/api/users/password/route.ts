@@ -59,6 +59,16 @@ async function POSTImpl(request: NextRequest) {
         { status: 403 }
       );
     }
+    if (!callerIsSuperAdmin && targetProfile.id !== caller.id) {
+      const callerRights = new Set(Array.isArray(caller.rights) ? caller.rights : []);
+      const cleanTargetRights = targetRights.filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+      if (cleanTargetRights.some((r: string) => !callerRights.has(r))) {
+        return NextResponse.json(
+          { success: false, error: "You cannot change credentials for a user who holds permissions beyond your authority." },
+          { status: 403 }
+        );
+      }
+    }
 
     const targetUserId = targetProfile.id;
 

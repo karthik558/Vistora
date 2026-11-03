@@ -32,6 +32,14 @@ async function applyMember(id:string,b:any,address:string,name:string) {
        }
      }
    }
+   // Subordinate delegation constraint: caller can ONLY grant permissions they hold
+   const callerRights = new Set(Array.isArray(user.rights) ? user.rights : []);
+   const rawRequested = Array.isArray(b.rights) ? b.rights : [];
+   const cleanRequested = rawRequested.filter((r: unknown) => typeof r === "string" && !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+   const forbiddenRights = cleanRequested.filter((r: string) => !callerRights.has(r));
+   if (forbiddenRights.length > 0) {
+     throw new PlatformError("You can only grant permissions that your own account possesses. Unauthorized: " + forbiddenRights.join(", "), 403);
+   }
  }
  for(const property of properties)await assertProperty(property);
  const rights=withModuleAssignments(Array.isArray(b.rights)?b.rights.filter((r:unknown)=>typeof r==="string"&&r.length<100&&!r.startsWith("org_role:")).slice(0,50):["view_feedback"]);
@@ -105,6 +113,22 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
  const currentRights = Array.isArray(current.rights) ? current.rights : [];
  if((current.role === "super_admin" || currentRights.includes("org_role:super_admin")) && !callerIsSuperAdmin) {
    throw new PlatformError("You cannot modify super administrator accounts.", 403);
+ }
+
+ // Self-editing rights prevention: A non-super-admin user CANNOT modify their own permissions, role, or property scope
+ if (current.id === caller.id && !callerIsSuperAdmin) {
+   if (b.rights !== undefined || b.role !== undefined || b.propertyIds !== undefined || b.propertyId !== undefined) {
+     throw new PlatformError("You cannot modify your own permissions, role, or property scope.", 403);
+   }
+ }
+
+ // Target hierarchy protection: A caller cannot modify a user who holds rights beyond the caller's authority
+ if (!callerIsSuperAdmin && current.id !== caller.id) {
+   const callerRights = new Set(Array.isArray(caller.rights) ? caller.rights : []);
+   const cleanTargetRights = currentRights.filter((r: string) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:") && !r.startsWith("module:") && r !== "module_access:configured");
+   if (cleanTargetRights.some((r: string) => !callerRights.has(r))) {
+     throw new PlatformError("You cannot modify a user who holds permissions beyond your own authority.", 403);
+   }
  }
  const user=await applyMember(current.id,{...b,role:b.role||currentRights.find((r:string)=>r.startsWith("org_role:"))?.slice(9)||current.role,propertyIds:b.propertyIds||current.property_ids,rights:b.rights||current.rights},current.email,b.fullName?text(b.fullName,"Name",100):current.full_name);
  return NextResponse.json({success:true,user});
