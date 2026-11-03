@@ -491,7 +491,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
              style={{display:"inline-flex",alignItems:"center",gap:"4px"}}
             >
              <ExternalLink size={12}/>
-             <span>Feedback ↗</span>
+             <span>Take feedback</span>
             </button>
             <button
              type="button"
@@ -670,7 +670,10 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
            <span style={{color:"var(--muted)",fontSize:"11px"}}>{stayCount} recorded stay{stayCount===1?"":"s"}</span>
           )}
          </td>
-         <td style={{textAlign:"right"}}>{canManage&&<button className="button button-outline compact" onClick={()=>{setGuest(g);window.scrollTo({top:0,behavior:"smooth"});}}>Edit</button>}</td>
+         <td style={{textAlign:"right"}}><div className="platform-actions" style={{justifyContent:"flex-end"}}>
+          {user.isOrganizationAdmin&&stays.filter(stay=>stay.guest_id===g.id&&stay.status==="active").map(stay=><button key={stay.id} className="button button-outline compact" onClick={()=>openFeedbackForStay(stay)}>Take feedback · Room {stay.room_number}</button>)}
+          {canManage&&<button className="button button-outline compact" onClick={()=>{setGuest(g);window.scrollTo({top:0,behavior:"smooth"});}}>Edit</button>}
+         </div></td>
         </tr>;
        })}
       </tbody>

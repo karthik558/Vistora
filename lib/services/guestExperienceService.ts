@@ -198,7 +198,7 @@ export async function fetchStayByToken(publicToken: string): Promise<GuestStayDe
         .eq("token_hash", hashToken(publicToken))
         .maybeSingle();
 
-      if (!invErr && inv) {
+      if (!invErr && inv && inv.status === "pending" && Date.parse(inv.expires_at) > Date.now()) {
         return {
           token: publicToken,
           guestName: inv.guest_name || "",

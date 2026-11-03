@@ -22,6 +22,7 @@ const departments: { value: DepartmentType; label: string; detail: string }[] = 
 export default function FeedbackForm({ publicToken = "verified" }: { publicToken?: string }) {
   const [stay, setStay] = useState<GuestStayDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [linkError, setLinkError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -62,11 +63,13 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true); setLinkError("");
 
     // Fetch properties and check for URL pre-selection or demo mode link
     fetch("/api/properties?public=true", { cache: "no-store" })
       .then((res) => res.json())
-      .then((json) => {
+      .then(async (json) => {
+        if (!json.success || !json.properties) throw new Error(json.error || "Could not load the feedback form.");
         if (mounted && json.success && json.properties) {
           // Exclude disabled properties from guest-facing selection
           const activeProperties = json.properties.filter((p: any) => p.is_active !== false);
@@ -123,42 +126,25 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             // Resolve invitation / stay if tokenParam exists
             const tokenToLookup = (publicToken && publicToken !== "verified") ? publicToken : tokenParam;
             if (tokenToLookup) {
-              fetch(`/api/stays/${encodeURIComponent(tokenToLookup)}`, { cache: "no-store" })
-                .then((r) => r.json())
-                .then((stayRes) => {
-                  if (mounted && stayRes.success && stayRes.data) {
-                    const d = stayRes.data;
-                    setStay(d);
-                    if (d.propertyId) {
-                      setSelectedPropertyId(d.propertyId);
-                      setIsUrlPreselected(true);
-                    }
-                    if (d.guestName && !guestParam) {
-                      setGuestName(d.guestName);
-                    }
-                    if (d.roomNumber && !roomParam) {
-                      setRoomNumber(d.roomNumber);
-                    }
-                    if (d.guestEmail) {
-                      setGuestEmail(d.guestEmail);
-                      setContactValue(d.guestEmail);
-                      setContactPreference("email");
-                    }
-                    if (d.guestPhone) {
-                      setGuestPhone(d.guestPhone);
-                      if (!d.guestEmail) {
-                        setContactValue(d.guestPhone);
-                        setContactPreference("phone");
-                      }
-                    }
-                  }
-                })
-                .catch(() => {});
+              const response = await fetch(`/api/stays/${encodeURIComponent(tokenToLookup)}`, { cache: "no-store" });
+              const stayRes = await response.json();
+              if (!response.ok || !stayRes.success || !stayRes.data) throw new Error(stayRes.error || "This feedback link is no longer available.");
+              if (mounted) {
+                const d = stayRes.data;
+                if (!activeProperties.some((property:any)=>property.id===d.propertyId)) throw new Error("This property is not accepting feedback.");
+                setStay(d);
+                setSelectedPropertyId(d.propertyId);
+                setIsUrlPreselected(true);
+                setGuestName(d.guestName || "");
+                setRoomNumber(d.roomNumber || "");
+                if (d.guestEmail) { setGuestEmail(d.guestEmail); setContactValue(d.guestEmail); setContactPreference("email"); }
+                if (d.guestPhone) { setGuestPhone(d.guestPhone); if (!d.guestEmail) { setContactValue(d.guestPhone); setContactPreference("phone"); } }
+              }
             }
           }
         }
       })
-      .catch(() => {})
+      .catch(error => { if (mounted) setLinkError(error.message || "Could not load the feedback form."); })
       .finally(() => {
         if (mounted) setLoading(false);
       });
@@ -268,6 +254,8 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const managerFollowUp = rating !== null && (rating <= 3 || wantsContact);
 
+  if (!loading && linkError) return <main className="guest-shell"><section className="guest-card" role="alert"><h1>Feedback form unavailable</h1><p>{linkError}</p><p>Ask the front desk for a current feedback link.</p><button className="button button-outline" onClick={()=>window.location.reload()}>Try again</button></section></main>;
+
   if (loading) {
     return (
       <main className="guest-shell">
@@ -365,7 +353,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           >
             <span style={{ color: "var(--gold)", fontWeight: 700 }}>★</span>
             <span>
-              Verified invitation for <strong>{stay.guestName || "Guest"}</strong>
+              Verified guest link for <strong>{stay.guestName || "Guest"}</strong>
               {stay.roomNumber ? ` · Room ${stay.roomNumber}` : ""}
               {stay.propertyName ? ` · ${stay.propertyName}` : ""}
             </span>
@@ -391,6 +379,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
             <CustomSelect
               id="property-select"
+              disabled={!!stay || submitting}
               value={selectedPropertyId}
               onChange={(val) => {
                 setSelectedPropertyId(val);
@@ -471,6 +460,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   id="guest-name"
                   type="text"
                   value={guestName}
+                  readOnly={!!stay?.guestName}
                   onChange={(e) => {
                     setGuestName(e.target.value);
                     if (propertyError) setPropertyError(null);
@@ -489,6 +479,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   id="guest-room"
                   type="text"
                   value={roomNumber}
+                  readOnly={!!stay?.roomNumber}
                   onChange={(e) => {
                     setRoomNumber(e.target.value);
                     if (propertyError) setPropertyError(null);
@@ -498,7 +489,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   required
                 />
                 <small style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "var(--muted)" }}>
-                  Enter room number, or &quot;NR&quot; if you are a non-resident / day guest.
+                  {stay ? "Guest and room details are linked to this feedback invitation." : <>Enter room number, or &quot;NR&quot; if you are a non-resident / day guest.</>}
                 </small>
               </div>
             </div>

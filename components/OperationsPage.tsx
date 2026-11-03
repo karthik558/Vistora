@@ -42,6 +42,7 @@ import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import FeedbackTopics from "./FeedbackTopics";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
 import CustomSelect from "./CustomSelect";
+import GuestDirectory from "./GuestDirectory";
 
 export default function OperationsPage({
   section,
@@ -279,7 +280,7 @@ export default function OperationsPage({
               filteredFeedback={feedback}
             />
           ) : section === "directory" ? (
-            <Directory data={data} query={query} setQuery={setQuery} />
+            user && <GuestDirectory user={user} properties={data.properties} history={<Directory data={data} query={query} setQuery={setQuery} canInvite={user.isOrganizationAdmin===true||user.rights?.includes("manage_questionnaire")===true} />}/>
           ) : section === "forms" ? (
             <Forms />
           ) : section === "questionnaire" ? (
@@ -511,7 +512,6 @@ interface CrmGuestProfile {
   phone: string | null;
   properties: string[];
   rooms: string[];
-  totalStays: number;
   hasProvidedFeedback: boolean;
   feedbackCount: number;
   averageRating: number | null;
@@ -529,10 +529,12 @@ function Directory({
   data,
   query,
   setQuery,
+  canInvite,
 }: {
   data: DashboardData;
   query: string;
   setQuery: (value: string) => void;
+  canInvite: boolean;
 }) {
   const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
   const [filterTab, setFilterTab] = useState<"all" | "provided" | "awaiting" | "recovery" | "promoters">("all");
@@ -549,6 +551,7 @@ function Directory({
 
   useEffect(() => {
     let mounted = true;
+    if (!canInvite) return;
     fetch("/api/invitations")
       .then((res) => res.json())
       .then((json) => {
@@ -560,7 +563,7 @@ function Directory({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [canInvite]);
 
   // Aggregate feedback and invitations into CRM guest profiles
   const profiles = useMemo(() => {
@@ -574,6 +577,7 @@ function Directory({
 
     // Process feedback items
     data.recentFeedback.forEach((f) => {
+      const propertyName = data.properties.find(property=>property.id===f.propertyId)?.name || "Property unavailable";
       const key = (f.guestEmail?.trim().toLowerCase()) || (f.guestPhone?.trim()) || f.name.trim().toLowerCase();
       if (!map.has(key)) {
         map.set(key, {
@@ -582,9 +586,8 @@ function Directory({
           initials: f.initials || getInitials(f.name),
           email: f.guestEmail || null,
           phone: f.guestPhone || null,
-          properties: [f.detail ? f.detail.split("·")[0].trim() : "Main Property"],
+          properties: [propertyName],
           rooms: f.roomNumber ? [f.roomNumber] : [],
-          totalStays: 1,
           hasProvidedFeedback: true,
           feedbackCount: 1,
           averageRating: f.rating,
@@ -592,13 +595,14 @@ function Directory({
           latestDepartment: f.department,
           sentiment: f.rating >= 4 ? (f.rating === 5 ? "delighted" : "positive") : f.rating === 3 ? "neutral" : "recovery_needed",
           hasOpenComplaint: f.status === "needs_attention" || f.status === "escalated",
-          vipTier: "Verified Guest",
+          vipTier: "Feedback received",
           lastActivityDate: f.createdAt,
           feedbacks: [f],
           invitations: [],
         });
       } else {
         const p = map.get(key)!;
+        if (!p.properties.includes(propertyName)) p.properties.push(propertyName);
         p.feedbacks.push(f);
         p.feedbackCount += 1;
         p.hasProvidedFeedback = true;
@@ -625,7 +629,6 @@ function Directory({
           phone: inv.guestPhone || null,
           properties: inv.propertyName ? [inv.propertyName] : ["Hotel Property"],
           rooms: inv.roomNumber ? [inv.roomNumber] : [],
-          totalStays: 1,
           hasProvidedFeedback: isCompleted,
           feedbackCount: isCompleted ? 1 : 0,
           averageRating: inv.feedbackRating || null,
@@ -654,7 +657,7 @@ function Directory({
     // Final calculations for each profile
     const result: CrmGuestProfile[] = [];
     map.forEach((p) => {
-      const ratings = p.feedbacks.map((f) => f.rating).concat(p.invitations.filter((i) => i.feedbackRating).map((i) => i.feedbackRating!));
+      const ratings = p.feedbacks.map((f) => f.rating).concat(p.invitations.filter(i=>i.status==="completed"&&i.feedbackRating&&!p.feedbacks.some(f=>f.id===i.feedbackId)).map(i=>i.feedbackRating!));
       if (ratings.length > 0) {
         const sum = ratings.reduce((a, b) => a + b, 0);
         p.averageRating = Math.round((sum / ratings.length) * 10) / 10;
@@ -664,22 +667,19 @@ function Directory({
         else p.sentiment = "recovery_needed";
       }
 
-      p.totalStays = Math.max(p.feedbacks.length, p.invitations.length, 1);
-      if (p.totalStays >= 3 || p.feedbacks.length >= 2) {
-        p.vipTier = "Repeat VIP Guest";
-      } else if (p.hasOpenComplaint || p.sentiment === "recovery_needed") {
-        p.vipTier = "Attention Needed";
+      if (p.hasOpenComplaint || p.sentiment === "recovery_needed") {
+        p.vipTier = "Follow-up needed";
       } else if (p.hasProvidedFeedback) {
-        p.vipTier = "Verified Guest";
+        p.vipTier = "Feedback received";
       } else {
-        p.vipTier = "New Touchpoint";
+        p.vipTier = "Invited guest";
       }
 
       result.push(p);
     });
 
     return result.sort((a, b) => new Date(b.lastActivityDate).getTime() - new Date(a.lastActivityDate).getTime());
-  }, [data.recentFeedback, invitations]);
+  }, [data.recentFeedback, data.properties, invitations]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -757,23 +757,14 @@ function Directory({
 
   return (
     <div style={{ display: "grid", gap: "20px" }}>
-      {/* CRM Heading */}
-      <div className="page-heading" style={{ marginBottom: 0 }}>
-        <div>
-          <p className="eyebrow">Hospitality Relationship Management</p>
-          <h1>Guest CRM &amp; Experience Directory</h1>
-          <p className="subheading">
-            Search guest profiles, review lifetime feedback history, track response conversion, and dispatch personalized touchpoints.
-          </p>
-        </div>
-      </div>
+      <p>Profiles from recorded feedback and invitations. To collect feedback for a current stay, use In-house guests.</p>
 
       {/* CRM Metric Cards */}
       <section className="metric-grid">
         <div className="metric-card">
           <span className="metric-label">Tracked Guest Profiles</span>
           <div className="metric-value">{totalProfiles}</div>
-          <div className="metric-change">Unique identified guests</div>
+          <div className="metric-change">Profiles with visible activity</div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Feedback Provided</span>
@@ -781,7 +772,7 @@ function Directory({
             {providedCount}
             <small>({engagementRate}%)</small>
           </div>
-          <div className="metric-change">Submitted verified reviews</div>
+          <div className="metric-change">Recorded feedback activity</div>
         </div>
         <div className="metric-card">
           <span className="metric-label">Awaiting Responses</span>
@@ -1097,7 +1088,7 @@ function Directory({
                       letterSpacing: "0.5px",
                     }}
                   >
-                    {selectedGuest.vipTier} · {selectedGuest.totalStays} Recorded Stay{selectedGuest.totalStays === 1 ? "" : "s"}
+                    {selectedGuest.vipTier}
                   </span>
                 </div>
               </div>
@@ -1165,6 +1156,8 @@ function Directory({
                 <button
                   type="button"
                   className="button button-dark"
+                  disabled={!canInvite}
+                  title={canInvite ? "Send a feedback invitation" : "Questionnaire management permission required"}
                   onClick={() => {
                     setShowInviteForm(!showInviteForm);
                     setInviteNotice("");
@@ -1175,7 +1168,7 @@ function Directory({
                   style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                 >
                   <Send size={14} />
-                  <span>{showInviteForm ? "Close Touchpoint Form" : "Dispatch New Invitation"}</span>
+                  <span>{showInviteForm ? "Close invitation form" : "Send feedback invitation"}</span>
                 </button>
               </div>
 

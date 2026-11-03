@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { ImportChanges, ImportResult } from "./GuestImportsPage";
 import WorkspaceSelect from "./WorkspaceSelect";
+import Link from "next/link";
+import { hasModuleAccess } from "../lib/auth/modules";
 import WorkspaceDateField from "./WorkspaceDateField";
 import type { WorkspaceUser } from "./Dashboard";
 import {
@@ -471,6 +473,7 @@ export default function DailyImportModal({
             </div>
 
             <p role="status">{resultNotice.imported?.checkedOut || 0} stays checked out.</p>
+            {hasModuleAccess(user,"feedback")&&(user.isOrganizationAdmin||user.rights?.includes("view_feedback"))&&<p><Link className="button button-outline compact" href="/dashboard/directory" onClick={handleClose}>Open guest directory to take feedback</Link></p>}
             <ImportChanges changes={resultNotice.changes || []}/>
             <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
               <button

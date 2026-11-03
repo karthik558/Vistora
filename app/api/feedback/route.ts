@@ -51,8 +51,8 @@ export async function POST(request:NextRequest) {
   const relevant=questions.filter(q=>!q.department||q.department===body.department);
   let validated;
   try {validated=validateAnswers(relevant,body.answers,body.recommendationScore);}catch(error){throw new PlatformError(error instanceof Error?error.message:"Invalid answers.");}
-  const finalGuestName = text(stayGuest || body.guestName || invGuest || "Guest", "Name", 100);
-  const finalRoomNumber = text(stayRoom || body.roomNumber || invRoom || "Guest", "Room", 50);
+  const finalGuestName = text(stayGuest || invGuest || body.guestName || "Guest", "Name", 100);
+  const finalRoomNumber = text(stayRoom || invRoom || body.roomNumber || "Guest", "Room", 50);
   const finalGuestEmail = (body.guestEmail || invEmail) ? text(body.guestEmail || invEmail, "Email", 254) : undefined;
   const finalGuestPhone = (body.guestPhone || invPhone) ? text(body.guestPhone || invPhone, "Phone", 30) : undefined;
   const created=await createFeedback({

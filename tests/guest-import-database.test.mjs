@@ -84,6 +84,31 @@ DO $$ BEGIN
  PERFORM import_guest_report((SELECT property_id FROM import_fixture),'[]','full',gen_random_uuid());
  IF NOT EXISTS(SELECT 1 FROM guest_imports) THEN RAISE EXCEPTION 'Authorized importer cannot see history'; END IF;
 END $$;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub',owner_id::text,true) FROM import_fixture;
+-- Prove the complete persistence path on disposable records only.
+DO $$ DECLARE f record; rows jsonb; preview jsonb; request uuid:=gen_random_uuid(); imported_stay_id uuid; saved jsonb; feedback_count integer;
+BEGIN
+ SELECT * INTO f FROM import_fixture;
+ rows:=jsonb_build_array(jsonb_build_object('guest_name','Feedback guest','room_number','105','check_in_date',current_date,'check_out_date',current_date+2,'guest_count',1));
+ preview:=import_guest_report(f.property_id,rows,'partial',request);
+ PERFORM import_guest_report(f.property_id,rows,'partial',request,preview->>'token');
+ SELECT id INTO STRICT imported_stay_id FROM stays WHERE property_id=f.property_id AND room_number='105' AND status='active';
+ saved:=submit_guest_feedback(jsonb_build_object('organization_id',f.org,'property_id',f.property_id,'stay_id',imported_stay_id,
+  'guest_name','Feedback guest','room_number','105','department','Front Desk','rating',5,'status','resolved','tone','positive','resolved_at',now()),'[]');
+ IF (saved->>'stay_id')::uuid<>imported_stay_id OR NOT EXISTS(SELECT 1 FROM feedback WHERE id=(saved->>'id')::uuid AND feedback.stay_id=imported_stay_id AND property_id=f.property_id AND organization_id=f.org) THEN
+  RAISE EXCEPTION 'Imported guest feedback did not persist against its stay and property';
+ END IF;
+ SELECT count(*) INTO feedback_count FROM feedback WHERE property_id=f.property_id;
+ BEGIN
+  PERFORM submit_guest_feedback(jsonb_build_object('organization_id',f.org,'property_id',f.property_id,'stay_id',imported_stay_id,
+   'guest_name','Feedback guest','room_number','105','department','Front Desk','rating',5,'status','resolved','tone','positive'),
+   jsonb_build_array(jsonb_build_object('questionId',gen_random_uuid(),'questionText','Invalid question','answerValue','Invalid')));
+  RAISE EXCEPTION 'Invalid answer accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL;
+ WHEN raise_exception THEN IF SQLERRM<>'Linked record belongs to another company' THEN RAISE; END IF; END;
+ IF (SELECT count(*) FROM feedback WHERE property_id=f.property_id)<>feedback_count THEN RAISE EXCEPTION 'Failed questionnaire left partial feedback'; END IF;
+END $$;
 ROLLBACK;
 ` });
 console.log('Guest import database acceptance passed.');
