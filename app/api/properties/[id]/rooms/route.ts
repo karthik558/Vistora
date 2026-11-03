@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withWorkspace, text, number } from "../../../../../lib/platform/http";
+import { readJson, withWorkspace, text, number } from "../../../../../lib/platform/http";
 import { checked, workspaceDb, workspaceUser, PlatformError } from "../../../../../lib/platform/db";
 
 type Context = { params: Promise<{ id: string }> };
@@ -28,7 +28,7 @@ export const POST = withWorkspace(async (request: NextRequest, { params }: Conte
   const prop = await getProperty(id);
   const user = workspaceUser();
   const db = workspaceDb();
-  const b = await request.json();
+  const b = await readJson(request);
 
   // BULK IMPORT / BATCH CREATION
   if (Array.isArray(b.rooms)) {
@@ -127,7 +127,7 @@ export const PATCH = withWorkspace(async (request: NextRequest, { params }: Cont
   const { id } = await params;
   await getProperty(id);
   const db = workspaceDb();
-  const b = await request.json();
+  const b = await readJson(request);
 
   const roomId = text(b.id, "Room ID", 50);
   const updates: Record<string, unknown> = {};

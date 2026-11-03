@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,email,number} from "../../../lib/platform/http";
+import { readJson,withWorkspace,text,email,number} from "../../../lib/platform/http";
 import {getApplicationSettings,updateApplicationSettings,getPropertySetting,getAllPropertySettings,updatePropertySetting} from "../../../lib/services/settingsService";
 import {assertProperty,PlatformError,workspaceUser} from "../../../lib/platform/db";
 import {validateHospitality} from "../../../lib/hospitality/config";
@@ -13,7 +13,7 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
  const user=workspaceUser();
  const isSuperAdmin = user.isOrganizationAdmin === true || (user as any).role === "super_admin" || (user.rights||[]).includes("org_role:super_admin");
  if(!isSuperAdmin)throw new PlatformError("Only super administrators can save system settings.",403);
- const b=await request.json();
+ const b=await readJson(request);
  if(b.type==="application"){
    const p=b.appSettings||{},patch:Record<string,unknown>={};
    for(const k of ["organizationName","projectName","brandTagline","defaultTimezone"])if(p[k]!==undefined)patch[k]=text(p[k],k,200);

@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text} from "../../../../lib/platform/http";
+import { readJson,readFormData,withWorkspace,text} from "../../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,serviceDb,PlatformError} from "../../../../lib/platform/db";
 import {randomUUID} from "node:crypto";
 type Context={params:Promise<{id:string}>};
@@ -26,7 +26,7 @@ export const POST=withWorkspace(async(request:NextRequest,{params}:Context)=>{
  const {id}=await params,row=await caseRow(id),user=workspaceUser(),db=workspaceDb();
  if(request.headers.get("content-type")?.includes("multipart/form-data")) {
   if(Number(request.headers.get("content-length"))>6*1024*1024)throw new PlatformError("File must be at most 5 MB.");
-  const form=await request.formData(),file=form.get("file");
+  const form=await readFormData(request),file=form.get("file");
   if(!(file instanceof File)||!file.size||file.size>5*1024*1024)throw new PlatformError("Choose a file of 1 byte to 5 MB.");
   const bytes=Buffer.from(await file.arrayBuffer());
   const jpg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255,png=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),pdf=bytes.subarray(0,5).toString()==="%PDF-";
@@ -38,7 +38,7 @@ export const POST=withWorkspace(async(request:NextRequest,{params}:Context)=>{
   try {checked(await db.from("feedback_attachments").insert({organization_id:row.organization_id,feedback_id:id,uploaded_by:user.id,object_path:path,filename:name,content_type:type,size_bytes:file.size}).select().single());}
   catch(error){await storage.remove([path]);throw error;}
  } else {
-  const b=await request.json();
+  const b=await readJson(request);
   checked(await db.from("feedback_comments").insert({organization_id:row.organization_id,feedback_id:id,author_id:user.id,body:text(b.body,"Internal note",4000)}).select().single());
  }
  return NextResponse.json({success:true},{status:201});

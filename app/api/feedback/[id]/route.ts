@@ -1,10 +1,10 @@
 import { NextRequest,NextResponse } from "next/server";
-import { withWorkspace, text } from "../../../../lib/platform/http";
+import { readJson, withWorkspace, text } from "../../../../lib/platform/http";
 import { checked,workspaceDb,workspaceUser,PlatformError } from "../../../../lib/platform/db";
 import { toViewModel,invalidateDashboardCache } from "../../../../lib/services/guestExperienceService";
 import {queueGuestMessage} from "../../../../lib/services/guestMessaging";
 export const PATCH=withWorkspace(async(request:NextRequest,{params}:{params:Promise<{id:string}>})=>{
- const {id}=await params,body=await request.json(),db=workspaceDb();
+ const {id}=await params,body=await readJson(request),db=workspaceDb();
  const current=checked(await db.from("feedback").select("*").eq("id",id).single());
  const updates:Record<string,unknown>={};
  if(body.status!==undefined){if(!["needs_attention","under_review","escalated","resolved"].includes(body.status))throw new PlatformError("Invalid status.");updates.status=body.status;}

@@ -1,4 +1,4 @@
-import { withWorkspace, errorResponse } from "../../../lib/platform/http";
+import { readJson, withWorkspace, errorResponse } from "../../../lib/platform/http";
 import { workspaceDb, serviceDb, checked } from "../../../lib/platform/db";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -21,7 +21,7 @@ async function GETImpl(request: NextRequest) {
 
     let query = supabase
       .from("properties")
-      .select("*, profiles:profiles(id, full_name, email, role)")
+      .select(user?.isOrganizationAdmin || user?.rights?.includes("view_users") || user?.rights?.includes("manage_users") ? "*, profiles:profiles(id, full_name, email, role)" : "*")
       .order("name", { ascending: true });
 
     // Multi-tenant isolation: Only Super Admins see all properties globally.
@@ -43,15 +43,12 @@ async function GETImpl(request: NextRequest) {
 
     if (error) {
       console.error("[Supabase Error] properties query failed:", error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Could not complete the property request." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, properties: properties || [] });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to fetch properties" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }
 
@@ -61,7 +58,7 @@ async function POSTImpl(request: NextRequest) {
     const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
-    const body = await request.json();
+    const body = await readJson(request);
     const { name, code, location, country, brand, totalRooms, userIds } = body;
 
     if (!name || !name.trim()) {
@@ -92,7 +89,7 @@ async function POSTImpl(request: NextRequest) {
 
     if (insertError) {
       console.error("[Supabase Error] Insert property failed:", insertError);
-      return NextResponse.json({ success: false, error: insertError.message }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Could not create the property." }, { status: 500 });
     }
 
     // Assign to users if provided
@@ -121,10 +118,7 @@ async function POSTImpl(request: NextRequest) {
     invalidateDashboardCache();
     return NextResponse.json({ success: true, property }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to create property" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }
 
@@ -134,7 +128,7 @@ async function PATCHImpl(request: NextRequest) {
     const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
-    const body = await request.json();
+    const body = await readJson(request);
     const { propertyId, id, name, code, location, country, brand, totalRooms, isActive, is_active } = body;
 
     const targetId = propertyId || id;
@@ -162,16 +156,13 @@ async function PATCHImpl(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Could not complete the property request." }, { status: 500 });
     }
 
     invalidateDashboardCache();
     return NextResponse.json({ success: true, property: updated });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to update property" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }
 
@@ -181,7 +172,7 @@ async function DELETEImpl(request: NextRequest) {
     const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
-    const { propertyId } = await request.json();
+    const { propertyId } = await readJson(request);
     if (!propertyId) {
       return NextResponse.json({ success: false, error: "Property ID is required." }, { status: 400 });
     }
@@ -190,25 +181,16 @@ async function DELETEImpl(request: NextRequest) {
     const { error } = await supabase.from("properties").delete().eq("id", propertyId);
 
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Could not complete the property request." }, { status: 500 });
     }
 
     invalidateDashboardCache();
     return NextResponse.json({ success: true, message: "Property removed successfully." });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to delete property" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }
-export async function GET(request:NextRequest) {
- if(request.nextUrl.searchParams.get("public")!=="true"&&(request.cookies.get("sb-access-token") || request.headers.get("authorization")))return withWorkspace(GETImpl)(request);
- try {
-  const properties=checked(await serviceDb().from("properties").select("id,name,code,location,is_active,organizations(name,logo_url,brand_color,welcome_message)").eq("is_active",true).order("name"));
-  return NextResponse.json({success:true,properties});
- }catch(error){return errorResponse(error);}
-}
+export const GET=withWorkspace(GETImpl);
 export const POST=withWorkspace(POSTImpl);
 export const PATCH=withWorkspace(PATCHImpl);
 export const DELETE=withWorkspace(DELETEImpl);

@@ -1385,10 +1385,10 @@ function Forms() {
         <span className="form-status">ACTIVE</span>
         <h2>Guest feedback form</h2>
         <p>Public form for collecting ratings, department context, comments, and optional manager follow-up.</p>
-        <code>/feedback</code>
+        <p>Generate a property-specific link or QR code before sharing the form.</p>
         <div className="form-card-actions">
-          <Link className="button button-dark compact" href="/feedback">
-            Open form ↗
+          <Link className="button button-dark compact" href="/dashboard/qr-codes">
+            Generate property link ↗
           </Link>
           <Link className="panel-action" href="/dashboard/qr-codes">
             Create QR link
@@ -1441,37 +1441,36 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
   const [identifier, setIdentifier] = useState("Room 302");
   const [label, setLabel] = useState("In-Room Concierge Card");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>(properties[0]?.id || "");
-  const [isDemoLink, setIsDemoLink] = useState(true);
+  const [signedPath, setSignedPath] = useState("");
+  const [linkError, setLinkError] = useState("");
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [showPrintModal, setShowPrintModal] = useState(false);
 
   const selectedProp = properties.find((p) => p.id === selectedPropertyId);
 
-  // Construct URL with property and room parameters so when walked over, feedback form preselects them
-  const url = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedPropertyId) {
-      const propParam = selectedProp?.code || selectedPropertyId;
-      params.set("property", propParam);
-    }
-    if (identifier.trim()) {
-      params.set("room", identifier.trim());
-    }
-    if (qrType) {
-      params.set("source", `qr_${qrType}`);
-    }
-    if (isDemoLink) {
-      params.set("demo", "true");
-    }
-    const query = params.toString();
-    return `${origin}/feedback${query ? `?${query}` : ""}`;
-  }, [origin, selectedPropertyId, selectedProp, identifier, qrType, isDemoLink]);
+  // Generate the property binding on the server; URL parameters are not authorization.
+  useEffect(() => {
+    const controller = new AbortController();
+    setSignedPath(""); setLinkError("");
+    if (!selectedPropertyId) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/feedback-links", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ propertyId: selectedPropertyId, room: identifier.trim(), department: qrType === "spa" ? "Spa & Wellness" : qrType === "dining" ? "Food & Beverage" : "Front Desk", demo: false }) });
+        const json = await response.json();
+        if (!response.ok || !json.success) throw new Error(json.error || "Could not generate a secure feedback link.");
+        if (!controller.signal.aborted) setSignedPath(json.path);
+      } catch (error) { if (!controller.signal.aborted) setLinkError((error as Error).message); }
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [selectedPropertyId, identifier, qrType]);
+  const url = signedPath && origin ? origin + signedPath : "";
 
   useEffect(() => {
     if (!origin) return;
     let active = true;
     setQrDataUrl("");
+    if (!url) return;
     QRCode.toDataURL(url, {
       width: 400,
       margin: 2,
@@ -1496,7 +1495,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
   }
 
   async function downloadSvg() {
-    if (!origin) return;
+    if (!origin || !url) return;
     try {
       const svgString = await QRCode.toString(url, { type: "svg", margin: 2 });
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
@@ -1551,7 +1550,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
           <p className="eyebrow">Enterprise Touchpoint &amp; QR Studio</p>
           <h2>Physical QR &amp; guest touchpoint studio</h2>
           <p>
-            Generate high-resolution QR codes mapped to specific rooms, dining tables, and hotel facilities. When the guest scans or opens the link, the property and touchpoint are pre-selected by default.
+            Generate high-resolution QR codes mapped to specific rooms, dining tables, and hotel facilities. When the guest scans or opens the link, the property and touchpoint are locked to the shared link.
           </p>
 
           {/* QR Touchpoint / Context Selector */}
@@ -1623,7 +1622,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
           {/* Target Property */}
           <div style={{ marginBottom: "20px" }}>
             <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-              Target Hotel Property (Pre-fills in Guest Form)
+              Property for this feedback link
             </label>
             <CustomSelect
               value={selectedPropertyId}
@@ -1640,9 +1639,10 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
           {/* Generated URL Box */}
           <div style={{ marginBottom: "20px" }}>
             <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>
-              Generated QR Destination Link (With Pre-Selected Room &amp; Hotel)
+              Property feedback link
             </label>
-            <input className="auth-input" value={url} readOnly />
+            <input className="auth-input" value={url} readOnly placeholder={linkError || "Generating secure link…"} />
+            {linkError && <p role="alert" className="guest-error">{linkError}</p>}
           </div>
 
           {/* Action Buttons: Copy, Walk over to form, Export PNG, Export SVG, Print Voucher PDF */}
@@ -1650,8 +1650,9 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             <button
               type="button"
               className="button button-dark"
-              disabled={!origin}
+              disabled={!url}
               onClick={async () => {
+                if (!url) return;
                 await navigator.clipboard?.writeText(url);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
@@ -1663,7 +1664,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             </button>
 
             <a
-              href={url}
+              href={url || undefined} aria-disabled={!url} onClick={event => { if (!url) event.preventDefault(); }}
               target="_blank"
               rel="noopener noreferrer"
               className="button button-outline"
@@ -1773,7 +1774,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             )}
           </div>
           <p style={{ margin: "10px 0 0", color: "var(--muted)", fontSize: "11px" }}>
-            Pre-fills hotel location and touchpoint into the guest feedback form.
+            Guests can review only the property attached to this link.
           </p>
         </div>
       </div>

@@ -114,6 +114,10 @@ export interface SubmitFeedbackPayload {
 }
 
 export interface GuestStayDetails {
+  propertyCode?: string;
+  isStayLink?: boolean;
+  demo?: boolean;
+  department?: string;
   token: string;
   guestName: string;
   roomNumber: string;

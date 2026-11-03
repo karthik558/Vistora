@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,number} from "../../../../lib/platform/http";
+import { readJson,withWorkspace,text,number} from "../../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,assertProperty,PlatformError} from "../../../../lib/platform/db";
 import {managementReport,reportRows} from "../../../../lib/platform/reports";
 
@@ -42,7 +42,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
 },"export_reports");
 
 export const POST=withWorkspace(async(request:NextRequest)=>{
- const b=await request.json(),f=b.filters||{},user=workspaceUser();
+ const b=await readJson(request),f=b.filters||{},user=workspaceUser();
  if(b.action!=="save_view")throw new PlatformError("Only saved report views can be changed here.",403);
  if(f.property&&f.property!=="all")await assertProperty(f.property);
  const result=checked(await workspaceDb().from("saved_views").insert({
@@ -53,7 +53,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
 },"export_reports");
 
 export const DELETE=withWorkspace(async(request:NextRequest)=>{
- const b=await request.json();
+ const b=await readJson(request);
  if(b.kind!=="view")throw new PlatformError("Only saved report views can be changed here.",403);
  checked(await workspaceDb().from("saved_views").delete().eq("id",b.id).eq("user_id",workspaceUser().id).select("id").single());
  return NextResponse.json({success:true});

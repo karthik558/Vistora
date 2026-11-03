@@ -6,10 +6,6 @@ execFileSync(process.env.PSQL_BIN || 'psql', [url, '-v', 'ON_ERROR_STOP=1', '-q'
 BEGIN;
 CREATE TEMP TABLE import_fixture AS SELECT gen_random_uuid() owner_id,gen_random_uuid() reader_id,gen_random_uuid() property_id,gen_random_uuid() request_id;
 INSERT INTO auth.users(id,email) SELECT owner_id,'import-owner@test.local' FROM import_fixture;
--- Auth fixtures have no request JWT: clear bootstrap org before company provisioning.
-ALTER TABLE public.profiles DISABLE TRIGGER stamp_workspace_trigger;
-UPDATE public.profiles SET organization_id=NULL WHERE id=(SELECT owner_id FROM import_fixture);
-ALTER TABLE public.profiles ENABLE TRIGGER stamp_workspace_trigger;
 SELECT create_company(owner_id,'Import test','import-test-'||owner_id) FROM import_fixture;
 ALTER TABLE import_fixture ADD COLUMN org uuid;
 UPDATE import_fixture SET org=(SELECT organization_id FROM organization_members WHERE user_id=owner_id);
@@ -106,7 +102,7 @@ BEGIN
  END IF;
  SELECT count(*) INTO feedback_count FROM feedback WHERE property_id=f.property_id;
  BEGIN
-  PERFORM submit_guest_feedback(jsonb_build_object('organization_id',f.org,'property_id',f.property_id,'stay_id',imported_stay_id,
+  PERFORM submit_guest_feedback(jsonb_build_object('organization_id',f.org,'property_id',f.property_id,
    'guest_name','Feedback guest','room_number','105','department','Front Desk','rating',5,'status','resolved','tone','positive'),
    jsonb_build_array(jsonb_build_object('questionId',gen_random_uuid(),'questionText','Invalid question','answerValue','Invalid')));
   RAISE EXCEPTION 'Invalid answer accepted';

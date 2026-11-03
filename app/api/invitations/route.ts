@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withWorkspace, text, email } from "../../../lib/platform/http";
+import { readJson, withWorkspace, text, email } from "../../../lib/platform/http";
 import { PlatformError, workspaceDb } from "../../../lib/platform/db";
 import { listInvitations, createInvitation, deleteInvitation, getInvitationById } from "../../../lib/services/invitationsService";
 import { logAuditEvent } from "../../../lib/services/auditLogService";
@@ -15,7 +15,7 @@ export const GET = withWorkspace(
 );
 
 export const POST = withWorkspace(async (request: NextRequest) => {
-  const b = await request.json();
+  const b = await readJson(request);
   const origin = request.headers.get("origin") || request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   // Action: Resend email to guest for an existing invitation
@@ -35,10 +35,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
       invitation.guestEmail = recipient;
     }
 
-    const propParam = invitation.propertyCode || invitation.propertyId;
-    let inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
-    if (invitation.guestEmail) inviteLink += `&email=${encodeURIComponent(invitation.guestEmail)}`;
-    if (invitation.guestPhone) inviteLink += `&phone=${encodeURIComponent(invitation.guestPhone)}`;
+    const inviteLink = `${origin}/feedback/${encodeURIComponent(invitation.token)}`;
 
     const sendRes = await sendInvitationEmail({
       recipient,
@@ -94,10 +91,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     notes: text(b.notes, "Notes", 1000, false),
   });
 
-  const propParam = invitation.propertyCode || invitation.propertyId;
-  let inviteLink = `${origin}/feedback?token=${invitation.token}&property=${encodeURIComponent(propParam)}&room=${encodeURIComponent(invitation.roomNumber)}&guest=${encodeURIComponent(invitation.guestName)}`;
-  if (invitation.guestEmail) inviteLink += `&email=${encodeURIComponent(invitation.guestEmail)}`;
-  if (invitation.guestPhone) inviteLink += `&phone=${encodeURIComponent(invitation.guestPhone)}`;
+  const inviteLink = `${origin}/feedback/${encodeURIComponent(invitation.token)}`;
 
   let emailSent = false;
   let emailError: string | undefined;

@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,number} from "../../../lib/platform/http";
+import { readJson,withWorkspace,text,number} from "../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,PlatformError} from "../../../lib/platform/db";
 function requireViewRoleMapping(){
  const user=workspaceUser();
@@ -45,7 +45,7 @@ export const GET=withWorkspace(async()=>{
  return NextResponse.json({success:true,rules:ruleList,properties:propList,team:team.map(p=>({...p,isAdmin:active.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
- requireManageRoleMapping();const b=await request.json(),caller=workspaceUser();
+ requireManageRoleMapping();const b=await readJson(request),caller=workspaceUser();
  const callerIsSuperAdmin=caller.isOrganizationAdmin||caller.orgRole==="super_admin"||(caller.rights||[]).includes("org_role:super_admin");
  if(!callerIsSuperAdmin){
   const allowedPropIds = caller.propertyIds?.length ? caller.propertyIds : (caller.propertyId ? [caller.propertyId] : []);
@@ -63,7 +63,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
 });
 export const PATCH=POST;
 export const DELETE=withWorkspace(async(request:NextRequest)=>{
- requireManageRoleMapping();const b=await request.json(),caller=workspaceUser();
+ requireManageRoleMapping();const b=await readJson(request),caller=workspaceUser();
  const callerIsSuperAdmin=caller.isOrganizationAdmin||caller.orgRole==="super_admin"||(caller.rights||[]).includes("org_role:super_admin");
  if(!callerIsSuperAdmin){
   const allowedPropIds = caller.propertyIds?.length ? caller.propertyIds : (caller.propertyId ? [caller.propertyId] : []);

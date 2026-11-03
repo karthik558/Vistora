@@ -1,4 +1,4 @@
-import { withWorkspace } from "../../../../lib/platform/http";
+import { readJson, errorResponse, withWorkspace } from "../../../../lib/platform/http";
 import { workspaceDb, workspaceUser, PlatformError } from "../../../../lib/platform/db";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -15,7 +15,7 @@ async function POSTImpl(request: NextRequest) {
     const callerIsSuperAdmin = caller.isOrganizationAdmin || caller.orgRole === "super_admin" || (caller.rights || []).includes("org_role:super_admin");
     const canManage = callerIsSuperAdmin || caller.rights?.includes("manage_users");
     if (!canManage) throw new PlatformError("Administrator access required.",403);
-    const { email, userId, newPassword } = await request.json();
+    const { email, userId, newPassword } = await readJson(request);
 
     if (typeof newPassword!=="string" || newPassword.length < 10) {
       return NextResponse.json(
@@ -107,11 +107,6 @@ async function POSTImpl(request: NextRequest) {
         role: targetProfile.role,
       },
     });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to update password." },
-      { status: 500 }
-    );
-  }
+  } catch (err: any) { return errorResponse(err); }
 }
 export const POST=withWorkspace(POSTImpl,"manage_users");

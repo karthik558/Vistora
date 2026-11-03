@@ -603,10 +603,10 @@ function StandaloneAppShell({
 
         <div className="sidebar-bottom">
           {!isAdministration&&workspaceArea==="feedback"&&<Link
-            href="/feedback"
+            href="/dashboard/qr-codes"
             className="sidebar-guest-link"
             onClick={() => setMobileNavOpen(false)}
-            title="Open guest feedback form"
+            title="Generate a property feedback link"
           >
             <span className="guest-link-text">Open guest feedback form</span>
             <ExternalLink size={13} strokeWidth={1.75} style={{ opacity: 0.8 }} />

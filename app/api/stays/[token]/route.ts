@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchStayByToken } from "../../../../lib/services/guestExperienceService";
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) {
+import { resolvePublicFeedbackLink } from "../../../../lib/feedback/public-links";
+import { errorResponse } from "../../../../lib/platform/http";
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
-    const stay = await fetchStayByToken(token);
-    if (!stay) {
-      return NextResponse.json({ success: false, error: "Stay not found" }, { status: 404, headers: {"Cache-Control":"no-store"} });
-    }
-    return NextResponse.json({ success: true, data: stay }, {headers:{"Cache-Control":"no-store"}});
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+    const { details } = await resolvePublicFeedbackLink(token);
+    return NextResponse.json({ success: true, data: details }, { headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
+  } catch (error) { return errorResponse(error); }
 }

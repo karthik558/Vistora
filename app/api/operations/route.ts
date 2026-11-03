@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, createHash } from "node:crypto";
-import { withWorkspace, text } from "../../../lib/platform/http";
+import { readJson, withWorkspace, text } from "../../../lib/platform/http";
 import {
   workspaceDb,
   workspaceUser,
@@ -224,7 +224,7 @@ export const GET = withWorkspace(async (request: NextRequest) => {
 });
 export const POST = withWorkspace(async (request: NextRequest) => {
   await access();
-  const body = await request.json();
+  const body = await readJson(request);
   if (!body || typeof body !== "object" || JSON.stringify(body).length > 30000)
     throw new PlatformError("Invalid operation payload.");
   const action = text(body.action, "Action", 40),

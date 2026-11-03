@@ -1,10 +1,10 @@
 import {NextRequest,NextResponse} from "next/server";
 import {checked,serviceDb,sessionDb,PlatformError} from "../../../lib/platform/db";
-import {errorResponse,text} from "../../../lib/platform/http";
+import { readJson,errorResponse,text} from "../../../lib/platform/http";
 import {hashToken} from "../../../lib/platform/secrets";
 export async function POST(request:NextRequest) {
  try {
-  const b=await request.json(),token=request.cookies.get("sb-access-token")?.value||request.headers.get("authorization")?.replace(/^Bearer /,"");
+  const b=await readJson(request),token=request.cookies.get("sb-access-token")?.value||request.headers.get("authorization")?.replace(/^Bearer /,"");
   if(!token)throw new PlatformError("Sign in first.",401);
   const {data,error}=await sessionDb(token).auth.getUser(token);if(error||!data.user)throw new PlatformError("Sign in first.",401);
   let organizationId:string;

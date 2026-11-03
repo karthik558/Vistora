@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withWorkspace, text } from "../../../lib/platform/http";
+import { readJson, withWorkspace, text } from "../../../lib/platform/http";
 import { checked, PlatformError, workspaceDb, workspaceUser } from "../../../lib/platform/db";
 import { hasModuleAccess } from "../../../lib/auth/modules";
 import { canTakeStayFeedback } from "../../../lib/feedback/guest-directory";
@@ -29,7 +29,7 @@ export const GET = withWorkspace(async (request: NextRequest) => {
 
 export const POST = withWorkspace(async (request: NextRequest) => {
   const { user, propertyIds, db } = context();
-  const body = await request.json();
+  const body = await readJson(request);
   const stayId = text(body.stayId, "Stay", 36);
   if (body.action === "followup") {
     const jobId = rpcResult(await db.rpc("feedback_checkout_followup", { p_stay: stayId }));

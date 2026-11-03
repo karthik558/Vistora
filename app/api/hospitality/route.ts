@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,email,number} from "../../../lib/platform/http";
+import { readJson,withWorkspace,text,email,number} from "../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,PlatformError} from "../../../lib/platform/db";
 import {getApplicationSettings} from "../../../lib/services/settingsService";
 import {hospitalityConfig,moneyToMinor} from "../../../lib/hospitality/config";
@@ -73,7 +73,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json({success:true,metrics,config,complaintsReady:readiness.data===true,properties:checked(properties),guests:checked(guests),rooms:checked(rooms),stays:checked(stays),jobs:checked(jobs),inspections:checked(inspections),costs:checked(costs),activity:checked(activity),budget:checked(budget),feedback:checked(feedback),team:team.map(p=>({...p,isAdmin:memberRows.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
- const b=await request.json(),db=workspaceDb(),user=workspaceUser();
+ const b=await readJson(request),db=workspaceDb(),user=workspaceUser();
  if(b.action==="complaint"){
   if(!canManageServiceJobs(user))throw new PlatformError("Complaint intake requires hotel operations permission.",403);
   const ready=await db.rpc("complaint_schema_ready");if(ready.error||ready.data!==true)throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
@@ -172,7 +172,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  return NextResponse.json({success:true,result},{status:201});
 });
 export const PATCH=withWorkspace(async(request:NextRequest)=>{
- const b=await request.json(),db=workspaceDb(),user=workspaceUser();
+ const b=await readJson(request),db=workspaceDb(),user=workspaceUser();
  if(!workspaceUser().isOrganizationAdmin){
   if(b.action==="stay"&&b.status==="checked_out"&&hasModuleAccess(workspaceUser(),"hospitality")){
    const current=checked(await db.from("stays").select("id,room_id,status").eq("id",text(b.id,"Stay",50)).single());

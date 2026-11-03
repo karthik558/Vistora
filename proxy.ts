@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isAllowedMutation } from "./lib/security/requestPolicy";
 import { checkRateLimit, getClientIp } from "./lib/security/rateLimiter";
 
 export default async function proxy(request: NextRequest) {
@@ -8,13 +9,12 @@ export default async function proxy(request: NextRequest) {
 
   // 1. RATE LIMITING FOR APIS
   if (pathname.startsWith("/api/")) {
-    const origin=request.headers.get("origin");
-    if(!["GET","HEAD","OPTIONS"].includes(request.method)&&origin&&(origin==="null"||new URL(origin).host!==(request.headers.get("host")||request.nextUrl.host)))return NextResponse.json({success:false,error:"Cross-origin requests are not allowed."},{status:403});
+    if (!isAllowedMutation(request)) return NextResponse.json({success:false,error:"Cross-origin requests are not allowed."},{status:403});
     let tier: "auth" | "submission" | "api" = "api";
 
     if (pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/auth/signup") || pathname.startsWith("/api/users/password") || pathname.startsWith("/api/onboarding")) {
       tier = "auth";
-    } else if (pathname.startsWith("/api/feedback") || (pathname.startsWith("/api/questions") && request.method === "POST")) {
+    } else if (request.method === "POST" && (pathname === "/api/feedback" || pathname.startsWith("/api/recovery/") || pathname.startsWith("/api/guest-services/"))) {
       tier = "submission";
     }
 
@@ -73,14 +73,16 @@ export default async function proxy(request: NextRequest) {
     response.cookies.set("sb-refresh-token",refreshed.refresh_token,{...options,maxAge:2592000});
   }
 
+  if (pathname.startsWith("/api/") || pathname.startsWith("/dashboard") || pathname.startsWith("/feedback")) response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-XSS-Protection", "1; mode=block");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Referrer-Policy", pathname.startsWith("/feedback") || pathname.startsWith("/api/stays/") || pathname.startsWith("/api/questions") ? "no-referrer" : "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", pathname.startsWith("/dashboard/hospitality") ? "camera=(self), microphone=(), geolocation=()" : "camera=(), microphone=(), geolocation=()");
+  const devEval = process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co;"
+    `default-src 'self'; script-src 'self' 'unsafe-inline'${devEval}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`
   );
 
   return response;

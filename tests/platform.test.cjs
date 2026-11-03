@@ -135,7 +135,7 @@ test("Workspace API rejects unassigned hotel access; admin configuration and rep
  db.sessionDb=()=>client;
  try{
   for(const method of ["GET","POST","DELETE"]){
-   const request=new NextRequest("http://localhost/api/platform",{method,...(method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"save_view",kind:"view"})})});
+   const request=new NextRequest("http://localhost/api/platform",{method,...(method==="GET"?{}:{headers: {"Content-Type":"application/json"}, body: JSON.stringify({action:"save_view",kind:"view"})})});
    const response=await db.workspaceContext.run({user,client},()=>workspace[method](request));
    assert.equal(response.status,403,method+" must require company administrator membership");
   }
@@ -165,7 +165,7 @@ test("Assigned hotel staff receive a read-only payload without financial or conf
   assert.equal(response.status,200);const payload=await response.json();
   assert.equal(payload.canManage,false);assert.equal(payload.budget,null);assert.deepEqual(payload.costs,[]);assert.deepEqual(payload.guests,[]);
   assert.ok(!queried.some(table=>["operating_costs","organization_settings","hotel_activity","guests"].includes(table)));
-  for(const method of ["POST","PATCH"]){const denied=await db.workspaceContext.run({user,client},()=>hotel[method](new NextRequest("http://localhost/api/hospitality",{method,body:"{}"})));assert.equal(denied.status,403);}
+  for(const method of ["POST","PATCH"]){const denied=await db.workspaceContext.run({user,client},()=>hotel[method](new NextRequest("http://localhost/api/hospitality",{method,headers:{"Content-Type":"application/json"},body:"{}"})));assert.equal(denied.status,403);}
   granted=false;
   const denied=await db.workspaceContext.run({user,client},()=>hotel.GET(new NextRequest("http://localhost/api/hospitality")));
   assert.equal(denied.status,403,"A revoked database module grant must override stale client/session state");
@@ -178,7 +178,7 @@ test("Member access cannot be saved before the module database policies are inst
  const original=db.sessionDb;db.sessionDb=()=>client;
  try{
   for(const method of ["POST","PATCH"]){
-   const response=await db.workspaceContext.run({user,client},()=>users[method](new NextRequest("http://localhost/api/users",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:"target",email:"member@test.local",fullName:"Test member",password:"test-password-only"})})));
+   const response=await db.workspaceContext.run({user,client},()=>users[method](new NextRequest("http://localhost/api/users",{method,headers: {"Content-Type":"application/json"}, body: JSON.stringify({userId:"target",email:"member@test.local",fullName:"Test member",password:"test-password-only"})})));
    assert.equal(response.status,503);assert.match((await response.json()).error,/section 25/);
   }
  }finally{db.sessionDb=original;}
@@ -203,11 +203,13 @@ test("Role mapping returns a specific migration notice when the connected databa
 test("Public feedback rejects invalid scores and missing required answers before submission",async()=>{
  const db=require('../lib/platform/db.ts'),route=require('../app/api/feedback/route.ts'),{NextRequest}=require('next/server');
  const original=db.serviceDb;
+ const {createPropertyFeedbackToken}=require("../lib/feedback/public-links.ts");
+ const token=createPropertyFeedbackToken({propertyId:"hotel",room:"",department:"",demo:false});
  const client={from(table){const q={select(){return q;},eq(){return q;},or(){return q;},maybeSingle:async()=>({data:{id:'hotel',organization_id:'org'},error:null}),then(resolve){resolve({data:[{id:'required',question_type:'text',question_text:'Required QA',is_required:true}],error:null});}};return q;}};
  db.serviceDb=()=>client;
  try{
-  for(const rating of [0,6,2.5,'3']){const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',body:JSON.stringify({propertyId:'hotel',department:'Front Desk',rating})}));assert.equal(response.status,400);assert.match((await response.json()).error,/Rating/);}
-  const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',body:JSON.stringify({propertyId:'hotel',department:'Front Desk',rating:3})}));assert.equal(response.status,400);assert.match((await response.json()).error,/required questions/);
+  for(const rating of [0,6,2.5,'3']){const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',headers: {"Content-Type":"application/json"}, body: JSON.stringify({publicToken:token,propertyId:'hotel',department:'Front Desk',rating})}));assert.equal(response.status,400);assert.match((await response.json()).error,/Rating/);}
+  const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',headers: {"Content-Type":"application/json"}, body: JSON.stringify({publicToken:token,propertyId:'hotel',department:'Front Desk',rating:3})}));assert.equal(response.status,400);assert.match((await response.json()).error,/required questions/);
  }finally{db.serviceDb=original;}
 });
 test("Role mapping edits are scoped to the session company and reject duplicate scopes",async()=>{
@@ -216,7 +218,7 @@ test("Role mapping edits are scoped to the session company and reject duplicate 
  const client={from(){const q={update(value){row=value;return q;},insert(value){row=value;return q;},eq(key,value){filters.push([key,value]);return q;},select(){return q;},single:async()=>duplicate?{data:null,error:{code:'23505'}}:{data:{id:'rule'},error:null}};return q;}};
  db.sessionDb=()=>client;
  const user={isOrganizationAdmin:true,organizationId:'company'};
- const request=method=>new NextRequest('http://localhost/api/role-mappings',{method,body:JSON.stringify({id:'rule',organization_id:'other-company',module:'feedback',country:'India',role_name:'Duty manager',assignee_id:'member',max_rating:3})});
+ const request=method=>new NextRequest('http://localhost/api/role-mappings',{method,headers: {"Content-Type":"application/json"}, body: JSON.stringify({id:'rule',organization_id:'other-company',module:'feedback',country:'India',role_name:'Duty manager',assignee_id:'member',max_rating:3})});
  try{
   const response=await db.workspaceContext.run({user,client},()=>route.PATCH(request('PATCH')));assert.equal(response.status,200);assert.equal(row.organization_id,'company');assert.deepEqual(filters,[['id','rule'],['organization_id','company']]);
   duplicate=true;const conflict=await db.workspaceContext.run({user,client},()=>route.POST(request('POST')));assert.equal(conflict.status,409);
@@ -241,9 +243,9 @@ test("Complaint API routes issues to their catalogue department and delegates au
  const client={rpc:async(name,args)=>{if(name==='complaint_schema_ready')return {data:true,error:null};assert.equal(name,'submit_service_complaint');saved=args.p_complaint;return {data:'complaint-id',error:null};},from(){throw new Error('Intake bypassed the protected RPC');}};
  const user={id:'reporter',organizationId:'org',isOrganizationAdmin:false,rights:['module:hospitality','manage_service_jobs']};db.sessionDb=()=>client;
  try{
-  const response=await db.workspaceContext.run({user,client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',body:JSON.stringify({action:'complaint',property_id:'hotel',issue_type:'wifi',department:'Engineering',location:'Room 101'})})));
+  const response=await db.workspaceContext.run({user,client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',headers: {"Content-Type":"application/json"}, body: JSON.stringify({action:'complaint',property_id:'hotel',issue_type:'wifi',department:'Engineering',location:'Room 101'})})));
   assert.equal(response.status,201);assert.equal(saved.department,'IT');assert.equal(saved.issue_type,'wifi');assert.equal(saved.location,'Room 101');
-  const denied=await db.workspaceContext.run({user:{...user,rights:['module:hospitality']},client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',body:JSON.stringify({action:'complaint'})})));assert.equal(denied.status,403);
+  const denied=await db.workspaceContext.run({user:{...user,rights:['module:hospitality']},client},()=>route.POST(new NextRequest('http://localhost/api/hospitality',{method:'POST',headers: {"Content-Type":"application/json"}, body: JSON.stringify({action:'complaint'})})));assert.equal(denied.status,403);
  }finally{db.sessionDb=original;}
 });
 test("Assignment delivery resolves the current authorized owner's email and cancels stale ownership",async()=>{
@@ -277,7 +279,7 @@ test("Private guest-link generation returns the same valid token on an idempoten
  db.sessionDb=()=>client;
  const body={action:"guest_link",requestId:"33333333-3333-4333-8333-333333333333",data:{property_id:"44444444-4444-4444-8444-444444444444",stay_id:"55555555-5555-4555-8555-555555555555"}};
  try{
-  const send=()=>db.workspaceContext.run({user,client},()=>operations.POST(new NextRequest("http://localhost/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})));
+  const send=()=>db.workspaceContext.run({user,client},()=>operations.POST(new NextRequest("http://localhost/api/operations",{method:"POST",headers: {"Content-Type":"application/json"}, body: JSON.stringify(body)})));
   const one=await send(),two=await send();assert.equal(one.status,200);assert.equal(two.status,200);const a=await one.json(),b=await two.json();assert.equal(a.path,b.path);
   const token=a.path.split("/").pop();assert.match(token,/^[A-Za-z0-9_-]{43}$/);assert.equal(createHash("sha256").update(token).digest("hex"),commands[0].p_data.token_hash);assert.equal(commands[0].p_data.token_hash,commands[1].p_data.token_hash);
  }finally{db.sessionDb=prior;if(secret===undefined)delete process.env.GUEST_LINK_SECRET;else process.env.GUEST_LINK_SECRET=secret;}
@@ -286,7 +288,7 @@ test("Push subscription endpoints reject SSRF destinations before using server c
  const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server"),push=require("../app/api/operations/push/route.ts");
  const prior=db.sessionDb,priorService=db.serviceDb;const client={};db.sessionDb=()=>client;db.serviceDb=()=>{throw new Error("Invalid endpoint reached the service client");};
  const user={id:"member",organizationId:"company",isOrganizationAdmin:false,accessToken:"verified",rights:["module:hospitality","module_access:configured","manage_service_jobs"],role:"staff"};
- try{for(const endpoint of ["http://127.0.0.1/", "https://169.254.169.254/", "https://evil.example/", "https://fcm.googleapis.com.evil.example/", "https://fcm.googleapis.com:8443/", "https://user:pass@fcm.googleapis.com/"]){const response=await db.workspaceContext.run({user,client},()=>push.POST(new NextRequest("http://localhost/api/operations/push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint,keys:{auth:"a".repeat(24),p256dh:"b".repeat(88)}})})));assert.equal(response.status,400,endpoint);}}
+ try{for(const endpoint of ["http://127.0.0.1/", "https://169.254.169.254/", "https://evil.example/", "https://fcm.googleapis.com.evil.example/", "https://fcm.googleapis.com:8443/", "https://user:pass@fcm.googleapis.com/"]){const response=await db.workspaceContext.run({user,client},()=>push.POST(new NextRequest("http://localhost/api/operations/push",{method:"POST",headers: {"Content-Type":"application/json"}, body: JSON.stringify({endpoint,keys:{auth:"a".repeat(24),p256dh:"b".repeat(88)}})})));assert.equal(response.status,400,endpoint);}}
  finally{db.sessionDb=prior;db.serviceDb=priorService;}
 });
 
@@ -358,7 +360,7 @@ test('Daily import API requires authorization, scopes one property and requires 
  db.sessionDb = () => client;
  const staff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality', 'import_guests'], propertyIds: ['prop-1'] };
  const body = { property_id: 'prop-1', request_id: 'request-1', mode: 'partial', records: [{ guest_name: 'Test', room_number: '101' }] };
- const post = (user, data) => db.workspaceContext.run({ user, client }, () => route.POST(new NextRequest('http://localhost/api/hospitality/import', { method: 'POST', body: JSON.stringify(data) })));
+ const post = (user, data) => db.workspaceContext.run({ user, client }, () => route.POST(new NextRequest('http://localhost/api/hospitality/import', { method: 'POST', headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) })));
  try {
   assert.equal((await post({ ...staff, rights: ['module:hospitality'] }, body)).status, 403);
   assert.equal((await post(staff, { ...body, property_id: 'prop-2' })).status, 403);
@@ -440,7 +442,7 @@ test("Super admin accounts are hidden and property access is strictly scoped for
    usersRoute.POST(
     new NextRequest("http://localhost/api/users", {
      method: "POST",
-     body: JSON.stringify({
+     headers: {"Content-Type":"application/json"}, body: JSON.stringify({
       fullName: "Attacker Super Admin",
       email: "attacker@vistora.com",
       password: "StrongPassword123!",
@@ -503,14 +505,14 @@ test("Granular view vs manage rights enforce read-only and write boundaries",asy
 
   // View user CANNOT mutate role mappings
   for(const method of ["POST","PATCH","DELETE"]){
-   const denied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>roleRoute[method](new NextRequest("http://localhost/api/role-mappings",{method,body:JSON.stringify({id:"r1",role_name:"Test",module:"hospitality",department:"IT",assignee_id:"user-1"})})));
+   const denied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>roleRoute[method](new NextRequest("http://localhost/api/role-mappings",{method,headers: {"Content-Type":"application/json"}, body: JSON.stringify({id:"r1",role_name:"Test",module:"hospitality",department:"IT",assignee_id:"user-1"})})));
    assert.equal(denied.status,403);
    const deniedJson=await denied.json();
    assert.match(deniedJson.error,/Role mapping manage access required/i);
   }
 
   // Settings: view user CANNOT PATCH settings
-  const settingsDenied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>settingsRoute.PATCH(new NextRequest("http://localhost/api/settings",{method:"PATCH",body:JSON.stringify({type:"application",appSettings:{projectName:"Hacked"}})})));
+  const settingsDenied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>settingsRoute.PATCH(new NextRequest("http://localhost/api/settings",{method:"PATCH",headers: {"Content-Type":"application/json"}, body: JSON.stringify({type:"application",appSettings:{projectName:"Hacked"}})})));
   assert.equal(settingsDenied.status,403);
  }finally{
   db.sessionDb=originalSession;
@@ -697,7 +699,7 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     const selfEditRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
       usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
         method: "PATCH",
-        body: JSON.stringify({ userId: "staff-caller", rights: ["manage_users", "manage_settings"] }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ userId: "staff-caller", rights: ["manage_users", "manage_settings"] }),
       }))
     );
     assert.equal(selfEditRes.status, 403);
@@ -708,7 +710,7 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     const grantForbiddenRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
       usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
         method: "PATCH",
-        body: JSON.stringify({ userId: "sub-1", rights: ["view_users", "manage_settings"] }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ userId: "sub-1", rights: ["view_users", "manage_settings"] }),
       }))
     );
     assert.equal(grantForbiddenRes.status, 403);
@@ -719,7 +721,7 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     const editHigherRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
       usersRoute.PATCH(new NextRequest("http://localhost/api/users", {
         method: "PATCH",
-        body: JSON.stringify({ userId: "higher-1", rights: ["view_users"] }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ userId: "higher-1", rights: ["view_users"] }),
       }))
     );
     assert.equal(editHigherRes.status, 403);
@@ -738,7 +740,7 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     const importRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
       importRoute.POST(new NextRequest("http://localhost/api/hospitality/import", {
         method: "POST",
-        body: JSON.stringify({ property_ids: ["prop-1"], records: [{ guest_name: "Test", room_number: "101" }] }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ property_ids: ["prop-1"], records: [{ guest_name: "Test", room_number: "101" }] }),
       }))
     );
     assert.equal(importRes.status, 403);
@@ -748,7 +750,7 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     const stayRes = await db.workspaceContext.run({ user: staffUser, client: mockClient }, () =>
       hospRoute.POST(new NextRequest("http://localhost/api/hospitality", {
         method: "POST",
-        body: JSON.stringify({ action: "stay", room_id: "room-1", check_in_date: "2026-11-04", check_out_date: "2026-11-06" }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "stay", room_id: "room-1", check_in_date: "2026-11-04", check_out_date: "2026-11-06" }),
       }))
     );
     assert.equal(stayRes.status, 403);
@@ -817,7 +819,7 @@ test("Property mutations and settings saving are strictly restricted to super ad
     const postPropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
       propRoute.POST(new NextRequest("http://localhost/api/properties", {
         method: "POST",
-        body: JSON.stringify({ name: "New Hotel" }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Hotel" }),
       }))
     );
     assert.equal(postPropRes.status, 403);
@@ -827,7 +829,7 @@ test("Property mutations and settings saving are strictly restricted to super ad
     const patchPropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
       propRoute.PATCH(new NextRequest("http://localhost/api/properties", {
         method: "PATCH",
-        body: JSON.stringify({ propertyId: "prop-1", name: "Renamed Hotel" }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ propertyId: "prop-1", name: "Renamed Hotel" }),
       }))
     );
     assert.equal(patchPropRes.status, 403);
@@ -835,7 +837,7 @@ test("Property mutations and settings saving are strictly restricted to super ad
     const deletePropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
       propRoute.DELETE(new NextRequest("http://localhost/api/properties", {
         method: "DELETE",
-        body: JSON.stringify({ propertyId: "prop-1" }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ propertyId: "prop-1" }),
       }))
     );
     assert.equal(deletePropRes.status, 403);
@@ -844,7 +846,7 @@ test("Property mutations and settings saving are strictly restricted to super ad
     const saveSettingsRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
       settingsRoute.PATCH(new NextRequest("http://localhost/api/settings", {
         method: "PATCH",
-        body: JSON.stringify({ type: "application", appSettings: { projectName: "Test" } }),
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({ type: "application", appSettings: { projectName: "Test" } }),
       }))
     );
     assert.equal(saveSettingsRes.status, 403);
@@ -855,7 +857,7 @@ test("Property mutations and settings saving are strictly restricted to super ad
     const roleOutsideRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
       roleRoute.POST(new NextRequest("http://localhost/api/role-mappings", {
         method: "POST",
-        body: JSON.stringify({
+        headers: {"Content-Type":"application/json"}, body: JSON.stringify({
           module: "hospitality",
           property_id: "unauthorized-prop",
           department: "IT",

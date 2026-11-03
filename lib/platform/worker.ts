@@ -68,8 +68,8 @@ export async function runWorker(org?:string) {
     const base=process.env.APP_URL;
     if(["followup","invitation","team_invitation"].includes(job.kind)) {
      if(!base){status="blocked";throw new Error("APP_URL is not configured.");}
-     const path=job.kind==="followup"?"/recovery/":job.kind==="team_invitation"?"/join/":"/feedback?token=";
-     payload.link=base.replace(/\/$/,"")+path+payload.token+(job.kind==="invitation"?"&property="+payload.propertyId:"");
+     const path=job.kind==="followup"?"/recovery/":job.kind==="team_invitation"?"/join/":"/feedback/";
+     payload.link=base.replace(/\/$/,"")+path+encodeURIComponent(payload.token);
      delete payload.token;
     }
     if(job.kind==="report") {

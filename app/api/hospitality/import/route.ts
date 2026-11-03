@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withWorkspace } from "../../../../lib/platform/http";
+import { readJson, withWorkspace } from "../../../../lib/platform/http";
 import { checked, workspaceDb, workspaceUser, PlatformError } from "../../../../lib/platform/db";
 import { hasModuleAccess } from "../../../../lib/auth/modules";
 
@@ -12,7 +12,7 @@ function authorize() {
 }
 export const POST = withWorkspace(async (request: NextRequest) => {
   const user = authorize();
-  const body = await request.json();
+  const body = await readJson(request, 8 * 1024 * 1024);
   if (!body.property_id || !body.request_id || !["partial", "full"].includes(body.mode)) throw new PlatformError("Choose a property and report type.");
   const allowed = user.propertyIds?.length ? user.propertyIds : [user.propertyId];
   if (!user.isOrganizationAdmin && !allowed.includes(body.property_id)) throw new PlatformError("Access to this property is not authorized.", 403);

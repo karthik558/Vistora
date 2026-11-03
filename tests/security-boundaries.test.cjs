@@ -1,0 +1,147 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2021, esModuleInterop: true } }).outputText, file);
+const { NextRequest } = require('next/server');
+const db = require('../lib/platform/db.ts');
+const auth = require('../lib/auth/serverAuth.ts');
+const { readJson, readFormData, errorResponse } = require('../lib/platform/http.ts');
+const { isAllowedMutation } = require('../lib/security/requestPolicy.ts');
+const { createPropertyFeedbackToken, resolvePublicFeedbackLink } = require('../lib/feedback/public-links.ts');
+const { hashToken } = require('../lib/platform/secrets.ts');
+const feedback = require('../app/api/feedback/route.ts');
+const questions = require('../app/api/questions/route.ts');
+const links = require('../app/api/feedback-links/route.ts');
+const service = require('../lib/services/guestExperienceService.ts');
+const audit = require('../lib/services/auditLogService.ts');
+const messages = require('../lib/services/guestMessaging.ts');
+const propA = '11111111-1111-4111-8111-111111111111', propB = '22222222-2222-4222-8222-222222222222';
+const stayToken = 'a'.repeat(64), inviteToken = 'b'.repeat(64), expiredToken = 'c'.repeat(64);
+const owner = { id: 'owner', organizationId: 'org-a', isOrganizationAdmin: true, rights: [], propertyIds: [propA], accessToken: 'valid' };
+const staff = { ...owner, id: 'staff', isOrganizationAdmin: false, rights: ['module:feedback', 'manage_questionnaire'], propertyIds: [propA] };
+function client() {
+  const calls = [];
+  const tables = {
+    properties: [{ id: propA, name: 'Authorized hotel', code: 'A', organization_id: 'org-a', is_active: true }, { id: propB, name: 'Other tenant hotel', code: 'B', organization_id: 'org-b', is_active: true }],
+    stays: [{ id: 'stay', public_token: stayToken, property_id: propA, organization_id: 'org-a', status: 'active', room_number: '101', guests: { full_name: 'Canonical guest' } }],
+    guest_invitations: [{ id: 'invite', token_hash: hashToken(inviteToken), organization_id: 'org-a', property_id: propA, status: 'pending', expires_at: new Date(Date.now() + 60000).toISOString(), guest_name: 'Invited guest', room_number: '102' }, { id: 'expired', token_hash: hashToken(expiredToken), property_id: propA, status: 'pending', expires_at: 'invalid' }],
+    feedback_questions: [{ id: 'q-a', organization_id: 'org-a', property_id: propA, is_active: true, question_type: 'text', question_text: 'A question', is_required: false }, { id: 'q-b', organization_id: 'org-b', property_id: propB, is_active: true, question_text: 'Private B question' }],
+  };
+  return { calls, from(table) {
+    calls.push(table); const filters = [];
+    const values = () => (tables[table] || []).filter(row => filters.every(([key, value]) => row[key] === value));
+    const q = { select() { return q; }, eq(key, value) { filters.push([key, value]); return q; }, or() { return q; }, order() { return q; },
+      async maybeSingle() { return { data: values()[0] || null, error: null }; }, async single() { return { data: values()[0] || null, error: null }; },
+      then(resolve) { resolve({ data: values(), error: null }); } };
+    return q;
+  } };
+}
+function post(url, body, headers = {}) { return new NextRequest('http://localhost' + url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }); }
+
+test('Property links are bound by authenticated encryption; metadata and questions disclose only their property', async () => {
+  const mock = client(), original = db.serviceDb; db.serviceDb = () => mock;
+  try {
+    const token = createPropertyFeedbackToken({ propertyId: propA, room: '301', department: 'Front Desk', demo: false });
+    assert.ok(!token.includes(propA));
+    const resolved = await resolvePublicFeedbackLink(token);
+    assert.equal(resolved.details.propertyId, propA); assert.equal(resolved.details.roomNumber, '301');
+    assert.ok(!JSON.stringify(resolved.details).includes('Other tenant'));
+    for (const invalid of [null, '', 'verified', propA, token + '.extra', token.slice(0, -1) + (token.endsWith('0') ? '1' : '0')]) await assert.rejects(resolvePublicFeedbackLink(invalid));
+    const result = await questions.GET(new NextRequest('http://localhost/api/questions?public=true&token=' + encodeURIComponent(token) + '&propertyId=' + propB));
+    assert.equal(result.status, 200); assert.deepEqual((await result.json()).questions.map(q => q.id), ['q-a']);
+    assert.equal((await questions.GET(new NextRequest('http://localhost/api/questions?public=true&propertyId=' + propA))).status, 403);
+    for (const legacy of [stayToken, inviteToken]) assert.equal((await resolvePublicFeedbackLink(legacy)).property.id, propA);
+    await assert.rejects(resolvePublicFeedbackLink(expiredToken), error => error.status === 410);
+  } finally { db.serviceDb = original; }
+});
+
+test('Public submission rejects missing, forged, wrong-property and preview tokens before storage; canonical fields win', async () => {
+  const originals = [db.serviceDb, service.createFeedback, audit.logAuditEvent, messages.queueGuestMessage];
+  const saved = []; db.serviceDb = () => client(); service.createFeedback = async value => { saved.push(value); return { id: 'saved' }; }; audit.logAuditEvent = async () => {}; messages.queueGuestMessage = async () => {};
+  const body = { propertyId: propA, rating: 5, department: 'Front Desk', guestName: 'Forged guest', roomNumber: '999', answers: [] };
+  try {
+    for (const publicToken of [undefined, 'verified', 'random', propA]) assert.ok((await feedback.POST(post('/api/feedback', { ...body, publicToken }))).status >= 400);
+    assert.equal(saved.length, 0);
+    assert.equal((await feedback.POST(post('/api/feedback', { ...body, publicToken: stayToken, propertyId: propB }))).status, 403);
+    const preview = createPropertyFeedbackToken({ propertyId: propA, room: '', department: '', demo: true });
+    assert.equal((await feedback.POST(post('/api/feedback', { ...body, publicToken: preview }))).status, 403);
+    const response = await feedback.POST(post('/api/feedback', { ...body, publicToken: stayToken }));
+    assert.equal(response.status, 201); assert.equal(saved[0].stayId, 'stay'); assert.equal(saved[0].guestName, 'Canonical guest'); assert.equal(saved[0].roomNumber, '101'); assert.equal(saved[0].organizationId, 'org-a');
+    assert.deepEqual(await response.json(), { success: true, id: 'saved' });
+    assert.equal((await feedback.POST(post('/api/feedback', { ...body, publicToken: inviteToken }))).status, 201);
+    assert.equal(saved[1].invitationId, 'invite');
+  } finally { [db.serviceDb, service.createFeedback, audit.logAuditEvent, messages.queueGuestMessage] = originals; }
+});
+
+test('Only authorized generators can mint property links, and staff cannot select another property', async () => {
+  const mock = client(), original = db.sessionDb; db.sessionDb = () => mock;
+  const generate = (user, propertyId) => db.workspaceContext.run({ user, client: mock }, () => links.POST(post('/api/feedback-links', { propertyId })));
+  try {
+    assert.equal((await generate(staff, propA)).status, 200);
+    assert.equal((await generate(staff, propB)).status, 403);
+    assert.equal((await generate({ ...staff, rights: ['module:feedback'] }, propA)).status, 403);
+    assert.equal((await generate({ ...staff, rights: ['manage_questionnaire', 'module:hospitality', 'module_access:configured'] }, propA)).status, 403);
+  } finally { db.sessionDb = original; }
+});
+
+test('Every protected API method denies missing sessions and forged display cookies before storage', async () => {
+  const originalSession = db.sessionDb, originalService = db.serviceDb;
+  db.sessionDb = () => { throw new Error('Unauthenticated storage access'); }; db.serviceDb = db.sessionDb;
+  const methods = [];
+  function visit(folder) { for (const entry of fs.readdirSync(folder, { withFileTypes: true })) { const file = path.join(folder, entry.name); if (entry.isDirectory()) visit(file); else if (entry.name === 'route.ts') { const source = fs.readFileSync(file, 'utf8'); for (const match of source.matchAll(/export const (GET|POST|PATCH|DELETE)\s*=\s*withWorkspace/g)) methods.push([file, match[1]]); } } }
+  visit(path.resolve(__dirname, '../app/api'));
+  try {
+    assert.ok(methods.length > 45, 'covers the protected API inventory');
+    for (const [file, method] of methods) for (const cookie of ['', 'vistora-user=' + encodeURIComponent(JSON.stringify(owner))]) {
+      const route = require(file);
+      const request = new NextRequest('http://localhost/api/test', { method, headers: { cookie, 'Content-Type': 'application/json' }, ...(method === 'GET' ? {} : { body: '{}' }) });
+      const response = await route[method](request, { params: Promise.resolve({ id: propA }) });
+      assert.equal(response.status, 401, path.relative(process.cwd(), file) + ':' + method);
+    }
+    const properties = require('../app/api/properties/route.ts');
+    assert.equal((await properties.GET(new NextRequest('http://localhost/api/properties?public=true'))).status, 401);
+    assert.equal((await questions.GET(new NextRequest('http://localhost/api/questions'))).status, 401);
+  } finally { db.sessionDb = originalSession; db.serviceDb = originalService; }
+});
+
+test('Forged access tokens are verified by the identity provider; revoked membership is checked on every request', async () => {
+  const originalSession = db.sessionDb, originalService = db.serviceDb;
+  let active = true, checks = 0;
+  db.sessionDb = () => ({ auth: { getUser: async token => token === 'verified-token' ? { data: { user: { id: 'user', email: 'user@example.test' } }, error: null } : { data: { user: null }, error: {} } }, from: () => ({ select: async () => ({ data: [{ id: propA }], error: null }) }) });
+  db.serviceDb = () => ({ from: table => { const q = { select() { return q; }, eq() { return q; }, async maybeSingle() { checks++; return { data: table === 'profiles' ? { id: 'user', organization_id: 'org-a', full_name: 'User', role: 'staff', rights: ['view_feedback'], property_id: propA } : active ? { organization_id: 'org-a', role: 'member' } : null, error: null }; } }; return q; } });
+  try {
+    assert.equal(await auth.getAuthenticatedUser(new NextRequest('http://localhost', { headers: { authorization: 'Bearer forged-token' } })), null);
+    const request = () => new NextRequest('http://localhost', { headers: { authorization: 'Bearer verified-token' } });
+    assert.ok(await auth.getAuthenticatedUser(request())); active = false; assert.equal(await auth.getAuthenticatedUser(request()), null); assert.equal(checks, 4);
+  } finally { db.sessionDb = originalSession; db.serviceDb = originalService; }
+});
+
+test('Request policy rejects cross-origin, opaque and malformed browser mutations; bounded JSON rejects oversized and invalid bodies', async () => {
+  for (const origin of ['https://evil.example', 'null', 'not a URL', 'https://localhost']) assert.equal(isAllowedMutation(post('/api/feedback', {}, { origin })), false);
+  assert.equal(isAllowedMutation(post('/api/feedback', {}, { origin: 'http://localhost' })), true);
+  assert.equal(isAllowedMutation(post('/api/feedback', {}, { 'sec-fetch-site': 'cross-site' })), false);
+  assert.equal(isAllowedMutation(post('/api/feedback', {})), true);
+  await assert.rejects(readJson(new NextRequest('http://localhost', { method: 'POST', body: '{}' })), e => e.status === 415);
+  for (const value of ['null', '[]', '"hello"', '{']) await assert.rejects(readJson(new NextRequest('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: value })), e => e.status === 400);
+  await assert.rejects(readJson(post('/api/feedback', { text: 'a'.repeat(100) }), 30), e => e.status === 413);
+  await assert.rejects(readFormData(new NextRequest('http://localhost', { method: 'POST', headers: { 'Content-Type': 'multipart/form-data; boundary=x' }, body: 'x'.repeat(100) }), 30), e => e.status === 413);
+  const sanitized = await errorResponse(new Error('secret database exception')).json(); assert.ok(!sanitized.error.includes('secret'));
+});
+
+test('Public submissions and authentication attempts are limited even from loopback; invalid IP strings share a bounded identity', () => {
+  const { checkRateLimit, getClientIp } = require('../lib/security/rateLimiter.ts');
+  for (let i = 0; i < 15; i++) assert.ok(checkRateLimit('127.0.0.1', 'submission').success);
+  assert.equal(checkRateLimit('127.0.0.1', 'submission').success, false);
+  for (let i = 0; i < 5; i++) assert.ok(checkRateLimit('198.51.100.17', 'auth').success);
+  assert.equal(checkRateLimit('198.51.100.17', 'auth').success, false);
+  const original = process.env.TRUSTED_CLIENT_IP_HEADER;
+  try {
+    delete process.env.TRUSTED_CLIENT_IP_HEADER;
+    assert.equal(getClientIp(new Headers({ 'x-forwarded-for': '198.51.100.18' })), 'unknown');
+    process.env.TRUSTED_CLIENT_IP_HEADER = 'x-real-ip';
+    assert.equal(getClientIp(new Headers({ 'x-real-ip': '198.51.100.19', 'x-forwarded-for': '198.51.100.18' })), '198.51.100.19');
+    assert.equal(getClientIp(new Headers({ 'x-real-ip': 'x'.repeat(5000) })), 'unknown');
+  } finally { if (original === undefined) delete process.env.TRUSTED_CLIENT_IP_HEADER; else process.env.TRUSTED_CLIENT_IP_HEADER = original; }
+});

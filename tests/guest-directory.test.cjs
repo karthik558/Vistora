@@ -11,10 +11,10 @@ const messaging = require('../lib/services/guestMessaging.ts');
 const directory = require('../app/api/guest-directory/route.ts');
 const feedback = require('../app/api/feedback/route.ts');
 const rows = [
- { id: 'stay-1', organization_id: 'org-1', property_id: 'prop-1', status: 'active', room_number: '101', check_in_date: '2026-11-03', check_out_date: '2026-11-06', public_token: 'secret-one', guests: { full_name: 'Alex' }, properties: { name: 'Hotel One', is_active: true }, feedback: [{ count: 0 }] },
- { id: 'stay-2', organization_id: 'org-1', property_id: 'prop-2', status: 'active', room_number: '202', public_token: 'secret-two', guests: { full_name: 'Bea' }, properties: { name: 'Hotel Two', is_active: true }, feedback: [{ count: 1 }] },
- { id: 'stay-3', organization_id: 'org-2', property_id: 'prop-3', status: 'active', room_number: '301', public_token: 'other-company', guests: { full_name: 'Outside' }, properties: { name: 'Outside', is_active: true }, feedback: [{ count: 0 }] },
- { id: 'stay-4', organization_id: 'org-1', property_id: 'prop-1', status: 'checked_out', public_token: 'closed', guests: { full_name: 'Closed' }, properties: { is_active: true }, feedback: [{ count: 0 }] },
+ { id: 'stay-1', organization_id: 'org-1', property_id: 'prop-1', status: 'active', room_number: '101', check_in_date: '2026-11-03', check_out_date: '2026-11-06', public_token: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', guests: { full_name: 'Alex' }, properties: { name: 'Hotel One', is_active: true }, feedback: [{ count: 0 }] },
+ { id: 'stay-2', organization_id: 'org-1', property_id: 'prop-2', status: 'active', room_number: '202', public_token: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', guests: { full_name: 'Bea' }, properties: { name: 'Hotel Two', is_active: true }, feedback: [{ count: 1 }] },
+ { id: 'stay-3', organization_id: 'org-2', property_id: 'prop-3', status: 'active', room_number: '301', public_token: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', guests: { full_name: 'Outside' }, properties: { name: 'Outside', is_active: true }, feedback: [{ count: 0 }] },
+ { id: 'stay-4', organization_id: 'org-1', property_id: 'prop-1', status: 'checked_out', public_token: 'd' .repeat(64), guests: { full_name: 'Closed' }, properties: { is_active: true }, feedback: [{ count: 0 }] },
 ];
 function client() {
  const calls = [];
@@ -46,7 +46,7 @@ const staff = { ...admin, id: 'staff', isOrganizationAdmin: false, role: 'staff'
 async function request(user, method = 'GET', body, params = '') {
  const mock = client(); const original = db.sessionDb; db.sessionDb = () => mock;
  try {
-   const response = await db.workspaceContext.run({ user, client: mock }, () => directory[method](new NextRequest('http://localhost/api/guest-directory' + params, { method, ...(body ? { body: JSON.stringify(body) } : {}) })));
+   const response = await db.workspaceContext.run({ user, client: mock }, () => directory[method](new NextRequest('http://localhost/api/guest-directory' + params, { method, ...(body ? { headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) } : {}) })));
    return { response, json: await response.json(), mock };
  } finally { db.sessionDb = original; }
 }
@@ -70,8 +70,8 @@ test('Take feedback resolves a current scoped stay on demand and audits without 
  const original = audit.logAuditEvent; const events = []; audit.logAuditEvent = async event => { events.push(event); };
  try {
    const opened = await request(staff, 'POST', { stayId: 'stay-1' });
-   assert.equal(opened.response.status, 200); assert.equal(opened.json.path, '/feedback/secret-one');
-   assert.equal(events[0].resource, 'stay-1'); assert.ok(!JSON.stringify(events).includes('secret-one'));
+   assert.equal(opened.response.status, 200); assert.equal(opened.json.path, '/feedback/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+   assert.equal(events[0].resource, 'stay-1'); assert.ok(!JSON.stringify(events).includes('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'));
    for (const stayId of ['stay-2', 'stay-3', 'stay-4', 'missing']) assert.equal((await request(staff, 'POST', { stayId })).response.status, 404);
    assert.equal(events.length, 1);
  } finally { audit.logAuditEvent = original; }
@@ -79,12 +79,12 @@ test('Take feedback resolves a current scoped stay on demand and audits without 
 test('Public submission keeps canonical guest, room, property and stay identity; rejects wrong-property and closed tokens', async () => {
  const originals = [db.serviceDb, service.createFeedback, audit.logAuditEvent, messaging.queueGuestMessage];
  const saved = []; db.serviceDb = () => client(); service.createFeedback = async value => { saved.push(value); return { id: 'feedback-new', ...value }; }; audit.logAuditEvent = async () => {}; messaging.queueGuestMessage = async () => {};
- const submit = body => feedback.POST(new NextRequest('http://localhost/api/feedback', { method: 'POST', body: JSON.stringify({ rating: 5, department: 'Front Desk', answers: [], guestName: 'Forged name', roomNumber: '999', ...body }) }));
+ const submit = body => feedback.POST(new NextRequest('http://localhost/api/feedback', { method: 'POST', headers: {"Content-Type":"application/json"}, body: JSON.stringify({ rating: 5, department: 'Front Desk', answers: [], guestName: 'Forged name', roomNumber: '999', ...body }) }));
  try {
-   assert.equal((await submit({ publicToken: 'secret-one', propertyId: 'prop-1' })).status, 201);
+   assert.equal((await submit({ publicToken: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', propertyId: 'prop-1' })).status, 201);
    assert.equal(saved[0].stayId, 'stay-1'); assert.equal(saved[0].guestName, 'Alex'); assert.equal(saved[0].roomNumber, '101'); assert.equal(saved[0].propertyId, 'prop-1'); assert.equal(saved[0].organizationId, 'org-1');
-   assert.equal((await submit({ publicToken: 'secret-one', propertyId: 'prop-2' })).status, 404);
-   assert.equal((await submit({ publicToken: 'closed', propertyId: 'prop-1' })).status, 404);
+   assert.equal((await submit({ publicToken: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', propertyId: 'prop-2' })).status, 403);
+   assert.equal((await submit({ publicToken: 'd' .repeat(64), propertyId: 'prop-1' })).status, 404);
    assert.equal(saved.length, 1);
  } finally { [db.serviceDb, service.createFeedback, audit.logAuditEvent, messaging.queueGuestMessage] = originals; }
 });

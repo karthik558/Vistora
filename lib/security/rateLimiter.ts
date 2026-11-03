@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 /**
  * In-memory sliding-window Rate Limiter for Next.js API and Edge Middleware.
  * Provides granular rate limits by IP and route tier to defend against brute force,
@@ -68,21 +69,14 @@ export function checkRateLimit(
   ip: string,
   tier: "auth" | "submission" | "api" | "default" = "api"
 ): RateLimitResult {
-  const isDev = process.env.NODE_ENV !== "production";
-  if (isDev && (ip === "127.0.0.1" || ip === "::1" || ip === "localhost")) {
-    return {
-      success: true,
-      limit: 10000,
-      remaining: 9999,
-      reset: Math.ceil((Date.now() + 60000) / 1000),
-    };
-  }
-
   const now = Date.now();
   performGarbageCollection(now);
 
   const config = TIER_CONFIGS[tier] || TIER_CONFIGS.default;
-  const storeKey = `${tier}:${ip || "unknown"}`;
+  // Bound memory without evicting active quotas to make room for attacker keys.
+  const identity = isIP(ip) ? ip : "unknown";
+  const requestedKey = `${tier}:${identity}`;
+  const storeKey = rateLimitStore.has(requestedKey) || rateLimitStore.size < 10_000 ? requestedKey : `${tier}:overflow`;
 
   let record = rateLimitStore.get(storeKey);
   if (!record) {
@@ -123,17 +117,10 @@ export function checkRateLimit(
  * Helper to extract client IP address accurately from standard reverse-proxy headers.
  */
 export function getClientIp(headers: Headers): string {
-  const forwardedFor = headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0].trim();
-  }
-  const realIp = headers.get("x-real-ip");
-  if (realIp) {
-    return realIp.trim();
-  }
-  const cfConnectingIp = headers.get("cf-connecting-ip");
-  if (cfConnectingIp) {
-    return cfConnectingIp.trim();
-  }
-  return "127.0.0.1";
+  // Forwarding headers are caller-controlled unless a configured ingress
+  // overwrites them. Unknown clients share a conservative quota by default.
+  const header = process.env.TRUSTED_CLIENT_IP_HEADER?.toLowerCase();
+  if (!header || !["x-forwarded-for", "x-real-ip", "cf-connecting-ip"].includes(header)) return "unknown";
+  const value = headers.get(header)?.split(",")[0]?.trim();
+  return value && value.length <= 45 && isIP(value) ? value : "unknown";
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { serviceDb, PlatformError } from "../../../../lib/platform/db";
-import { errorResponse } from "../../../../lib/platform/http";
+import { readJson, errorResponse } from "../../../../lib/platform/http";
 import { uuid } from "../../../../lib/omniops/validation";
 const headers = {
   "Cache-Control": "private, no-store",
@@ -111,7 +111,7 @@ export async function POST(
       throw new PlatformError("Cross-origin requests are not allowed.", 403);
     const { token } = await params,
       { db, hash, link, stay } = await context(token),
-      body = await request.json();
+      body = await readJson(request);
 
     if (body.action === "pulse") {
       const rating = Number(body.rating);

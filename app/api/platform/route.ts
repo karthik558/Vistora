@@ -1,6 +1,6 @@
 import {integrationStatus} from "../../../lib/platform/integrationStatus";
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,email,number} from "../../../lib/platform/http";
+import { readJson,withWorkspace,text,email,number} from "../../../lib/platform/http";
 import {checked,workspaceDb,workspaceUser,serviceDb,assertProperty,PlatformError} from "../../../lib/platform/db";
 import {newToken,hashToken,encryptSecret} from "../../../lib/platform/secrets";
 import {managementReport,reportRows} from "../../../lib/platform/reports";
@@ -38,7 +38,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
  admin();
- const b=await request.json(),db=workspaceDb(),user=workspaceUser(),org=user.organizationId;
+ const b=await readJson(request),db=workspaceDb(),user=workspaceUser(),org=user.organizationId;
  let result:any={};
  if(b.action==="save_view") {
   const f=b.filters||{};
@@ -97,7 +97,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
 });
 export const DELETE=withWorkspace(async(request:NextRequest)=>{
  admin();
- const b=await request.json(),db=workspaceDb();
+ const b=await readJson(request),db=workspaceDb();
  const tables:Record<string,string>={view:"saved_views",schedule:"report_schedules",sla:"sla_policies",team:"team_invitations"};
  if(b.kind!=="view")admin();
  if(tables[b.kind])checked(await db.from(tables[b.kind]).delete().eq("id",b.id).select("id").single());

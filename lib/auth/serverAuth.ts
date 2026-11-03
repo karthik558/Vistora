@@ -7,30 +7,6 @@ export interface VerifiedUser {
   organizationId: string; isOrganizationAdmin: boolean; accessToken: string;
   propertyId: string | null; propertyIds: string[]; rights: string[];
 }
-interface CachedUserEntry {
-  user: VerifiedUser;
-  expiresAt: number;
-}
-const userAuthCache = new Map<string, CachedUserEntry>();
-
-// Fast session-level auth cache prevents redundant Supabase auth/profile queries on every page transition.
-export function invalidateAuthCache(identifier?: string) {
-  if (identifier) {
-    for (const [token, entry] of userAuthCache.entries()) {
-      if (entry.user.email === identifier || entry.user.id === identifier || token === identifier) {
-        userAuthCache.delete(token);
-      }
-    }
-  } else {
-    userAuthCache.clear();
-  }
-}
-export function invalidateSessionCache(email?: string) {
-  invalidateAuthCache(email);
-}
-export function getCachedProfile(_email: string): any | null { return null; }
-export function setCachedProfile(_email: string, _profile: any) {}
-
 export async function getAuthenticatedUser(request: NextRequest): Promise<VerifiedUser | null> {
   const existing = workspaceContext.getStore();
   if (existing) return existing.user;
@@ -38,15 +14,8 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
   const token = header?.startsWith("Bearer ") ? header.slice(7) : request.cookies.get("sb-access-token")?.value;
   if (!token) return null;
 
-  const now = Date.now();
-  const cached = userAuthCache.get(token);
-  if (cached && cached.expiresAt > now) {
-    return cached.user;
-  }
-
   const { data, error } = await sessionDb(token).auth.getUser(token);
   if (error || !data.user) {
-    userAuthCache.delete(token);
     return null;
   }
   const db = serviceDb();
@@ -78,7 +47,6 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
     organizationId: membership.organization_id, isOrganizationAdmin: isSuperAdmin, accessToken: token,
     propertyId: effectivePropertyIds[0] || profile.property_id || null, propertyIds: effectivePropertyIds, rights:effectiveModuleRights(rights,isSuperAdmin)
   };
-  userAuthCache.set(token, { user: verified, expiresAt: now + 15_000 });
   return verified;
 }
 export function publicUser(user: VerifiedUser) {

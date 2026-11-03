@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withWorkspace } from "../../../../lib/platform/http";
+import { readJson, withWorkspace } from "../../../../lib/platform/http";
 import {
   workspaceUser,
   serviceDb,
@@ -22,7 +22,7 @@ export const GET = withWorkspace(async () => {
 });
 export const POST = withWorkspace(async (request: NextRequest) => {
   const user = actor(),
-    sub = await request.json();
+    sub = await readJson(request);
   let endpoint: URL;
   try {
     endpoint = new URL(sub.endpoint);

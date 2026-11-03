@@ -228,69 +228,33 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  }
 
  function getStayFeedbackUrl(stay:any){
-  const origin=typeof window!=="undefined"?window.location.origin:"";
-  if(stay?.public_token)return `${origin}/feedback/${stay.public_token}`;
-  const params=new URLSearchParams();
-  if(stay?.property_id)params.set("property",stay.property_id);
-  if(stay?.room_number)params.set("room",stay.room_number);
-  params.set("source","hotel_ops");
-  return `${origin}/feedback?${params.toString()}`;
+  if(!stay?.public_token)throw new Error("A current stay feedback link is required.");
+  return `${window.location.origin}/feedback/${encodeURIComponent(stay.public_token)}`;
  }
-
- function getRoomFeedbackUrl(room:any){
-  const origin=typeof window!=="undefined"?window.location.origin:"";
-  const params=new URLSearchParams();
-  if(room?.property_id)params.set("property",room.property_id);
-  if(room?.room_number)params.set("room",room.room_number);
-  params.set("source","room_qr");
-  return `${origin}/feedback?${params.toString()}`;
+ async function getPropertyFeedbackUrl(propertyId:string,room=""){
+  const response=await fetch("/api/feedback-links",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({propertyId,room})});
+  const json=await response.json();
+  if(!response.ok||!json.success)throw new Error(json.error||"Could not generate feedback link.");
+  return window.location.origin+json.path;
  }
-
  function openFeedbackForStay(stay:any){
-  const url=getStayFeedbackUrl(stay);
-  window.open(url,"_blank");
+  try{window.open(getStayFeedbackUrl(stay),"_blank","noopener,noreferrer");}catch(error){setError((error as Error).message);}
  }
-
- function openFeedbackForRoom(room:any){
-  const url=getRoomFeedbackUrl(room);
-  window.open(url,"_blank");
+ async function openFeedbackForRoom(room:any){
+  const popup=window.open("about:blank","_blank");
+  if(!popup){setError("Allow pop-ups to open feedback.");return;}
+  popup.opener=null;
+  try{popup.location.replace(await getPropertyFeedbackUrl(room.property_id,room.room_number));}catch(error){popup.close();setError((error as Error).message);}
  }
-
  function showStayQr(stay:any){
-  const guestName=stay.guests?.full_name||"Guest";
-  const roomText=stay.room_number?`Room ${stay.room_number}`:"General";
-  const propName=data?.properties?.find((p:any)=>p.id===stay.property_id)?.name||"Vistora Hotel";
-  setQrModalData({
-   title:`${guestName} · ${roomText}`,
-   roomNumber:stay.room_number,
-   propertyName:propName,
-   url:getStayFeedbackUrl(stay)
-  });
+  try{setQrModalData({title:`${stay.guests?.full_name||"Guest"} · Room ${stay.room_number}`,roomNumber:stay.room_number,propertyName:data?.properties?.find((p:any)=>p.id===stay.property_id)?.name||"Property",url:getStayFeedbackUrl(stay)});}catch(error){setError((error as Error).message);}
  }
-
- function showRoomQr(room:any){
-  const propName=data?.properties?.find((p:any)=>p.id===room.property_id)?.name||"Vistora Hotel";
-  setQrModalData({
-   title:`Room ${room.room_number} (${room.room_type||"Standard"})`,
-   roomNumber:room.room_number,
-   propertyName:propName,
-   url:getRoomFeedbackUrl(room)
-  });
+ async function showRoomQr(room:any){
+  try{setQrModalData({title:`Room ${room.room_number}`,roomNumber:room.room_number,propertyName:data?.properties?.find((p:any)=>p.id===room.property_id)?.name||"Property",url:await getPropertyFeedbackUrl(room.property_id,room.room_number)});}catch(error){setError((error as Error).message);}
  }
-
- function openGeneralFeedbackCode(){
-  const origin=typeof window!=="undefined"?window.location.origin:"";
-  const selectedProp=(data?.properties||[]).find((p:any)=>p.id===property);
-  const params=new URLSearchParams();
-  if(property!=="all")params.set("property",property);
-  params.set("source","hotel_check_code");
-  const queryStr=params.toString();
-  const url=`${origin}/feedback${queryStr?`?${queryStr}`:""}`;
-  setQrModalData({
-   title:selectedProp?`Guest Feedback · ${selectedProp.name}`:"General Guest Feedback",
-   propertyName:selectedProp?.name||"All Properties",
-   url
-  });
+ async function openGeneralFeedbackCode(){
+  if(property==="all"){setError("Select one property before generating a feedback link.");return;}
+  try{const selected=data?.properties?.find((p:any)=>p.id===property);setQrModalData({title:`Guest feedback · ${selected?.name||"Property"}`,propertyName:selected?.name||"Property",url:await getPropertyFeedbackUrl(property)});}catch(error){setError((error as Error).message);}
  }
 
  const config=hospitalityConfig(data?.config||appearance.config);

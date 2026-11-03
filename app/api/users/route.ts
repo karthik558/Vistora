@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
-import {withWorkspace,text,email} from "../../../lib/platform/http";
+import { readJson,withWorkspace,text,email} from "../../../lib/platform/http";
 import {checked,workspaceDb,serviceDb,workspaceUser,assertProperty,PlatformError} from "../../../lib/platform/db";
 import {withModuleAssignments} from "../../../lib/auth/modules";
 const roles=["super_admin","admin","general_manager","department_head","executive","front_office_staff","feedback","analyst","report","staff","visitor"];
@@ -93,7 +93,7 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
  const callerIsSuperAdmin = caller.isOrganizationAdmin || caller.orgRole === "super_admin" || (caller.rights || []).includes("org_role:super_admin");
  const canManage = callerIsSuperAdmin || caller.rights?.includes("manage_users");
  if(!canManage)throw new PlatformError("Team management permission required.",403);
- const b=await request.json(),address=email(b.email),name=text(b.fullName,"Name",100);
+ const b=await readJson(request),address=email(b.email),name=text(b.fullName,"Name",100);
  if(b.role === "super_admin" && !callerIsSuperAdmin) {
    throw new PlatformError("Only super administrators can assign the Super Admin role.", 403);
  }
@@ -109,7 +109,7 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
  await moduleSchemaReady();
  const caller = workspaceUser();
  const callerIsSuperAdmin = caller.isOrganizationAdmin || caller.orgRole === "super_admin" || (caller.rights || []).includes("org_role:super_admin");
- const b=await request.json(),current=checked(await workspaceDb().from("profiles").select("*").eq("id",b.userId).single());
+ const b=await readJson(request),current=checked(await workspaceDb().from("profiles").select("*").eq("id",b.userId).single());
  const currentRights = Array.isArray(current.rights) ? current.rights : [];
  if((current.role === "super_admin" || currentRights.includes("org_role:super_admin")) && !callerIsSuperAdmin) {
    throw new PlatformError("You cannot modify super administrator accounts.", 403);

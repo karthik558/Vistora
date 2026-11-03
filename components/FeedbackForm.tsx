@@ -19,7 +19,7 @@ const departments: { value: DepartmentType; label: string; detail: string }[] = 
   { value: "Valet & Transfers", label: "Valet & Transfers", detail: "Airport transit, drop-off & parking" },
 ];
 
-export default function FeedbackForm({ publicToken = "verified" }: { publicToken?: string }) {
+export default function FeedbackForm({ publicToken = "" }: { publicToken?: string }) {
   const [stay, setStay] = useState<GuestStayDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [linkError, setLinkError] = useState("");
@@ -39,13 +39,10 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
 
-  // Mandatory Property Selection
-  const [properties, setProperties] = useState<Array<{ id: string; name: string; code: string; location: string; is_active?: boolean;organizations?:{name:string;logo_url:string|null;brand_color:string;welcome_message:string} }>>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  // The server resolves one property from the authorized guest link.
+  const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [propertyError, setPropertyError] = useState<string | null>(null);
-  const [isUrlPreselected, setIsUrlPreselected] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
-  const [trackedToken, setTrackedToken] = useState<string>(publicToken || "verified");
 
   // Dynamic Questionnaire
   const [questions, setQuestions] = useState<Array<{
@@ -62,108 +59,35 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true); setLinkError("");
-
-    // Fetch properties and check for URL pre-selection or demo mode link
-    fetch("/api/properties?public=true", { cache: "no-store" })
-      .then((res) => res.json())
-      .then(async (json) => {
-        if (!json.success || !json.properties) throw new Error(json.error || "Could not load the feedback form.");
-        if (mounted && json.success && json.properties) {
-          // Exclude disabled properties from guest-facing selection
-          const activeProperties = json.properties.filter((p: any) => p.is_active !== false);
-          setProperties(activeProperties);
-
-          if (typeof window !== "undefined") {
-            const params = new URLSearchParams(window.location.search);
-            const propParam = params.get("property") || params.get("propertyId") || params.get("p");
-            const demoParam = params.get("demo") === "true" || params.get("demo") === "1" || params.has("demo");
-            const tokenParam = params.get("token") || params.get("t");
-            const roomParam = params.get("room") || params.get("roomNumber") || params.get("r");
-            const guestParam = params.get("guest") || params.get("guestName") || params.get("name");
-            const deptParam = params.get("dept") || params.get("department");
-            const emailParam = params.get("email") || params.get("guestEmail");
-            const phoneParam = params.get("phone") || params.get("guestPhone");
-
-            if (tokenParam) setTrackedToken(tokenParam);
-            if (roomParam) setRoomNumber(roomParam);
-            if (guestParam) setGuestName(guestParam);
-            if (emailParam) {
-              setGuestEmail(emailParam);
-              setContactValue(emailParam);
-            }
-            if (phoneParam) {
-              setGuestPhone(phoneParam);
-              if (!emailParam) {
-                setContactValue(phoneParam);
-                setContactPreference("phone");
-              }
-            }
-            if (deptParam && departments.some((d) => d.value === deptParam)) {
-              setDepartment(deptParam as DepartmentType);
-            }
-            if (demoParam) setIsDemoMode(true);
-
-            if (propParam) {
-              const cleanParam = propParam.trim().toLowerCase();
-              const match = json.properties.find(
-                (p: any) =>
-                  p.id.toLowerCase() === cleanParam ||
-                  p.code.toLowerCase() === cleanParam ||
-                  p.name.toLowerCase().includes(cleanParam)
-              );
-              if (match) {
-                setSelectedPropertyId(match.id);
-                setIsUrlPreselected(true);
-              }
-            } else if (demoParam && activeProperties.length > 0) {
-              // Demo link automatically selects property
-              setSelectedPropertyId(activeProperties[0].id);
-              setIsUrlPreselected(true);
-            }
-
-            // Resolve invitation / stay if tokenParam exists
-            const tokenToLookup = (publicToken && publicToken !== "verified") ? publicToken : tokenParam;
-            if (tokenToLookup) {
-              const response = await fetch(`/api/stays/${encodeURIComponent(tokenToLookup)}`, { cache: "no-store" });
-              const stayRes = await response.json();
-              if (!response.ok || !stayRes.success || !stayRes.data) throw new Error(stayRes.error || "This feedback link is no longer available.");
-              if (mounted) {
-                const d = stayRes.data;
-                if (!activeProperties.some((property:any)=>property.id===d.propertyId)) throw new Error("This property is not accepting feedback.");
-                setStay(d);
-                setSelectedPropertyId(d.propertyId);
-                setIsUrlPreselected(true);
-                setGuestName(d.guestName || "");
-                setRoomNumber(d.roomNumber || "");
-                if (d.guestEmail) { setGuestEmail(d.guestEmail); setContactValue(d.guestEmail); setContactPreference("email"); }
-                if (d.guestPhone) { setGuestPhone(d.guestPhone); if (!d.guestEmail) { setContactValue(d.guestPhone); setContactPreference("phone"); } }
-              }
-            }
-          }
-        }
+    const controller = new AbortController();
+    setLoading(true); setLinkError(""); setStay(null); setSelectedPropertyId("");
+    if (!publicToken) { setLinkError("Ask reception for a property feedback link."); setLoading(false); return; }
+    fetch(`/api/stays/${encodeURIComponent(publicToken)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async response => {
+        const json = await response.json();
+        if (!response.ok || !json.success || !json.data) throw new Error(json.error || "This feedback link is unavailable.");
+        if (controller.signal.aborted) return;
+        const details = json.data as GuestStayDetails;
+        setStay(details); setSelectedPropertyId(details.propertyId);
+        setGuestName(details.guestName || ""); setRoomNumber(details.roomNumber || "");
+        setIsDemoMode(details.demo === true);
+        if (departments.some(item => item.value === details.department)) setDepartment(details.department as DepartmentType);
       })
-      .catch(error => { if (mounted) setLinkError(error.message || "Could not load the feedback form."); })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
+      .catch(error => { if (!controller.signal.aborted) setLinkError(error.message || "Could not load the feedback form."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [publicToken]);
 
   useEffect(()=>{
     setQuestions([]);setAnswers({});setQuestionsProperty("");setQuestionsError("");
     if(!selectedPropertyId)return;
     const controller=new AbortController();
-    fetch("/api/questions?public=true&propertyId="+encodeURIComponent(selectedPropertyId),{signal:controller.signal})
+    fetch("/api/questions?public=true&token="+encodeURIComponent(publicToken),{signal:controller.signal})
       .then(async response=>{const body=await response.json();if(!response.ok||!body.success||!Array.isArray(body.questions))throw new Error("Could not load the feedback questions. Please retry.");return body;})
       .then(body=>{if(!controller.signal.aborted){setQuestions(body.questions);setQuestionsProperty(selectedPropertyId);}})
       .catch(error=>{if(!controller.signal.aborted)setQuestionsError(error.message||"Could not load feedback questions.");});
     return ()=>controller.abort();
-  },[selectedPropertyId,questionsRetry]);
+  },[selectedPropertyId,publicToken,questionsRetry]);
 
   const activeQuestions = questions.filter((q) => {
     if (department === "Housekeeping") {
@@ -182,7 +106,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
     setPropertyError(null);
 
     if (!selectedPropertyId) {
-      setPropertyError("Please select the hotel property location of your stay.");
+      setPropertyError("Open a valid property feedback link to continue.");
       return;
     }
     if (!rating) {
@@ -222,7 +146,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          publicToken: trackedToken || publicToken,
+          publicToken,
           propertyId: selectedPropertyId,
           guestName: guestName.trim() || undefined,
           roomNumber: roomNumber.trim() || undefined,
@@ -251,7 +175,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
 
   const progressStep = !selectedPropertyId ? 1 : !rating ? 2 : 3;
   const ratingWord = rating === 1 ? "Needs work" : rating === 2 ? "Fair" : rating === 3 ? "Good" : rating === 4 ? "Very good" : rating === 5 ? "Exceptional" : "";
-  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+  const selectedProperty = stay ? { id: stay.propertyId, name: stay.propertyName, code: stay.propertyCode } : null;
   const managerFollowUp = rating !== null && (rating <= 3 || wantsContact);
 
   if (!loading && linkError) return <main className="guest-shell"><section className="guest-card" role="alert"><h1>Feedback form unavailable</h1><p>{linkError}</p><p>Ask the front desk for a current feedback link.</p><button className="button button-outline" onClick={()=>window.location.reload()}>Try again</button></section></main>;
@@ -325,18 +249,19 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
             />
           </Link>
         </div>
+        {selectedProperty && <p className="guest-intro"><strong>{selectedProperty.name}</strong>{selectedProperty.code ? ` · ${selectedProperty.code}` : ""}</p>}
         <div className="guest-progress" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={progressStep} aria-label={`Step ${progressStep} of 3`}>
           <span className={progressStep > 1 ? "done" : "current"} />
           <span className={progressStep > 2 ? "done" : progressStep === 2 ? "current" : ""} />
           <span className={progressStep === 3 ? "current" : ""} />
         </div>
         <ol className="guest-progress-labels">
-          <li className={progressStep > 1 ? "done" : "current"}>Property</li>
+          <li className={progressStep > 1 ? "done" : "current"}>Your link</li>
           <li className={progressStep > 2 ? "done" : progressStep === 2 ? "current" : ""}>Rating</li>
           <li className={progressStep === 3 ? "current" : ""}>Note</li>
         </ol>
 
-        {stay && (
+        {stay?.isStayLink && (
           <div
             style={{
               display: "flex",
@@ -366,38 +291,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         </p>
 
         <form onSubmit={handleSubmit}>
-          {/* Mandatory Property Selection */}
-          <div className={`guest-callout${propertyError ? " has-error" : ""}`}>
-            <label className="field-label guest-callout-label" htmlFor="property-select">
-              <span>Which Vistora property are you reviewing? <strong className="guest-required">*</strong></span>
-              {selectedPropertyId && isUrlPreselected && (
-                <span className="guest-preselected">
-                  ✓ {isDemoMode ? "Demo link · Property pre-selected" : "Property pre-selected"}
-                </span>
-              )}
-            </label>
-
-            <CustomSelect
-              id="property-select"
-              disabled={!!stay || submitting}
-              value={selectedPropertyId}
-              onChange={(val) => {
-                setSelectedPropertyId(val);
-                setPropertyError(null);
-              }}
-              placeholder="-- Select property location (Required) --"
-              header="Vistora Properties"
-              options={properties.map((p) => ({
-                value: p.id,
-                label: `${p.name} (${p.code})`,
-                detail: p.location,
-              }))}
-            />
-
-            {propertyError && (
-              <p className="guest-error">{propertyError}</p>
-            )}
-          </div>
+          {propertyError && <p className="guest-error" role="alert">{propertyError}</p>}
 
           {!activeQuestions.some(q=>q.question_type==="nps")&&<fieldset className="guest-recommendation"><legend>Would you recommend your stay? <span>Optional</span></legend><div className="nps-input" role="group" aria-label="Recommendation score, 0 to 10">{Array.from({length:11},(_,n)=><button type="button" key={n} aria-pressed={recommendationScore===n} onClick={()=>setRecommendationScore(recommendationScore===n?null:n)} aria-label={`${n} out of 10`}>{n}</button>)}</div><div className="guest-score-ends"><span>Not likely</span><span>Extremely likely</span></div></fieldset>}
           {/* Rating */}
@@ -489,7 +383,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
                   required
                 />
                 <small style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "var(--muted)" }}>
-                  {stay ? "Guest and room details are linked to this feedback invitation." : <>Enter room number, or &quot;NR&quot; if you are a non-resident / day guest.</>}
+                  {stay?.isStayLink ? "Guest and room details are linked to this feedback invitation." : <>Enter room number, or &quot;NR&quot; if you are a non-resident / day guest.</>}
                 </small>
               </div>
             </div>
@@ -738,7 +632,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
           {(!selectedPropertyId || !rating || !guestName.trim() || !roomNumber.trim()) && (
             <p className="guest-hint">
               {!selectedPropertyId
-                ? "Please select a hotel property location above to proceed."
+                ? "Open a valid property feedback link to continue."
                 : !rating
                 ? "Please select an overall rating (1-5) above."
                 : !guestName.trim()
@@ -751,7 +645,7 @@ export default function FeedbackForm({ publicToken = "verified" }: { publicToken
         </form>
 
         <p className="privacy-note">
-          Your feedback is handled securely and connected to your verified stay record.{" "}
+          Your feedback is sent to the team at the property shown above.{" "}
           <a href="#privacy">Privacy notice</a>
         </p>
       </div>
