@@ -22,7 +22,7 @@ export default async function HomePage() {
   if (userCookie) {
     try { isLoggedIn = !!JSON.parse(decodeURIComponent(userCookie))?.email; } catch { /* Display hint only; workspace routes verify the session. */ }
   }
-  const destination = isLoggedIn ? "/dashboard/overview" : "/login";
+  const destination = isLoggedIn ? "/dashboard" : "/login";
   return <main className="vistora-public">
     <a className="vp-skip" href="#main-content">Skip to content</a>
     <header className="vp-header"><Link href="/" aria-label="Vistora home"><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={135} height={34} priority /></Link><nav aria-label="Main navigation"><a href="#experience">The experience</a><a href="#features">Features</a><a href="#questions">FAQs</a></nav><Link prefetch={true} href={destination} className="vp-login">{isLoggedIn ? "Your workspace" : "Sign in"}<ArrowUpRight size={16} /></Link></header>
@@ -42,7 +42,7 @@ export default async function HomePage() {
       ["How are feedback topics identified?", "The Analytics page matches words in guest comments to topics such as cleanliness, room comfort and breakfast. Ratings provide the positive, neutral and low-rated breakdown. This is transparent keyword matching, not AI sentiment analysis."],
       ["Can I work across multiple properties?", "Yes. Authorized teams can filter feedback by property and date. Access follows the property assignments and permissions in your workspace."],
     ].map(([q,a]) => <details key={q}><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</div></section>
-    <section className="vp-cta"><p className="vp-kicker">BETTER EXPERIENCES START HERE</p><h2>Your guests have something to say.<br /><em>Make it matter.</em></h2><Link href={destination} className="vp-button">Let’s get listening<span><ArrowRight size={18} /></span></Link></section>
+    <section className="vp-cta"><p className="vp-kicker">BETTER EXPERIENCES START HERE</p><h2>Your guests have something to say.<br /><em>Make it matter.</em></h2><Link href={destination} prefetch={true} className="vp-button">{isLoggedIn ? "Open your workspace" : "Explore your workspace"}<span><ArrowRight size={18} /></span></Link></section>
     <footer className="vp-footer"><Link href="/" aria-label="Vistora home"><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={120} height={30} /></Link><p>Every voice. A better stay.</p><span>© 2026 Vistora</span><a href="#main-content">Back to top ↑</a></footer>
   </main>;
 }

@@ -27,7 +27,7 @@ test("Initial preloader is document-scoped rather than route-scoped", () => {
 });
 
 test("Workspace entry prefetches public links and keeps login pending through navigation", () => {
-  assert.equal((read("app/page.tsx").match(/prefetch=\{true\}/g) || []).length, 2);
+  assert.equal((read("app/page.tsx").match(/prefetch=\{true\}/g) || []).length, 3);
   const login = read("components/LoginForm.tsx");
   assert.match(login, /startNavigation\(\(\) => router.replace/);
   assert.match(login, /disabled=\{loading \|\| openingWorkspace\}/);
