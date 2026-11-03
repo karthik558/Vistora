@@ -24,7 +24,6 @@ export default async function HomePage() {
   }
   const destination = isLoggedIn ? "/dashboard" : "/login";
   return <main className="vistora-public">
-    <a className="vp-skip" href="#main-content">Skip to content</a>
     <header className="vp-header"><Link href="/" aria-label="Vistora home"><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={135} height={34} priority /></Link><nav aria-label="Main navigation"><a href="#experience">The experience</a><a href="#features">Features</a><a href="#questions">FAQs</a></nav><Link prefetch={true} href={destination} className="vp-login">{isLoggedIn ? "Your workspace" : "Sign in"}<ArrowUpRight size={16} /></Link></header>
     <section className="vp-hero" id="main-content">
       <div className="vp-hero-art" aria-hidden="true" />

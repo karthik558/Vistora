@@ -10,6 +10,8 @@ export default function InitialPreloader() {
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
+    // The public index renders immediately, without an overlay or loading timers.
+    if (window.location.pathname === "/") return;
     setMounted(true);
     const startedAt = performance.now();
     let scheduled = false;

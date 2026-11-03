@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 test("Initial preloader is document-scoped rather than route-scoped", () => {
   const loader = read("components/InitialPreloader.tsx");
   assert.match(loader, /\[mounted, setMounted\] = useState\(false\)/);
+  assert.ok(loader.indexOf('if (window.location.pathname === "/") return;') < loader.indexOf("setMounted(true)"));
   assert.match(loader, /if \(!mounted \|\| !loading\) return null/);
   assert.match(read("app/layout.tsx"), /<InitialPreloader \/>/);
   assert.match(loader, /document.readyState === "complete"/);
@@ -24,6 +25,34 @@ test("Initial preloader is document-scoped rather than route-scoped", () => {
   assert.match(loader, /vistora_wordmark_white\.webp/);
   assert.doesNotMatch(loader, /Loading…/);
   assert.match(read("app/layout.tsx"), /<noscript>/);
+});
+
+test("Index skips preloader setup while other pages retain it", () => {
+  const ts = require("typescript");
+  const vm = require("node:vm");
+  const source = ts.transpileModule(read("components/InitialPreloader.tsx"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2021, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  function mount(pathname) {
+    const effects = [], updates = [], events = [], timers = [];
+    const exports = {};
+    vm.runInNewContext(source, {
+      exports,
+      require: name => name === "react" ? {
+        useState: initial => [initial, next => updates.push(next)],
+        useEffect: effect => effects.push(effect),
+      } : require(name),
+      window: { location: { pathname }, addEventListener: name => events.push(name), setTimeout: (_, ms) => timers.push(ms) },
+      document: { readyState: "loading" }, performance: { now: () => 0 },
+    });
+    assert.equal(exports.default(), null);
+    effects.forEach(effect => effect());
+    return { updates, events, timers };
+  }
+  assert.deepEqual(mount("/"), { updates: [], events: [], timers: [] });
+  for (const route of ["/login", "/dashboard/overview", "/feedback"]) {
+    assert.deepEqual(mount(route), { updates: [true], events: ["load", "pageshow"], timers: [8000] });
+  }
 });
 
 test("Workspace entry prefetches public links and keeps login pending through navigation", () => {
