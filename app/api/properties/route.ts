@@ -57,8 +57,8 @@ async function GETImpl(request: NextRequest) {
 
 async function POSTImpl(request: NextRequest) {
   try {
-    // Strictly require administrator or manage_properties privileges
-    const authCheck = await requireAdminOrRight(request, "manage_properties");
+    // Strictly require super administrator privileges to create properties
+    const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();
@@ -130,7 +130,8 @@ async function POSTImpl(request: NextRequest) {
 
 async function PATCHImpl(request: NextRequest) {
   try {
-    const authCheck = await requireAdminOrRight(request, "manage_properties");
+    // Strictly require super administrator privileges to update properties
+    const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const body = await request.json();
@@ -176,8 +177,8 @@ async function PATCHImpl(request: NextRequest) {
 
 async function DELETEImpl(request: NextRequest) {
   try {
-    // Strictly require administrator or manage_properties privileges
-    const authCheck = await requireAdminOrRight(request, "manage_properties");
+    // Strictly require super administrator privileges to delete properties
+    const authCheck = await requireAdmin(request);
     if (authCheck.errorResponse) return authCheck.errorResponse;
 
     const { propertyId } = await request.json();
@@ -208,6 +209,6 @@ export async function GET(request:NextRequest) {
   return NextResponse.json({success:true,properties});
  }catch(error){return errorResponse(error);}
 }
-export const POST=withWorkspace(POSTImpl,"manage_properties");
-export const PATCH=withWorkspace(PATCHImpl,"manage_properties");
-export const DELETE=withWorkspace(DELETEImpl,"manage_properties");
+export const POST=withWorkspace(POSTImpl);
+export const PATCH=withWorkspace(PATCHImpl);
+export const DELETE=withWorkspace(DELETEImpl);

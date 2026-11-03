@@ -1,7 +1,7 @@
-"use client";
-import {useEffect,useState} from "react";
+ "use client";
+import {useEffect,useState,useMemo} from "react";
 import Link from "next/link";
-import {ArrowRight,Clock,ShieldCheck,Users} from "lucide-react";
+import {ArrowRight,Clock,ShieldCheck,Users,Building2} from "lucide-react";
 import WorkspaceSelect from "./WorkspaceSelect";
 import DashboardPageHeading from "./DashboardPageHeading";
 import {AppShell,WorkspaceUser} from "./Dashboard";
@@ -15,7 +15,17 @@ export default function RoleMappingPage({initialUser}:{initialUser:WorkspaceUser
 
  const [data,setData]=useState<any>(null),[editing,setEditing]=useState<any>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [scope,setScope]=useState("property"),[module,setModule]=useState("hospitality"),[property,setProperty]=useState(""),[country,setCountry]=useState(""),[department,setDepartment]=useState("*");
- async function load(){const r=await fetch("/api/role-mappings",{cache:"no-store"}),j=await r.json();if(!r.ok)throw new Error(j.error||"Unable to load routing rules.");setData(j);}
+ const [activeRuleFilterProperty, setActiveRuleFilterProperty] = useState<string>("all");
+
+ async function load(){
+  const r=await fetch("/api/role-mappings",{cache:"no-store"}),j=await r.json();
+  if(!r.ok)throw new Error(j.error||"Unable to load routing rules.");
+  setData(j);
+  if(j.properties?.length > 0 && !property){
+   const activeProps = j.properties.filter((p: any) => p.is_active !== false);
+   if(activeProps.length > 0) setProperty(activeProps[0].id);
+  }
+ }
  useEffect(()=>{load().catch(e=>setError(e.message));},[]);
  const properties=(data?.properties||[]).filter((p:any)=>p.is_active);
  const departments=module==="hospitality"?OPERATIONS_DEPARTMENTS:feedbackDepartments;
@@ -26,9 +36,26 @@ export default function RoleMappingPage({initialUser}:{initialUser:WorkspaceUser
   const deptAllowed=!rights.some((r:string)=>r.startsWith("dept_scope:"))||rights.includes("dept_scope:*")||rights.includes("dept_scope:All Departments")||(department!=="*"&&rights.includes("dept_scope:"+department));
   return targets.length>0&&targets.every((h:any)=>p.property_id===h.id||p.property_ids?.includes(h.id))&&moduleAllowed&&deptAllowed&&rights.includes(module==="feedback"?"manage_complaints":"manage_service_jobs");
  });
+
+ const juniorAuto = eligible.find((p: any) => p.role === "staff") || eligible[0];
+ const seniorAuto = eligible.find((p: any) => (p.role === "manager" || p.isAdmin) && p.id !== juniorAuto?.id) || eligible.find((p: any) => p.id !== juniorAuto?.id);
+ const gmAuto = eligible.find((p: any) => (p.isAdmin || p.role === "admin" || p.role === "general_manager") && p.id !== seniorAuto?.id && p.id !== juniorAuto?.id) || eligible.find((p: any) => p.id !== seniorAuto?.id);
+
+ const autoAssigned: Record<string, string> = {
+  assignee_id: juniorAuto?.id || "",
+  senior_assignee_id: seniorAuto?.id || "",
+  gm_assignee_id: gmAuto?.id || "",
+ };
+
  const name=(id:string)=>data?.team.find((p:any)=>p.id===id)?.full_name||"Not configured / inactive";
  async function mutate(method:string,body:any){setBusy(true);setError("");setNotice("");try{const r=await fetch("/api/role-mappings",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}),j=await r.json();if(!r.ok)throw new Error(j.error||"Could not save routing.");await load();setEditing(null);setNotice(method==="DELETE"?"Routing rule removed. Existing work keeps its current owner.":"Escalation chain saved. New complaints will follow this routing rule.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  function edit(r:any){setEditing(r);setScope(r.property_id?"property":r.country?"country":"company");setModule(r.module);setProperty(r.property_id||"");setCountry(r.country||"");setDepartment(r.department);}
+
+ const filteredRules = useMemo(() => {
+  if (!data?.rules) return [];
+  if (activeRuleFilterProperty === "all") return data.rules;
+  return data.rules.filter((r: any) => r.property_id === activeRuleFilterProperty);
+ }, [data?.rules, activeRuleFilterProperty]);
 
  if (!canViewRoleMapping) {
   return (
@@ -61,10 +88,23 @@ export default function RoleMappingPage({initialUser}:{initialUser:WorkspaceUser
  <label>Escalate until<WorkspaceSelect label="Escalation stop condition" name="escalate_until" defaultValue={editing?.escalate_until||"acknowledged"} disabled={busy} options={[{value:"acknowledged",label:"Acknowledged or started"},{value:"resolved",label:"Resolved / completed"}]}/></label>
  {module==="feedback"&&<label>Attention threshold<WorkspaceSelect label="Attention threshold" name="max_rating" defaultValue={String(editing?.max_rating||3)} disabled={busy} options={[{value:"3",label:"Ratings 1–3"},{value:"2",label:"Ratings 1–2"},{value:"1",label:"Rating 1 only"}]}/></label>}
  </div><div className="routing-stages" key={[editing?.id,scope,property,country,module,department].join(":")}>
- {[{key:"assignee_id",title:"Junior",number:"01",note:"Receives new complaints",timer:"response_minutes",minutes:15},{key:"senior_assignee_id",title:"Senior",number:"02",note:"Takes over if the junior response window expires",timer:"senior_response_minutes",minutes:20},{key:"gm_assignee_id",title:"General manager",number:"03",note:"Final escalation owner",timer:null,minutes:0}].map((step,i)=><section className="routing-stage" key={step.key}><span className="routing-stage-number">{step.number}</span><h3>{step.title}</h3><p>{step.note}</p><label>{step.title} owner<WorkspaceSelect label={`${step.title} owner`} name={step.key} disabled={busy} defaultValue={eligible.some((p:any)=>p.id===editing?.[step.key])?editing[step.key]:""} placeholder={i===0?"Choose authorized member":"No escalation at this level"} options={[{value:"",label:i===0?"Choose authorized member":"No escalation at this level"},...eligible.map((p:any)=>({value:p.id,label:p.full_name,detail:p.email}))]}/></label>{step.timer&&<label>Response window · minutes<input name={step.timer} type="number" required min={1} max={1440} defaultValue={editing?.[step.timer]||step.minutes}/></label>}</section>)}
+ {[{key:"assignee_id",title:"Junior",number:"01",note:"Receives new complaints",timer:"response_minutes",minutes:15},{key:"senior_assignee_id",title:"Senior",number:"02",note:"Takes over if the junior response window expires",timer:"senior_response_minutes",minutes:20},{key:"gm_assignee_id",title:"General manager",number:"03",note:"Final escalation owner",timer:null,minutes:0}].map((step,i)=><section className="routing-stage" key={step.key}><span className="routing-stage-number">{step.number}</span><h3>{step.title}</h3><p>{step.note}</p><label>{step.title} owner<WorkspaceSelect label={`${step.title} owner`} name={step.key} disabled={busy} defaultValue={editing ? (editing[step.key] || "") : (autoAssigned[step.key] || "")} placeholder={i===0?"Choose authorized member":"No escalation at this level"} options={[{value:"",label:i===0?"Choose authorized member":"No escalation at this level"},...eligible.map((p:any)=>({value:p.id,label:p.full_name,detail:p.email}))]}/></label>{step.timer&&<label>Response window · minutes<input name={step.timer} type="number" required min={1} max={1440} defaultValue={editing?.[step.timer]||step.minutes}/></label>}</section>)}
  </div><p className="routing-help">Only members with access to every selected property, the channel and the department can be chosen. Set these in <Link href="/dashboard/users">Team &amp; users</Link>. Use different people at each level.</p>
  {!eligible.length&&<p role="status">No authorized members match this scope. Choose a property or update team permissions first.</p>}<button className="button button-dark" disabled={busy||!eligible.length}>{busy?"Saving…":"Save escalation chain"}</button></fieldset></form></section>}
- <section className="platform-card"><h2>Active routing rules</h2>{!data.rules.length&&<p>No rules yet. Create a chain for each department that handles complaints.</p>}<div className="routing-rule-list">{data.rules.map((r:any)=><article className="routing-rule" key={r.id}><div className="platform-heading"><div><strong>{r.role_name}</strong><p>{r.module==="hospitality"?"Hotel operations":"Guest feedback"} · {r.property_id?data.properties.find((p:any)=>p.id===r.property_id)?.name:r.country||"Company default"} · {r.department==="*"?"All departments":r.department}</p></div>{canManageRoleMapping&&<div className="platform-actions"><button className="button button-ghost" disabled={busy} onClick={()=>edit(r)}>Edit</button><button className="button button-ghost" disabled={busy} onClick={()=>mutate("DELETE",{id:r.id})}>Remove</button></div>}</div><div className="routing-rule-chain"><span><small>Junior</small>{name(r.assignee_id)}</span><span className="routing-wait">{r.response_minutes} min →</span><span><small>Senior</small>{name(r.senior_assignee_id)}</span><span className="routing-wait">{r.senior_response_minutes} min →</span><span><small>GM</small>{name(r.gm_assignee_id)}</span></div><p>Stops when {r.escalate_until==="resolved"?"resolved / completed":"acknowledged or started"}. Existing manually assigned work keeps its owner.</p></article>)}</div></section></>}
+ <section className="platform-card">
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+   <h2 style={{ margin: 0 }}>Active routing rules</h2>
+   {properties.length > 1 && (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+     <Building2 size={15} style={{ color: "var(--muted)" }} />
+     <span style={{ fontSize: "12px", color: "var(--muted)" }}>Property filter:</span>
+     <WorkspaceSelect label="Filter property rules" value={activeRuleFilterProperty} onChange={setActiveRuleFilterProperty} options={[{ value: "all", label: "All properties" }, ...properties.map((p: any) => ({ value: p.id, label: p.name }))]} />
+    </div>
+   )}
+  </div>
+  {!filteredRules.length&&<p>No routing rules found for this property filter. Create a chain for each department that handles complaints.</p>}
+  <div className="routing-rule-list">{filteredRules.map((r:any)=><article className="routing-rule" key={r.id}><div className="platform-heading"><div><strong>{r.role_name}</strong><p>{r.module==="hospitality"?"Hotel operations":"Guest feedback"} · {r.property_id?data.properties.find((p:any)=>p.id===r.property_id)?.name:r.country||"Company default"} · {r.department==="*"?"All departments":r.department}</p></div>{canManageRoleMapping&&<div className="platform-actions"><button className="button button-ghost" disabled={busy} onClick={()=>edit(r)}>Edit</button><button className="button button-ghost" disabled={busy} onClick={()=>mutate("DELETE",{id:r.id})}>Remove</button></div>}</div><div className="routing-rule-chain"><span><small>Junior</small>{name(r.assignee_id)}</span><span className="routing-wait">{r.response_minutes} min →</span><span><small>Senior</small>{name(r.senior_assignee_id)}</span><span className="routing-wait">{r.senior_response_minutes} min →</span><span><small>GM</small>{name(r.gm_assignee_id)}</span></div><p>Stops when {r.escalate_until==="resolved"?"resolved / completed":"acknowledged or started"}. Existing manually assigned work keeps its owner.</p></article>)}</div>
+ </section></>}
  <p className="routing-help">Escalation runs through the scheduled worker. Run it every minute for 15–20 minute response targets. Delivery requires a configured provider; assignments and history remain visible in the portal.</p>
  </div></AppShell>;
 }

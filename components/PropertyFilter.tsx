@@ -101,9 +101,17 @@ export default function PropertyFilter({
 
   function handleSelectAll() {
     onChange("all", ["all"]);
+    setIsOpen(false);
   }
 
-  function handleToggleProperty(propId: string) {
+  function handleSelectProperty(propId: string) {
+    if (isSingle) return;
+    onChange(propId, [propId]);
+    setIsOpen(false);
+  }
+
+  function handleToggleCheckbox(e: React.MouseEvent, propId: string) {
+    e.stopPropagation();
     if (isSingle) return; // Cannot toggle away from the only assigned property
 
     if (isAll) {
@@ -125,11 +133,6 @@ export default function PropertyFilter({
 
     const primary = next.includes("all") ? "all" : next[0] || "all";
     onChange(primary, next);
-  }
-
-  function handleSelectOnly(e: React.MouseEvent, propId: string) {
-    e.stopPropagation();
-    onChange(propId, [propId]);
   }
 
   return (
@@ -245,7 +248,7 @@ export default function PropertyFilter({
                   <div
                     key={prop.id}
                     className={`property-filter-item ${isSelected ? "selected" : ""}`}
-                    onClick={() => handleToggleProperty(prop.id)}
+                    onClick={() => handleSelectProperty(prop.id)}
                     style={{
                       cursor: isSingle ? "default" : "pointer",
                       display: "flex",
@@ -255,6 +258,8 @@ export default function PropertyFilter({
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
                       <span
+                        onClick={(e) => handleToggleCheckbox(e, prop.id)}
+                        title="Toggle selection"
                         style={{
                           width: "14px",
                           height: "14px",
@@ -266,6 +271,7 @@ export default function PropertyFilter({
                           background: isSelected ? "var(--sage, #4e6f5b)" : "transparent",
                           color: "#fff",
                           flexShrink: 0,
+                          cursor: isSingle ? "default" : "pointer",
                         }}
                       >
                         {isSelected && <Check size={11} strokeWidth={3} />}
@@ -299,27 +305,7 @@ export default function PropertyFilter({
                       >
                         Assigned
                       </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => handleSelectOnly(e, prop.id)}
-                        title="Isolate this property only"
-                        style={{
-                          background: "var(--canvas-alt)",
-                          border: "1px solid var(--line)",
-                          color: "var(--muted)",
-                          fontSize: "9px",
-                          fontWeight: 600,
-                          padding: "2px 6px",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                          marginLeft: "6px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        Only
-                      </button>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}

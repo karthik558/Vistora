@@ -52,8 +52,8 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const isSuperAdminUser = activeUser?.role === "super_admin" || currentUserRole === "super_admin" || activeUser?.isOrganizationAdmin === true || (Array.isArray(activeUser?.rights) && activeUser.rights.includes("org_role:super_admin"));
   const isUserAdmin = isSuperAdminUser || activeUser?.role === "admin" || currentUserRole === "admin";
   const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
-  const canManageProperties = isUserAdmin || userRights.has("manage_properties");
-  const canViewProperties = canManageProperties || userRights.has("view_properties");
+  const canManageProperties = isSuperAdminUser;
+  const canViewProperties = isSuperAdminUser || isUserAdmin || userRights.has("view_properties") || userRights.has("manage_properties");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -371,7 +371,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
 
             {!canManageProperties && (
               <div className="panel notice" style={{ marginBottom: "16px", fontSize: "12.5px" }}>
-                View-only access: Contact an administrator to add, edit, or remove hotel properties.
+                View-only access: Only super administrators can register, edit, or configure hotel properties.
               </div>
             )}
 

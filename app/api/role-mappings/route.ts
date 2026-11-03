@@ -31,10 +31,28 @@ export const GET=withWorkspace(async()=>{
    return true;
   });
  }
- return NextResponse.json({success:true,rules:checked(rules),properties:checked(properties),team:team.map(p=>({...p,isAdmin:active.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
+ const allowedPropIds = caller.propertyIds?.length
+   ? caller.propertyIds
+   : caller.propertyId
+   ? [caller.propertyId]
+   : [];
+ let propList = checked(properties);
+ let ruleList = checked(rules);
+ if (!callerIsSuperAdmin) {
+   propList = propList.filter((p: any) => allowedPropIds.includes(p.id));
+   ruleList = ruleList.filter((r: any) => !r.property_id || allowedPropIds.includes(r.property_id));
+ }
+ return NextResponse.json({success:true,rules:ruleList,properties:propList,team:team.map(p=>({...p,isAdmin:active.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
- requireManageRoleMapping();const b=await request.json();
+ requireManageRoleMapping();const b=await request.json(),caller=workspaceUser();
+ const callerIsSuperAdmin=caller.isOrganizationAdmin||caller.orgRole==="super_admin"||(caller.rights||[]).includes("org_role:super_admin");
+ if(!callerIsSuperAdmin){
+  const allowedPropIds = caller.propertyIds?.length ? caller.propertyIds : (caller.propertyId ? [caller.propertyId] : []);
+  if(!b.property_id || !allowedPropIds.includes(b.property_id)){
+   throw new PlatformError("Hotel administrators can only configure escalation rules for their assigned property.", 403);
+  }
+ }
  if(b.escalate_until&&!["acknowledged","resolved"].includes(b.escalate_until))throw new PlatformError("Choose a valid escalation stop condition.");
  if(!["feedback","hospitality"].includes(b.module))throw new PlatformError("Choose a valid module.");
  const row={organization_id:workspaceUser().organizationId,module:b.module,property_id:b.property_id||null,country:text(b.country,"Country",100,false),department:text(b.department||"*","Department",60),role_name:text(b.role_name,"Role name",80),assignee_id:text(b.assignee_id,"Assignee",50),max_rating:number(b.max_rating??3,"Attention rating",1,3),senior_assignee_id:b.senior_assignee_id||null,gm_assignee_id:b.gm_assignee_id||null,response_minutes:number(b.response_minutes??15,"Junior response minutes",1,1440),senior_response_minutes:number(b.senior_response_minutes??20,"Senior response minutes",1,1440),escalate_until:b.escalate_until||"acknowledged"};
@@ -45,7 +63,15 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
 });
 export const PATCH=POST;
 export const DELETE=withWorkspace(async(request:NextRequest)=>{
- requireManageRoleMapping();const b=await request.json();
+ requireManageRoleMapping();const b=await request.json(),caller=workspaceUser();
+ const callerIsSuperAdmin=caller.isOrganizationAdmin||caller.orgRole==="super_admin"||(caller.rights||[]).includes("org_role:super_admin");
+ if(!callerIsSuperAdmin){
+  const allowedPropIds = caller.propertyIds?.length ? caller.propertyIds : (caller.propertyId ? [caller.propertyId] : []);
+  const targetRule = checked(await workspaceDb().from("role_mappings").select("property_id").eq("organization_id", caller.organizationId).eq("id", text(b.id, "Mapping", 50)).single());
+  if(targetRule?.property_id && !allowedPropIds.includes(targetRule.property_id)){
+   throw new PlatformError("You are not authorized to delete rules outside your assigned property.", 403);
+  }
+ }
  if(b.escalate_until&&!["acknowledged","resolved"].includes(b.escalate_until))throw new PlatformError("Choose a valid escalation stop condition.");checked(await workspaceDb().from("role_mappings").delete().eq("organization_id",workspaceUser().organizationId).eq("id",text(b.id,"Mapping",50)).select("id").single());
  return NextResponse.json({success:true});
 });

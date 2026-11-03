@@ -73,8 +73,9 @@ export default function SystemSettingsPage({
   });
 
   const userRights = new Set(Array.isArray(user?.rights) ? user.rights : []);
-  const canManageSettings = user?.isOrganizationAdmin === true || userRights.has("manage_settings");
-  const canViewSettings = canManageSettings || userRights.has("view_settings");
+  const isSuperAdmin = user?.isOrganizationAdmin === true || (user as any)?.role === "super_admin" || (user as any)?.orgRole === "super_admin" || userRights.has("org_role:super_admin");
+  const canManageSettings = isSuperAdmin;
+  const canViewSettings = canManageSettings || userRights.has("view_settings") || userRights.has("manage_settings");
 
   useEffect(() => {
     const local = getClientUser();
@@ -270,7 +271,7 @@ export default function SystemSettingsPage({
                   <form onSubmit={handleSaveAppSettings}>
                     {!canManageSettings && (
                       <div className="panel notice" style={{ marginBottom: "20px", fontSize: "12.5px" }}>
-                        View-only configuration: Contact a workspace administrator to modify platform settings and SLA recovery targets.
+                        View-only configuration: Only super administrators can modify and save system settings.
                       </div>
                     )}
                     <fieldset disabled={!canManageSettings} style={{ border: "none", padding: 0, margin: 0 }}>

@@ -849,3 +849,116 @@ test("Self-modification is blocked, subordinate delegation enforced, and guest i
     db.sessionDb = orig;
   }
 });
+
+test("Property mutations and settings saving are strictly restricted to super admins, and role mapping is property-scoped", async () => {
+  const db = require("../lib/platform/db.ts");
+  const { NextRequest } = require("next/server");
+  const propRoute = require("../app/api/properties/route.ts");
+  const settingsRoute = require("../app/api/settings/route.ts");
+  const roleRoute = require("../app/api/role-mappings/route.ts");
+
+  const orig = db.sessionDb;
+
+  const hotelAdmin = {
+    id: "hotel-admin-1",
+    fullName: "Hotel Admin",
+    email: "admin@hotel.com",
+    role: "admin",
+    orgRole: "admin",
+    organizationId: "org-1",
+    isOrganizationAdmin: false, // NOT super admin
+    propertyIds: ["prop-1"],
+    propertyId: "prop-1",
+    rights: ["manage_properties", "view_properties", "manage_settings", "view_settings", "manage_role_mapping", "view_role_mapping"],
+    accessToken: "verified",
+  };
+
+  const superAdmin = {
+    id: "super-admin-1",
+    fullName: "Super Admin",
+    email: "super@vistora.com",
+    role: "super_admin",
+    orgRole: "super_admin",
+    organizationId: "org-1",
+    isOrganizationAdmin: true,
+    propertyIds: ["prop-1", "prop-2"],
+    rights: ["org_role:super_admin"],
+    accessToken: "verified",
+  };
+
+  const mockClient = {
+    from() {
+      const q = {
+        select() { return q; },
+        insert() { return q; },
+        update() { return q; },
+        delete() { return q; },
+        eq() { return q; },
+        single: async () => ({ data: { id: "p1", name: "Test" }, error: null }),
+        maybeSingle: async () => ({ data: null, error: null }),
+      };
+      return q;
+    },
+  };
+
+  db.sessionDb = () => mockClient;
+
+  try {
+    // 1. Property POST/PATCH/DELETE restricted to super admins only
+    const postPropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
+      propRoute.POST(new NextRequest("http://localhost/api/properties", {
+        method: "POST",
+        body: JSON.stringify({ name: "New Hotel" }),
+      }))
+    );
+    assert.equal(postPropRes.status, 403);
+    const postPropJson = await postPropRes.json();
+    assert.match(postPropJson.error, /Workspace administrator access required/i);
+
+    const patchPropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
+      propRoute.PATCH(new NextRequest("http://localhost/api/properties", {
+        method: "PATCH",
+        body: JSON.stringify({ propertyId: "prop-1", name: "Renamed Hotel" }),
+      }))
+    );
+    assert.equal(patchPropRes.status, 403);
+
+    const deletePropRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
+      propRoute.DELETE(new NextRequest("http://localhost/api/properties", {
+        method: "DELETE",
+        body: JSON.stringify({ propertyId: "prop-1" }),
+      }))
+    );
+    assert.equal(deletePropRes.status, 403);
+
+    // 2. Settings saving restricted to super admins only
+    const saveSettingsRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
+      settingsRoute.PATCH(new NextRequest("http://localhost/api/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ type: "application", appSettings: { projectName: "Test" } }),
+      }))
+    );
+    assert.equal(saveSettingsRes.status, 403);
+    const saveSettingsJson = await saveSettingsRes.json();
+    assert.match(saveSettingsJson.error, /Only super administrators can save system settings/i);
+
+    // 3. Role mapping: Hotel admin cannot create rule for property outside their assignment
+    const roleOutsideRes = await db.workspaceContext.run({ user: hotelAdmin, client: mockClient }, () =>
+      roleRoute.POST(new NextRequest("http://localhost/api/role-mappings", {
+        method: "POST",
+        body: JSON.stringify({
+          module: "hospitality",
+          property_id: "unauthorized-prop",
+          department: "IT",
+          role_name: "IT Lead",
+          assignee_id: "user-1",
+        }),
+      }))
+    );
+    assert.equal(roleOutsideRes.status, 403);
+    const roleOutsideJson = await roleOutsideRes.json();
+    assert.match(roleOutsideJson.error, /assigned property/i);
+  } finally {
+    db.sessionDb = orig;
+  }
+});

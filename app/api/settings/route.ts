@@ -11,7 +11,8 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
 },"view_settings");
 export const PATCH=withWorkspace(async(request:NextRequest)=>{
  const user=workspaceUser();
- if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_settings"))throw new PlatformError("Workspace administrator or manage_settings permission required.",403);
+ const isSuperAdmin = user.isOrganizationAdmin === true || (user as any).role === "super_admin" || (user.rights||[]).includes("org_role:super_admin");
+ if(!isSuperAdmin)throw new PlatformError("Only super administrators can save system settings.",403);
  const b=await request.json();
  if(b.type==="application"){
    const p=b.appSettings||{},patch:Record<string,unknown>={};
