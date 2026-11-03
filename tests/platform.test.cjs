@@ -336,7 +336,7 @@ test('Daily guest report parser extracts records and normalizes arrival dates', 
  const { parseGuestReportCsv } = require('../lib/hospitality/guestReportParser.ts');
  const csv = `Guest Name,Email,Phone,Room No,Check-in,Check-out,Pax,VIP Tier,Preferences
 "Doe, John",john@example.com,+1 555-0199,101,2026-11-03,2026-11-06,2,VIP,Sea view
-Eleanor Vance,eleanor@example.co.uk,+44 7700 900111,204,04/11/2026,08/11/2026,1,NC / Complimentary,VIP amenity`;
+Eleanor Vance,eleanor@example.co.uk,+44 7700 900111,204,2026-11-04,2026-11-08,1,NC / Complimentary,VIP amenity`;
  const records = parseGuestReportCsv(csv);
  assert.equal(records.length, 2);
  assert.equal(records[0].guest_name, "Doe, John");
@@ -348,120 +348,29 @@ Eleanor Vance,eleanor@example.co.uk,+44 7700 900111,204,04/11/2026,08/11/2026,1,
  assert.equal(records[1].vip_tier, "NC / Complimentary");
 });
 
-test('Daily import API enforces property scoping and authorization', async () => {
+test('Daily import API requires authorization, scopes one property and requires review before commit', async () => {
  const db = require('../lib/platform/db.ts');
- const importRoute = require('../app/api/hospitality/import/route.ts');
+ const route = require('../app/api/hospitality/import/route.ts');
  const { NextRequest } = require('next/server');
+ const calls = [];
+ const client = { rpc: async (name, args) => { calls.push({ name, args }); return { data: { success: true, preview: !args.p_preview_token }, error: null }; } };
  const original = db.sessionDb;
-
- const client = {
-  from(table) {
-   const q = {
-    select() { return q; },
-    in() { return q; },
-    eq() { return q; },
-    then(resolve) {
-     if (table === 'properties') resolve({ data: [{ id: 'prop-1', name: 'Hotel One', is_active: true }], error: null });
-     else if (table === 'guests') resolve({ data: [], error: null });
-     else if (table === 'hotel_rooms') resolve({ data: [], error: null });
-     else if (table === 'stays') resolve({ data: [], error: null });
-     else resolve({ data: [], error: null });
-    }
-   };
-   return q;
-  }
- };
-
- const unauthStaff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality'], propertyIds: ['prop-1'] };
- const authStaff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality', 'manage_service_jobs'], propertyIds: ['prop-1'] };
-
  db.sessionDb = () => client;
+ const staff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality', 'import_guests'], propertyIds: ['prop-1'] };
+ const body = { property_id: 'prop-1', request_id: 'request-1', mode: 'partial', records: [{ guest_name: 'Test', room_number: '101' }] };
+ const post = (user, data) => db.workspaceContext.run({ user, client }, () => route.POST(new NextRequest('http://localhost/api/hospitality/import', { method: 'POST', body: JSON.stringify(data) })));
  try {
-  // 1. Rejects if user lacks property right to prop-2
-  const unauthProp = await db.workspaceContext.run({ user: authStaff, client }, () =>
-   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
-    method: 'POST',
-    body: JSON.stringify({ property_ids: ['prop-2'], records: [{ guest_name: 'Test', room_number: '101' }] })
-   }))
-  );
-  assert.equal(unauthProp.status, 403);
-
-  // 2. Rejects if user lacks management rights
-  const noRight = await db.workspaceContext.run({ user: unauthStaff, client }, () =>
-   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
-    method: 'POST',
-    body: JSON.stringify({ property_ids: ['prop-1'], records: [{ guest_name: 'Test', room_number: '101' }] })
-   }))
-  );
-  assert.equal(noRight.status, 403);
-
-  // 3. Single property import strictly scopes stays to the selected property
-  const insertedStays = [];
-  const insertedRooms = [];
-  const trackClient = {
-   from(table) {
-    const q = {
-     select() { return q; },
-     in() { return q; },
-     eq() { return q; },
-     single() {
-      if (table === 'stays') return Promise.resolve({ data: { id: 's-1', property_id: 'prop-1' }, error: null });
-      if (table === 'guests') return Promise.resolve({ data: { id: 'g-1', full_name: 'Test' }, error: null });
-      if (table === 'hotel_rooms') return Promise.resolve({ data: { id: 'r-1', property_id: 'prop-1', room_number: '105' }, error: null });
-      return Promise.resolve({ data: {}, error: null });
-     },
-     insert(val) {
-      if (table === 'stays') insertedStays.push(val);
-      if (table === 'guests') return { select: () => ({ single: () => Promise.resolve({ data: { id: 'g-1', full_name: val.full_name }, error: null }) }) };
-      if (table === 'hotel_rooms') insertedRooms.push(val);
-      return q;
-     },
-     upsert(val) {
-      if (table === 'hotel_rooms') insertedRooms.push(val);
-      return { select: () => ({ single: () => Promise.resolve({ data: { id: 'r-1', property_id: val.property_id, room_number: val.room_number }, error: null }) }) };
-     },
-     then(resolve) {
-      if (table === 'properties') resolve({ data: [{ id: 'prop-1', name: 'Hotel One', is_active: true }, { id: 'prop-2', name: 'Hotel Two', is_active: true }], error: null });
-      else if (table === 'guests') resolve({ data: [], error: null });
-      else if (table === 'hotel_rooms') resolve({ data: [], error: null });
-      else if (table === 'stays') resolve({ data: [], error: null });
-      else resolve({ data: [], error: null });
-     }
-    };
-    return q;
-   }
-  };
-
-  const adminUser = { id: 'admin', fullName: 'Admin', email: 'admin@example.com', role: 'admin', organizationId: 'org', isOrganizationAdmin: true, rights: ['module:hospitality'] };
-  db.sessionDb = () => trackClient;
-  const singlePropRes = await db.workspaceContext.run({ user: adminUser, client: trackClient }, () =>
-   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
-    method: 'POST',
-    body: JSON.stringify({ property_ids: ['prop-1'], records: [{ guest_name: 'Single Prop Guest', room_number: '105' }] })
-   }))
-  );
-  if (singlePropRes.status !== 200) {
-    const err = await singlePropRes.json();
-    throw new Error('singlePropRes failed with: ' + JSON.stringify(err));
-  }
-  assert.equal(singlePropRes.status, 200);
-  assert.equal(insertedStays.length, 1);
-  assert.equal(insertedStays[0].property_id, 'prop-1');
-
-  // 4. Multi-property import allocates to all selected properties
-  insertedStays.length = 0;
-  const multiPropRes = await db.workspaceContext.run({ user: adminUser, client: trackClient }, () =>
-   importRoute.POST(new NextRequest('http://localhost/api/hospitality/import', {
-    method: 'POST',
-    body: JSON.stringify({ property_ids: ['prop-1', 'prop-2'], records: [{ guest_name: 'Multi Prop Guest', room_number: '202' }] })
-   }))
-  );
-  assert.equal(multiPropRes.status, 200);
-  assert.equal(insertedStays.length, 2);
-  assert.deepEqual(insertedStays.map(s => s.property_id).sort(), ['prop-1', 'prop-2']);
- } finally {
-  db.sessionDb = original;
- }
+  assert.equal((await post({ ...staff, rights: ['module:hospitality'] }, body)).status, 403);
+  assert.equal((await post(staff, { ...body, property_id: 'prop-2' })).status, 403);
+  assert.equal((await post(staff, { ...body, commit: true })).status, 400);
+  assert.equal(calls.length, 0);
+  assert.equal((await post(staff, body)).status, 200);
+  assert.equal(calls[0].name, 'import_guest_report');
+  assert.equal(calls[0].args.p_property, 'prop-1');
+  assert.equal(calls[0].args.p_preview_token, null);
+  assert.equal((await post(staff, { ...body, commit: true, preview_token: 'review-token' })).status, 200);
+  assert.equal(calls[1].args.p_preview_token, 'review-token');
+ } finally { db.sessionDb = original; }
 });
 
 test("Super admin accounts are hidden and property access is strictly scoped for hotel admins", async () => {

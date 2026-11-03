@@ -4,6 +4,7 @@ import Link from "next/link";
 import {useSearchParams} from "next/navigation";
 import QRCode from "qrcode";
 import RoomManagerModal from "./RoomManagerModal";
+import GuestImportsPage from "./GuestImportsPage";
 import DailyImportModal from "./DailyImportModal";
 import {AppShell,WorkspaceUser} from "./Dashboard";
 import WorkspaceSelect from "./WorkspaceSelect";
@@ -188,6 +189,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
  const [showRoomManagerModal,setShowRoomManagerModal]=useState(false);
  const [roomManagerPropertyId,setRoomManagerPropertyId]=useState("");
+ const [importRevision,setImportRevision]=useState(0);
  const [showDailyImportModal,setShowDailyImportModal]=useState(false);
  const [dailyImportTab,setDailyImportTab]=useState<"file"|"manual">("file");
  const [qrModalData,setQrModalData]=useState<{title:string;roomNumber?:string;propertyName?:string;url:string}|null>(null);
@@ -297,6 +299,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const canAttend=canManageServiceJobs(user)&&data?.complaintsReady===true;
  const descriptions:Record<Tab,string>={
   Overview:"A clear view of guest stays, room readiness, and immediate service requests.",
+  "Guest imports":"Review occupancy changes and import history across the day.",
   Guests:"Track active in-house guests, handle checkouts, manage reservations, and customer profiles.",
   Cleaning:"Prioritize room cleaning, confirm access and record minibar consumption.",
   Maintenance:"Track assets, reactive repairs and recurring preventive maintenance.",
@@ -309,7 +312,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   Inspections:"Review room checks and follow up on readiness issues.",
   "Cost controls":"Review operating costs, approvals and monthly budgets."
  };
- const sectionKey=tab==="Guests"?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
+ const sectionKey=(tab==="Guests"||tab==="Guest imports")?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
  const enabled=tab==="Overview"||config.modules[sectionKey as keyof typeof config.modules]!==false;
  const propertySelect=(name="property_id")=><WorkspaceSelect label="Property" name={name} defaultValue={property==="all"?"":property} placeholder="Choose property" options={(data?.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}/>;
  const nameOf=(id:string)=>data?.properties?.find((p:any)=>p.id===id)?.name||"—";
@@ -326,7 +329,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const historyStays=stays.filter(s=>s.status==="checked_out"||s.status==="cancelled");
 
 
- return <AppShell active={tab} user={user} module="operations"><div className="content-wrap platform-page hotel-page">
+ return <AppShell active={tab} user={user} module="operations"><div className={`content-wrap platform-page hotel-page${tab==="Guests"||tab==="Guest imports"?" guest-import-workspace":""}`}>
  <DashboardPageHeading eyebrow="Hotel operations" title={tab} description={descriptions[tab]}>
   <PropertyFilter
     properties={data?.properties||[]}
@@ -342,31 +345,13 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     manageHref="/dashboard/properties?workspace=operations"
     isGlobalAdmin={user?.isOrganizationAdmin === true}
   />
-  {!suiteTabs.includes(tab)&&canImport&&(
-   <>
-    <button
-     type="button"
-     className="button button-outline compact"
-     onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}
-     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
-     title="Import daily arrivals from CSV or Excel report"
-    >
-     <Upload size={14}/>
-     <span>Import for the day</span>
-    </button>
-    <button
-     type="button"
-     className="button button-outline compact"
-     onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}
-     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
-     title="Quick add & check in guest"
-    >
-     <UserPlus size={14}/>
-     <span>+ Quick Add Guest</span>
-    </button>
-   </>
-  )}
-  {!suiteTabs.includes(tab)&&<button
+  {(tab==="Guests"||tab==="Guest imports")&&canImport&&enabled&&<>
+   <button type="button" className="button button-dark compact" disabled={!data} onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}>
+    <Upload size={14}/><span>{tab==="Guest imports"?"Upload report":"Import for the day"}</span>
+   </button>
+   {tab==="Guests"&&<button type="button" className="button button-outline compact" disabled={!data} onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}><UserPlus size={14}/><span>Add guest</span></button>}
+  </>}
+  {!suiteTabs.includes(tab)&&tab!=="Guest imports"&&<button
    type="button"
    className="button button-ghost compact"
    onClick={openGeneralFeedbackCode}
@@ -376,10 +361,10 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
    <QrCode size={14}/>
    <span>Feedback code</span>
   </button>}
-  {!suiteTabs.includes(tab)&&<button className="button button-ghost compact" disabled={loading} onClick={load}><RefreshCw size={14}/>Refresh</button>}
+  {!suiteTabs.includes(tab)&&<button className="button button-ghost compact" disabled={loading} onClick={()=>{void load();if(tab==="Guest imports")setImportRevision(value=>value+1);}}><RefreshCw size={14}/>Refresh</button>}
  </DashboardPageHeading>
 
- {!canManage&&<p className="platform-notice">{canAttend?"You can log complaints and attend your assigned work. Inventory, stays and costs remain administrator-only.":"Read-only access to your assigned properties. Ask an administrator for complaint intake and assigned work permission."}</p>}
+ {!canManage&&tab!=="Guest imports"&&<p className="platform-notice">{canAttend?"You can log complaints and attend your assigned work. Inventory, stays and costs remain administrator-only.":"Read-only access to your assigned properties. Ask an administrator for complaint intake and assigned work permission."}</p>}
  {error&&<p role="alert" className="platform-notice">{error}</p>}{message&&<p role="status" className="hotel-success">{message}</p>}
   {loading&&!data&&!suiteTabs.includes(tab)&&<p role="status">Loading hotel operations…</p>}
   <div hidden={!enabled||(!suiteTabs.includes(tab)&&!(tab==="Complaints"&&canManage))}>
@@ -389,6 +374,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in workspace Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard">Open workspace</Link>}</section>:<>
  {(tab==="Complaints")&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
   {tab==="Complaints"&&<ComplaintBoard data={data} user={user} save={save} busy={busy}/>}
+ {tab==="Guest imports"&&(canImport?<GuestImportsPage property={property} properties={data.properties||[]} revision={importRevision}/>:<p>Guest import permission is required.</p>)}
  {tab==="Guests"&&<>
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
    <nav className="platform-tabs" aria-label="Guest views" style={{borderBottom:"none",marginBottom:0,paddingBottom:0}}>
@@ -421,28 +407,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
      Directory ({data.guests?.length||0})
     </button>
    </nav>
-   <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"2px"}}>
-    {canImport&&<button
-     type="button"
-     className="button button-dark compact"
-     onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}
-     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
-     title="Import daily arrivals from CSV or Excel report"
-    >
-     <Upload size={13}/>
-     <span>Import for the day</span>
-    </button>}
-    {canImport&&<button
-     type="button"
-     className="button button-outline compact"
-     onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}
-     style={{display:"inline-flex",alignItems:"center",gap:"5px"}}
-     title="Quick add & check in a guest or NC visitor"
-    >
-     <UserPlus size={13}/>
-     <span>+ Quick Add / NC Guest</span>
-    </button>}
-   </div>
+
   </div>
 
   {/* IN-HOUSE GUESTS: Active stays only */}
@@ -456,7 +421,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {activeStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in{property!=="all"?` at ${nameOf(property)}`:""}. Checked-out guests have been cleared from this view.</p>
-      {canImport&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Check In Guest</button>}
+
      </div>
     ):(
      <div className="platform-table">
@@ -559,7 +524,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {reservedStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No upcoming reservations{property!=="all"?` for ${nameOf(property)}`:""}. Booked reservations will appear here awaiting guest arrival.</p>
-      {canImport&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Reserve Guest</button>}
+
      </div>
     ):(
      <div className="platform-table">
@@ -849,7 +814,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   initialTab={dailyImportTab}
   initialPropertyId={property!=="all"?property:undefined}
   directoryGuests={data?.guests||[]}
-  onImportCompleted={load}
+  onImportCompleted={()=>{setImportRevision(value=>value+1);void load();}}
  />
 
  </div></AppShell>;

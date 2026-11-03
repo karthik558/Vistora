@@ -13,10 +13,10 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-  AlertTriangle,
   UserPlus,
   Check,
 } from "lucide-react";
+import { ImportChanges, ImportResult } from "./GuestImportsPage";
 import WorkspaceSelect from "./WorkspaceSelect";
 import WorkspaceDateField from "./WorkspaceDateField";
 import type { WorkspaceUser } from "./Dashboard";
@@ -25,10 +25,7 @@ import {
   parseGuestReportCsv,
 } from "../lib/hospitality/guestReportParser";
 
-const SAMPLE_CSV = `guest_name,email,phone,room_number,room_type,check_in_date,check_out_date,guest_count,vip_tier,preferences
-Aarav Sharma,aarav.sharma@example.com,+91 98765 43210,101,Standard Room,${new Date().toISOString().slice(0, 10)},${new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10)},2,VIP,High floor ocean view requested
-Priya Patel,priya.patel@acme-corp.com,+91 91234 56789,204,Deluxe Room,${new Date().toISOString().slice(0, 10)},${new Date(Date.now() + 86400000 * 4).toISOString().slice(0, 10)},1,Standard,Quiet room away from elevator
-Vikram Malhotra,v.malhotra@techventures.io,+91 98111 22334,305,Executive Suite,${new Date().toISOString().slice(0, 10)},${new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10)},2,NC / Complimentary,VIP management courtesy amenity`;
+const SAMPLE_CSV = "guest_name,email,phone,room_number,room_type,check_in_date,check_out_date,guest_count,vip_tier,preferences\n";
 
 interface DirectoryGuest {
   id: string;
@@ -67,11 +64,10 @@ export default function DailyImportModal({
     const userPropIds = Array.isArray(user.propertyIds) && user.propertyIds.length > 0
       ? user.propertyIds
       : (user.propertyId ? [user.propertyId] : []);
-    if (userPropIds.length === 0) return properties.filter((p) => p.is_active !== false);
+    if (userPropIds.length === 0) return [];
     return properties.filter((p) => p.is_active !== false && userPropIds.includes(p.id));
   }, [properties, user]);
 
-  const hasSingleProperty = allowedProperties.length <= 1;
 
   // Selected property IDs for import
   const [selectedPropIds, setSelectedPropIds] = useState<string[]>(() => {
@@ -81,10 +77,13 @@ export default function DailyImportModal({
     return allowedProperties[0] ? [allowedProperties[0].id] : [];
   });
 
-  // Multi-property toggle state
-  const [isMultiPropertyMode, setIsMultiPropertyMode] = useState(false);
-  const [multiPropertyConfirmed, setMultiPropertyConfirmed] = useState(false);
-
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [importMode, setImportMode] = useState<"partial" | "full">("partial");
+  const [emptyConfirmed, setEmptyConfirmed] = useState(false);
+  const [review, setReview] = useState<ImportResult | null>(null);
+  const pendingRecords = useRef<ImportedGuestRecord[]>([]);
+  const requestId = useRef("");
+  const fileSequence = useRef(0);
   // Active tab: file upload or manual/NC entry
   const [activeTab, setActiveTab] = useState<"file" | "manual">(initialTab);
 
@@ -121,61 +120,34 @@ export default function DailyImportModal({
   // Sync state whenever modal opens
   useEffect(() => {
     if (open) {
+      dialogRef.current?.showModal();
+      setRecords([]); setFileName("");
+      setReview(null); setImportMode("partial"); setEmptyConfirmed(false);
       if (initialTab) setActiveTab(initialTab);
       if (initialPropertyId && allowedProperties.some((p) => p.id === initialPropertyId)) {
         setSelectedPropIds([initialPropertyId]);
-        setIsMultiPropertyMode(false);
-      } else if (allowedProperties.length > 0 && selectedPropIds.length === 0) {
+      } else if (allowedProperties.length > 0 && !allowedProperties.some(p=>p.id===selectedPropIds[0])) {
         setSelectedPropIds([allowedProperties[0].id]);
       }
-      setMultiPropertyConfirmed(false);
       setError("");
       setResultNotice(null);
-    }
-  }, [open, initialTab, initialPropertyId, allowedProperties]);
+    } else { dialogRef.current?.close(); fileSequence.current++; }
+  // Preserve the report while the parent refreshes its data.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  // Handle single vs multi-property selection
   const handleSelectProperty = (propId: string) => {
-    if (hasSingleProperty) return;
-    setError("");
-    if (!isMultiPropertyMode) {
-      // In single property mode, clicking a property button selects ONLY that property
-      setSelectedPropIds([propId]);
-      setMultiPropertyConfirmed(false);
-    } else {
-      // In multi-property mode, clicking toggles inclusion
-      setSelectedPropIds((prev) => {
-        if (prev.includes(propId)) {
-          if (prev.length === 1) return prev; // keep at least one
-          return prev.filter((id) => id !== propId);
-        } else {
-          return [...prev, propId];
-        }
-      });
-    }
+    setSelectedPropIds([propId]); setError("");
   };
-
-  const handleToggleMultiMode = (enabled: boolean) => {
-    setIsMultiPropertyMode(enabled);
-    setMultiPropertyConfirmed(false);
-    if (!enabled && selectedPropIds.length > 1) {
-      setSelectedPropIds([selectedPropIds[0]]);
-    }
-  };
-
-  const handleSelectAllProperties = () => {
-    setSelectedPropIds(allowedProperties.map((p) => p.id));
-  };
-
-  const isMultiPropertySelected = selectedPropIds.length > 1;
 
   // Reset when dialog closes
   const handleClose = () => {
     setError("");
+    setReview(null);
+    fileSequence.current++;
     setResultNotice(null);
     setRecords([]);
     setFileName("");
-    setMultiPropertyConfirmed(false);
     onClose();
   };
 
@@ -191,28 +163,21 @@ export default function DailyImportModal({
     URL.revokeObjectURL(url);
   };
 
-  const processFile = (file: File) => {
-    if (!file) return;
-    setError("");
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      try {
-        const parsed = parseGuestReportCsv(text);
-        if (parsed.length === 0) {
-          setError(
-            "No valid guest rows detected. Please ensure your report has a header row with Guest Name and Room Number."
-          );
-          setRecords([]);
-        } else {
-          setRecords(parsed);
-        }
-      } catch (err: any) {
-        setError("Error parsing file: " + (err.message || "Unknown error"));
-      }
-    };
-    reader.readAsText(file);
+  const processFile = async (file: File) => {
+    if (!file || busy) return;
+    setBusy(true);
+    const ticket = ++fileSequence.current;
+    setError(""); setRecords([]); setFileName(file.name); setEmptyConfirmed(false);
+    try {
+      if (!/\.(csv|tsv|txt)$/i.test(file.name)) throw new Error("Export your Excel report as CSV before uploading.");
+      if (file.size > 2_000_000) throw new Error("Report must be smaller than 2 MB.");
+      const parsed = parseGuestReportCsv(await file.text());
+      if (ticket !== fileSequence.current) return;
+      if (!parsed.length) throw new Error("No guest rows found. Check the file or explicitly confirm an empty property.");
+      if (parsed.length > 500) throw new Error("A report can contain up to 500 rooms.");
+      setRecords(parsed);
+    } catch (error) { if (ticket === fileSequence.current) setError((error as Error).message); }
+    finally { if (ticket === fileSequence.current) setBusy(false); }
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -243,10 +208,10 @@ export default function DailyImportModal({
     const found = directoryGuests.find((g) => g.id === guestId);
     if (found) {
       setManualName(found.full_name || "");
-      if (found.email) setManualEmail(found.email);
-      if (found.phone) setManualPhone(found.phone);
-      if (found.vip_tier) setManualTier(found.vip_tier);
-      if (found.preferences) setManualPref(found.preferences);
+      setManualEmail(found.email || "");
+      setManualPhone(found.phone || "");
+      setManualTier(found.vip_tier || "Standard");
+      setManualPref(found.preferences || "");
     }
   };
 
@@ -280,6 +245,7 @@ export default function DailyImportModal({
     e.preventDefault();
     const newRec = buildCurrentManualRecord();
     if (!newRec) return;
+    setImportMode("partial");
     setRecords((prev) => [newRec, ...prev]);
     setManualName("");
     setManualRoom("");
@@ -293,31 +259,32 @@ export default function DailyImportModal({
   const handleRemoveRecord = (id?: string) => {
     if (!id) return;
     setRecords((prev) => prev.filter((r) => r.id !== id));
+    setImportMode("partial");
   };
 
   // Core execution engine
-  const executeImport = async (recordsToImport: ImportedGuestRecord[]) => {
-    if (recordsToImport.length === 0) {
+  const executeImport = async (recordsToImport: ImportedGuestRecord[], commit = false) => {
+    if (recordsToImport.length === 0 && !(activeTab === "file" && importMode === "full" && emptyConfirmed)) {
       setError("Please add or upload guest records before importing.");
       return;
     }
-    if (selectedPropIds.length === 0) {
+    if (!allowedProperties.some(p=>p.id===selectedPropIds[0])) {
       setError("Please choose a destination property.");
       return;
     }
-    if (isMultiPropertySelected && !multiPropertyConfirmed) {
-      setError("Please confirm the multi-property reminder before proceeding.");
-      return;
-    }
-
     setBusy(true);
     setError("");
+    if (!commit) requestId.current = crypto.randomUUID();
     try {
       const response = await fetch("/api/hospitality/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          property_ids: selectedPropIds,
+          property_id: selectedPropIds[0],
+          mode: activeTab === "manual" ? "partial" : importMode,
+          request_id: requestId.current,
+          commit,
+          preview_token: review?.token,
           records: recordsToImport.map((r) => ({
             guest_name: r.guest_name,
             email: r.email,
@@ -339,8 +306,8 @@ export default function DailyImportModal({
         throw new Error(json.error || "Failed to import guest data.");
       }
 
-      setResultNotice(json);
-      onImportCompleted?.();
+      if (commit) { setResultNotice(json); setReview(null); onImportCompleted?.(); }
+      else { setReview(json); pendingRecords.current = recordsToImport; }
     } catch (err: any) {
       setError(err.message || "Could not complete import.");
     } finally {
@@ -348,7 +315,7 @@ export default function DailyImportModal({
     }
   };
 
-  // Direct 1-click check in from Quick Add form
+  // Review a single check-in from the Quick Add form
   const handleQuickAddInstantSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const rec = buildCurrentManualRecord();
@@ -369,8 +336,13 @@ export default function DailyImportModal({
   if (!open) return null;
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="daily-import-title"
+      onCancel={e=>{e.preventDefault();if(!busy)handleClose();}}
       style={{
+        color: "var(--ink)", font: "inherit",
+        border: 0, width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", margin: 0,
         position: "fixed",
         inset: 0,
         backgroundColor: "rgba(11, 16, 15, 0.55)",
@@ -411,13 +383,13 @@ export default function DailyImportModal({
           }}
         >
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "18px", color: "var(--ink)" }}>
-              {activeTab === "manual" ? "Quick Add & Check In Guest" : "Daily Guest Arrivals Import"}
+            <h3 id="daily-import-title" style={{ margin: "0 0 4px 0", fontSize: "18px", color: "var(--ink)" }}>
+              {activeTab === "manual" ? "Add guest" : "Import for the day"}
             </h3>
             <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>
               {activeTab === "manual"
-                ? "Instantly check in or reserve a guest, VIP, or NC / complimentary house guest."
-                : "Upload daily guest arrivals and stays in CSV or Excel format with smart profile deduplication."}
+                ? "Review a check-in or reservation for a guest, VIP, or NC / complimentary house guest."
+                : "Upload current occupancy or selected rooms, then review changes before importing."}
             </p>
           </div>
           <button
@@ -431,7 +403,7 @@ export default function DailyImportModal({
               padding: "4px",
               color: "var(--muted)",
             }}
-            title="Close dialog"
+            title="Close dialog" aria-label="Close import"
           >
             <X size={18} />
           </button>
@@ -498,6 +470,8 @@ export default function DailyImportModal({
               </article>
             </div>
 
+            <p role="status">{resultNotice.imported?.checkedOut || 0} stays checked out.</p>
+            <ImportChanges changes={resultNotice.changes || []}/>
             <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
               <button
                 type="button"
@@ -509,170 +483,27 @@ export default function DailyImportModal({
               </button>
             </div>
           </div>
+        ) : review ? (
+          <section>
+            <h4>Review occupancy changes · {selectedPropertyNames}</h4>
+            <p>{review.imported.staysCreated} new stays · {review.imported.staysUpdated} existing stays · <strong>{review.imported.checkedOut} check-outs</strong></p>
+            {activeTab === "file" && importMode === "full" && <p>Missing previous stays will be checked out now and rooms marked dirty. Scheduled departure dates remain in stay history.</p>}
+            <ImportChanges changes={review.changes}/>
+            {error && <p role="alert" className="platform-notice">{error}</p>}
+            <div className="platform-actions">
+              <button className="button button-outline" disabled={busy} onClick={()=>{setReview(null);setError("");}}>Back to report</button>
+              <button className="button button-dark" disabled={busy} onClick={()=>executeImport(pendingRecords.current,true)}>{busy?"Importing…":"Confirm import"}</button>
+            </div>
+          </section>
         ) : (
-          <>
-            {/* 1. Property Rights & Allocation Scoping */}
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: "6px",
-                background: "var(--canvas)",
-                border: "1px solid var(--line)",
-                marginBottom: "16px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "8px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Building2 size={15} style={{ color: "var(--muted)" }} />
-                  <strong style={{ fontSize: "13px", color: "var(--ink)" }}>
-                    Target Property
-                  </strong>
-                </div>
-                {!hasSingleProperty && (
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      fontSize: "11px",
-                      cursor: "pointer",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isMultiPropertyMode}
-                      onChange={(e) => handleToggleMultiMode(e.target.checked)}
-                    />
-                    <span>Import to multiple properties</span>
-                  </label>
-                )}
-              </div>
-
-              {hasSingleProperty ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "6px 10px",
-                    background: "var(--panel)",
-                    borderRadius: "4px",
-                    border: "1px solid var(--line)",
-                    fontSize: "12px",
-                  }}
-                >
-                  <span style={{ color: "var(--sage-deep)", fontWeight: 600 }}>● Active Property:</span>
-                  <strong>{allowedProperties[0]?.name}</strong>
-                  <span style={{ color: "var(--muted)", marginLeft: "auto", fontSize: "11px" }}>
-                    Scoped strictly to your assigned property
-                  </span>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    {allowedProperties.map((prop) => {
-                      const isSelected = selectedPropIds.includes(prop.id);
-                      return (
-                        <button
-                          key={prop.id}
-                          type="button"
-                          onClick={() => handleSelectProperty(prop.id)}
-                          className={`button ${isSelected ? "button-dark" : "button-outline"} compact`}
-                          style={{
-                            fontSize: "12px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: "8px",
-                              height: "8px",
-                              borderRadius: "50%",
-                              background: isSelected ? "#ffffff" : "var(--muted)",
-                            }}
-                          />
-                          <span>{prop.name}</span>
-                          {isSelected && !isMultiPropertyMode && (
-                            <Check size={12} style={{ marginLeft: "2px" }} />
-                          )}
-                        </button>
-                      );
-                    })}
-                    {isMultiPropertyMode && (
-                      <button
-                        type="button"
-                        className="button button-ghost compact"
-                        onClick={handleSelectAllProperties}
-                        style={{ fontSize: "11px", color: "var(--muted)" }}
-                      >
-                        Select All ({allowedProperties.length})
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Scoping Confirmation Indicator */}
-                  {!isMultiPropertySelected && selectedPropIds.length === 1 && (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        fontSize: "11px",
-                        color: "var(--sage-deep)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                      }}
-                    >
-                      <CheckCircle2 size={12} />
-                      <span>
-                        Import target locked: <strong>{selectedPropertyNames}</strong> (Only this property will receive the imported stays).
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Multi-Property Allocation Reminder */}
-              {isMultiPropertySelected && (
-                <div
-                  style={{
-                    marginTop: "12px",
-                    padding: "10px 14px",
-                    borderRadius: "5px",
-                    background: "var(--accent-warm-soft, #fff8e6)",
-                    border: "1px solid var(--accent-warm, #d9822b)",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "10px",
-                  }}
-                >
-                  <AlertTriangle size={18} style={{ color: "#d9822b", flexShrink: 0, marginTop: "2px" }} />
-                  <div style={{ fontSize: "12px", color: "var(--ink)", flex: 1 }}>
-                    <strong>Multi-Property Import Notice:</strong>
-                    <p style={{ margin: "3px 0 6px 0", lineHeight: 1.4 }}>
-                      Are you sure you want to import to both{" "}
-                      <strong>{selectedPropertyNames}</strong>? Stays will be allocated across these properties. Please verify before proceeding.
-                    </p>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontWeight: 600 }}>
-                      <input
-                        type="checkbox"
-                        checked={multiPropertyConfirmed}
-                        onChange={(e) => setMultiPropertyConfirmed(e.target.checked)}
-                      />
-                      <span>Yes, I confirm importing across multiple properties</span>
-                    </label>
-                  </div>
-                </div>
-              )}
+          <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
+            <div className="platform-fields" style={{marginBottom:16}}>
+              <label className="hotel-wide-field">Property
+                <WorkspaceSelect label="Import property" value={selectedPropIds[0]||""} disabled={busy||allowedProperties.length===0}
+                  placeholder="Choose property" onChange={handleSelectProperty}
+                  options={allowedProperties.map(property=>({value:property.id,label:property.name}))}/>
+              </label>
+              {allowedProperties.length===0&&<p role="alert">No active properties are available for your account.</p>}
             </div>
 
             {/* Error Message */}
@@ -698,6 +529,7 @@ export default function DailyImportModal({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                flexWrap: "wrap", gap: "8px",
                 borderBottom: "1px solid var(--line)",
                 marginBottom: "16px",
               }}
@@ -706,11 +538,11 @@ export default function DailyImportModal({
                 <button
                   type="button"
                   aria-current={activeTab === "manual" ? "page" : undefined}
-                  onClick={() => setActiveTab("manual")}
+                  onClick={() => {setActiveTab("manual");setImportMode("partial");}}
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
                   <UserPlus size={13} />
-                  <span>Quick Add &amp; Check-In / NC Guest</span>
+                  <span>Add rooms manually</span>
                 </button>
                 <button
                   type="button"
@@ -718,8 +550,8 @@ export default function DailyImportModal({
                   onClick={() => setActiveTab("file")}
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
-                  <FileSpreadsheet size={13} />
-                  <span>Upload Report (.CSV / Excel)</span>
+                  <Upload size={13} />
+                  <span>Upload report</span>
                 </button>
               </nav>
 
@@ -930,13 +762,13 @@ export default function DailyImportModal({
                     style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
                   >
                     <Plus size={13} />
-                    <span>+ Add to Batch Queue</span>
+                    <span>Add to report</span>
                   </button>
 
                   <button
                     type="submit"
                     className="button button-dark compact"
-                    disabled={busy || (isMultiPropertySelected && !multiPropertyConfirmed)}
+                    disabled={busy}
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                   >
                     {busy ? (
@@ -948,7 +780,7 @@ export default function DailyImportModal({
                       <>
                         <Check size={13} />
                         <span>
-                          {manualStatus === "active" ? "Check In Guest Now" : "Confirm Reservation"}
+                          {manualStatus === "active" ? "Review Check-in" : "Review Reservation"}
                         </span>
                       </>
                     )}
@@ -960,10 +792,24 @@ export default function DailyImportModal({
             {/* TAB 2: File Upload */}
             {activeTab === "file" && (
               <div>
+                <div className="platform-fields" style={{marginBottom:12}}><label className="hotel-wide-field">Report type
+                  <WorkspaceSelect label="Report type" value={importMode} disabled={busy}
+                    onChange={value=>{setImportMode(value as "partial"|"full");setEmptyConfirmed(false);}}
+                    options={[
+                      {value:"partial",label:"Partial update",detail:"Update listed rooms only. Omitted stays remain unchanged."},
+                      {value:"full",label:"Full in-house report",detail:"Reconcile all occupied rooms and check out missing stays."},
+                    ]}/>
+                </label></div>
+                <p>{importMode==="full"?"Use the latest complete list of occupied rooms for this property. Missing active stays will be checked out; future reservations remain unchanged.":"Import one, two, or more rooms. Omitted rooms remain unchanged."}</p>
+                <p>New check-ins require ready rooms and any configured inspection. Resolve conflicting stays before importing.</p>
+                {importMode==="full"&&records.length===0&&<label><input type="checkbox" checked={emptyConfirmed} onChange={e=>setEmptyConfirmed(e.target.checked)}/>The property has no in-house guests. Review check-out of all active stays.</label>}
+
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
+                  role="button" tabIndex={0} aria-label="Choose guest report"
+                  onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileInputRef.current?.click();}}}
                   onClick={() => fileInputRef.current?.click()}
                   style={{
                     border: `2px dashed ${isDragging ? "var(--ink)" : "var(--line)"}`,
@@ -979,7 +825,7 @@ export default function DailyImportModal({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.txt,.tsv,.xlsx,.xls"
+                    accept=".csv,.txt,.tsv"
                     onChange={handleFileChange}
                     style={{ display: "none" }}
                   />
@@ -991,10 +837,10 @@ export default function DailyImportModal({
                     }}
                   />
                   <strong style={{ display: "block", fontSize: "14px", color: "var(--ink)" }}>
-                    {fileName ? fileName : "Drag & drop your guest report file here (.csv, .xlsx, .tsv)"}
+                    {fileName ? fileName : "Drag & drop your guest report file here (.csv, .tsv)"}
                   </strong>
                   <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--muted)" }}>
-                    Upload your report in CSV or Excel format with automatic column detection.
+                    Export Excel reports as CSV. Use YYYY-MM-DD dates and one primary guest per room.
                   </p>
                 </div>
               </div>
@@ -1029,12 +875,12 @@ export default function DailyImportModal({
                   }}
                 >
                   <strong style={{ fontSize: "13px", color: "var(--ink)" }}>
-                    Batch Queue ({records.length} guest{records.length === 1 ? "" : "s"})
+                    Rooms in report ({records.length})
                   </strong>
                   <button
                     type="button"
                     className="button button-ghost compact"
-                    onClick={() => setRecords([])}
+                    onClick={() => {setRecords([]);setImportMode("partial");}}
                     style={{ fontSize: "11px", color: "var(--muted)" }}
                   >
                     Clear batch
@@ -1062,7 +908,7 @@ export default function DailyImportModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {records.slice(0, 50).map((r, idx) => (
+                      {records.map((r, idx) => (
                         <tr key={r.id || idx}>
                           <td>
                             <strong>{r.guest_name}</strong>
@@ -1114,11 +960,7 @@ export default function DailyImportModal({
                       ))}
                     </tbody>
                   </table>
-                  {records.length > 50 && (
-                    <div style={{ padding: "8px", textAlign: "center", fontSize: "11px", color: "var(--muted)", background: "var(--canvas)" }}>
-                      ...and {records.length - 50} more records in this batch
-                    </div>
-                  )}
+
                 </div>
               </div>
             )}
@@ -1142,12 +984,12 @@ export default function DailyImportModal({
               >
                 Cancel
               </button>
-              {records.length > 0 && (
+              {(records.length > 0 || (activeTab === "file" && importMode === "full" && emptyConfirmed)) && (
                 <button
                   type="button"
                   className="button button-dark"
                   onClick={handleExecuteImport}
-                  disabled={busy || records.length === 0 || (isMultiPropertySelected && !multiPropertyConfirmed)}
+                  disabled={busy}
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
                   {busy ? (
@@ -1159,16 +1001,16 @@ export default function DailyImportModal({
                     <>
                       <Upload size={14} />
                       <span>
-                        Import {records.length} Queued Records
+                        Review import
                       </span>
                     </>
                   )}
                 </button>
               )}
             </div>
-          </>
+          </fieldset>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }

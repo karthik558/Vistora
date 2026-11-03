@@ -160,3 +160,8 @@ html::-webkit-scrollbar-corner,body::-webkit-scrollbar-corner,body *::-webkit-sc
 .launcher-account-role{display:inline-flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--canvas-alt);font-size:11px;color:var(--ink)}
 .module-launcher-header .launcher-signout{height:40px;min-height:40px}
 @media(max-width:600px){.module-launcher-header img{width:120px}.module-launcher-header .launcher-signout{width:40px}.launcher-account{padding:0}.launcher-account-popover{position:fixed;top:76px;right:16px}.launcher-administration-card:nth-child(odd){border-right:0}.launcher-administration-card:nth-child(n+2){border-top:1px solid var(--line)}}
+
+/* Keep guest import titles readable when the sidebar leaves a narrow content area. */
+.guest-import-workspace .page-heading { flex-wrap: wrap !important; }
+.guest-import-workspace .page-heading > :first-child { flex: 1 1 280px; min-width: 0; }
+.guest-import-workspace .page-heading-actions { flex-wrap: wrap !important; max-width: 100%; }

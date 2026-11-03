@@ -24,45 +24,32 @@ export function detectDelimiter(headerLine: string): string {
   return ",";
 }
 
-export function parseCsvLine(line: string, delimiter = ","): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"' || char === "'") {
-      inQuotes = !inQuotes;
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
+// Apostrophes are ordinary text; only double quotes delimit CSV fields.
+function parseCsvRows(text: string, delimiter: string): string[][] {
+  const rows: string[][] = []; let row: string[] = []; let value = ""; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') { value += '"'; i++; }
+      else if (quoted || !value.trim()) quoted = !quoted;
+      else throw new Error("Unexpected quote in report.");
+    } else if (!quoted && (char === delimiter || char === "\n" || char === "\r")) {
+      row.push(value.trim()); value = "";
+      if (char !== delimiter) { if (row.some(Boolean)) rows.push(row); row = []; if (char === "\r" && text[i + 1] === "\n") i++; }
+    } else value += char;
   }
-  result.push(current.trim());
-  return result;
+  if (quoted) throw new Error("Unclosed quote in report.");
+  row.push(value.trim()); if (row.some(Boolean)) rows.push(row);
+  return rows;
 }
-
+export function parseCsvLine(line: string, delimiter = ","): string[] {
+  return parseCsvRows(line, delimiter)[0] || [];
+}
 export function normalizeDate(raw: string): string {
-  if (!raw) return "";
-  const clean = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
-  const parsed = Date.parse(clean);
-  if (Number.isFinite(parsed)) {
-    return new Date(parsed).toISOString().slice(0, 10);
-  }
-  const parts = clean.split(/[/\-.]/);
-  if (parts.length === 3) {
-    let [p1, p2, p3] = parts;
-    if (p3.length === 2) p3 = "20" + p3;
-    if (p1.length === 4) {
-      return `${p1}-${p2.padStart(2, "0")}-${p3.padStart(2, "0")}`;
-    }
-    if (Number(p1) > 12) {
-      return `${p3}-${p2.padStart(2, "0")}-${p1.padStart(2, "0")}`;
-    }
-    return `${p3}-${p1.padStart(2, "0")}-${p2.padStart(2, "0")}`;
-  }
+  const clean = (raw || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) throw new Error("Use unambiguous YYYY-MM-DD arrival and departure dates.");
+  const date = new Date(clean);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== clean) throw new Error("Invalid date: " + clean);
   return clean;
 }
 
@@ -74,16 +61,11 @@ export function parseGuestReportCsv(text: string): ImportedGuestRecord[] {
     );
   }
 
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const clean = text.replace(/^\uFEFF/, "");
+  const delimiter = detectDelimiter(clean.split(/\r?\n/, 1)[0]);
+  const lines = parseCsvRows(clean, delimiter);
   if (lines.length < 2) return [];
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = parseCsvLine(lines[0], delimiter).map((h) =>
-    h.toLowerCase().trim().replace(/[\s_#-]+/g, "")
-  );
+  const headers = lines[0].map(h => h.toLowerCase().trim().replace(/[\s_#-]+/g, ""));
 
   const getIndex = (aliases: string[]) =>
     headers.findIndex((h) => aliases.includes(h));
@@ -168,28 +150,22 @@ export function parseGuestReportCsv(text: string): ImportedGuestRecord[] {
     "comments",
   ]);
 
-  if (nameIdx === -1 && roomIdx === -1) return [];
-
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-
+  const statusIdx = getIndex(["status", "staystatus"]);
+  if ([nameIdx, roomIdx, checkInIdx, checkOutIdx].some(index => index === -1)) {
+    throw new Error("Report requires Guest Name, Room Number, Check In Date and Check Out Date columns.");
+  }
   const records: ImportedGuestRecord[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i], delimiter);
-    const guestName = (nameIdx !== -1 ? cols[nameIdx] : "") || `Guest in Room ${cols[roomIdx] || i}`;
-    const roomNumber = (roomIdx !== -1 ? cols[roomIdx] : "") || "General";
-    if (!guestName && !roomNumber) continue;
-
-    const rawIn = checkInIdx !== -1 ? cols[checkInIdx] : "";
-    const rawOut = checkOutIdx !== -1 ? cols[checkOutIdx] : "";
-    const arrival = normalizeDate(rawIn) || today;
-    let departure = normalizeDate(rawOut) || tomorrow;
-    if (departure <= arrival) {
-      const arrD = new Date(arrival);
-      arrD.setDate(arrD.getDate() + 1);
-      departure = arrD.toISOString().slice(0, 10);
-    }
-
+    const cols = lines[i];
+    if (cols.length !== headers.length) throw new Error(`Row ${i + 1}: column count does not match the header.`);
+    const guestName = cols[nameIdx]; const roomNumber = cols[roomIdx];
+    if (!guestName || !roomNumber) throw new Error(`Row ${i + 1}: guest name and room number are required.`);
+    const arrival = normalizeDate(cols[checkInIdx]); const departure = normalizeDate(cols[checkOutIdx]);
+    if (departure <= arrival) throw new Error(`Row ${i + 1}: departure must be after arrival.`);
+    const count = countIdx !== -1 && cols[countIdx] ? Number(cols[countIdx]) : 1;
+    if (!Number.isInteger(count) || count < 1 || count > 20) throw new Error(`Row ${i + 1}: guest count must be between 1 and 20.`);
+    const status = statusIdx !== -1 ? cols[statusIdx].toLowerCase() : "";
+    if (status && !["active", "reserved"].includes(status)) throw new Error(`Row ${i + 1}: status must be active or reserved.`);
     records.push({
       id: "row-" + i + "-" + Math.random().toString(36).slice(2, 7),
       guest_name: guestName.trim(),
@@ -199,7 +175,8 @@ export function parseGuestReportCsv(text: string): ImportedGuestRecord[] {
       room_type: typeIdx !== -1 && cols[typeIdx] ? cols[typeIdx].trim() : "Standard",
       check_in_date: arrival,
       check_out_date: departure,
-      guest_count: countIdx !== -1 && Number(cols[countIdx]) > 0 ? Math.min(20, Number(cols[countIdx])) : 1,
+      guest_count: count,
+      status: status || undefined,
       vip_tier: tierIdx !== -1 && cols[tierIdx] ? cols[tierIdx].trim() : "Standard",
       preferences: prefIdx !== -1 && cols[prefIdx] ? cols[prefIdx].trim() : "",
     });

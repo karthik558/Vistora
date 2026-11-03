@@ -1,6 +1,7 @@
 export const operationTabs = [
   "Overview",
   "Guests",
+  "Guest imports",
   "Rooms",
   "Cleaning",
   "Complaints",
