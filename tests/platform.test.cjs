@@ -463,3 +463,147 @@ test('Daily import API enforces property scoping and authorization', async () =>
   db.sessionDb = original;
  }
 });
+
+test("Super admin accounts are hidden and property access is strictly scoped for hotel admins", async () => {
+ const db = require("../lib/platform/db.ts");
+ const { NextRequest } = require("next/server");
+ const original = db.sessionDb;
+ try {
+  const usersRoute = require("../app/api/users/route.ts");
+  const mockProfiles = [
+   { id: "owner-1", full_name: "Super Boss", email: "boss@vistora.com", role: "super_admin", rights: ["org_role:super_admin"], property_ids: [] },
+   { id: "hotel-admin-1", full_name: "Hotel Admin", email: "hotel1@vistora.com", role: "admin", rights: ["org_role:admin", "manage_users"], property_ids: ["prop-1"] },
+   { id: "hotel-admin-2", full_name: "Other Hotel Admin", email: "hotel2@vistora.com", role: "admin", rights: ["org_role:admin", "manage_users"], property_ids: ["prop-2"] },
+  ];
+  const mockMembers = [
+   { user_id: "owner-1", role: "owner", is_active: true },
+   { user_id: "hotel-admin-1", role: "member", is_active: true },
+   { user_id: "hotel-admin-2", role: "member", is_active: true },
+  ];
+
+  const client = {
+   from: (table) => ({
+    select: () => ({
+     eq: () => ({
+      data: mockMembers,
+      error: null,
+     }),
+     in: () => ({
+      order: () => ({
+       data: mockProfiles,
+       error: null,
+      }),
+     }),
+    }),
+   }),
+  };
+  db.sessionDb = () => client;
+
+  const hotelAdminUser = {
+   id: "hotel-admin-1",
+   fullName: "Hotel Admin",
+   email: "hotel1@vistora.com",
+   role: "admin",
+   orgRole: "admin",
+   organizationId: "org",
+   isOrganizationAdmin: false,
+   propertyIds: ["prop-1"],
+   propertyId: "prop-1",
+   rights: ["manage_users"],
+   accessToken: "verified",
+  };
+
+  const res = await db.workspaceContext.run({ user: hotelAdminUser, client }, () =>
+   usersRoute.GET(new NextRequest("http://localhost/api/users"))
+  );
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  // Super admin must be completely hidden
+  assert.equal(data.users.some(u => u.role === "super_admin" || u.email === "boss@vistora.com"), false);
+  // Other properties must be filtered out for single property admin
+  assert.equal(data.users.some(u => u.id === "hotel-admin-2"), false);
+  // Self / assigned property admin is present
+  assert.equal(data.users.some(u => u.id === "hotel-admin-1"), true);
+
+  // Non-superadmin cannot create super_admin
+  const createSuperRes = await db.workspaceContext.run({ user: hotelAdminUser, client }, () =>
+   usersRoute.POST(
+    new NextRequest("http://localhost/api/users", {
+     method: "POST",
+     body: JSON.stringify({
+      fullName: "Attacker Super Admin",
+      email: "attacker@vistora.com",
+      password: "StrongPassword123!",
+      role: "super_admin",
+     }),
+    })
+   )
+  );
+  assert.equal(createSuperRes.status, 403);
+  const createErr = await createSuperRes.json();
+  assert.match(createErr.error, /super administrator/i);
+ } finally {
+  db.sessionDb = original;
+ }
+});
+test("Granular view vs manage rights enforce read-only and write boundaries",async()=>{
+ const db=require("../lib/platform/db.ts"),{NextRequest}=require("next/server");
+ const roleRoute=require("../app/api/role-mappings/route.ts");
+ const settingsRoute=require("../app/api/settings/route.ts");
+ const {canOpenRoleMapping,canOpenProperties,canOpenTeam,canOpenSettings}=require("../lib/auth/administration.ts");
+
+ // 1. Administration open checks
+ assert.equal(canOpenRoleMapping({rights:["view_role_mapping"]}),true);
+ assert.equal(canOpenRoleMapping({rights:["manage_role_mapping"]}),true);
+ assert.equal(canOpenRoleMapping({rights:["view_feedback"]}),false);
+ assert.equal(canOpenProperties({rights:["module:hospitality","view_properties"]}),true);
+ assert.equal(canOpenTeam({rights:["view_users"]}),true);
+ assert.equal(canOpenSettings({rights:["view_settings"]}),true);
+
+ // 2. Role mappings route checks
+ const viewOnlyUser={id:"viewer",organizationId:"org",isOrganizationAdmin:false,rights:["view_role_mapping"],accessToken:"verified"};
+ const originalSession=db.sessionDb;
+ const mockClient={
+  from(table){
+   const q={
+    select(){return q;},
+    eq(){return q;},
+    order(){return q;},
+    in(){return q;},
+    then(resolve){
+     if(table==="role_mappings")resolve({data:[{id:"r1",role_name:"Duty IT",module:"hospitality",property_id:null,country:"",department:"IT",assignee_id:"user-1",response_minutes:15,max_rating:3,is_active:true}],error:null});
+     else if(table==="properties")resolve({data:[{id:"p1",name:"Bangkok Resort",country:"Thailand",is_active:true}],error:null});
+     else if(table==="organization_members")resolve({data:[{user_id:"user-1",role:"member",is_active:true}],error:null});
+     else if(table==="profiles")resolve({data:[{id:"user-1",full_name:"John",email:"john@vistora.com",property_id:"p1",rights:[]}],error:null});
+     else resolve({data:[],error:null});
+    }
+   };
+   return q;
+  },
+  rpc(fn){return Promise.resolve({data:true,error:null});}
+ };
+ db.sessionDb=()=>mockClient;
+ try{
+  // View user can GET role mappings
+  const getRes=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>roleRoute.GET(new NextRequest("http://localhost/api/role-mappings")));
+  assert.equal(getRes.status,200);
+  const getJson=await getRes.json();
+  assert.equal(getJson.success,true);
+  assert.equal(getJson.rules.length,1);
+
+  // View user CANNOT mutate role mappings
+  for(const method of ["POST","PATCH","DELETE"]){
+   const denied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>roleRoute[method](new NextRequest("http://localhost/api/role-mappings",{method,body:JSON.stringify({id:"r1",role_name:"Test",module:"hospitality",department:"IT",assignee_id:"user-1"})})));
+   assert.equal(denied.status,403);
+   const deniedJson=await denied.json();
+   assert.match(deniedJson.error,/Role mapping manage access required/i);
+  }
+
+  // Settings: view user CANNOT PATCH settings
+  const settingsDenied=await db.workspaceContext.run({user:viewOnlyUser,client:mockClient},()=>settingsRoute.PATCH(new NextRequest("http://localhost/api/settings",{method:"PATCH",body:JSON.stringify({type:"application",appSettings:{projectName:"Hacked"}})})));
+  assert.equal(settingsDenied.status,403);
+ }finally{
+  db.sessionDb=originalSession;
+ }
+});

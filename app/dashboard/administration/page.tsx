@@ -1,6 +1,6 @@
 import {redirect} from "next/navigation";
 import {serverUser} from "../../../lib/platform/server-session";
-import {canOpenAuditLog,canOpenReports,canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace} from "../../../lib/auth/administration";
+import {canOpenAuditLog,canOpenReports,canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,canOpenRoleMapping} from "../../../lib/auth/administration";
 import AdministrationWorkspace from "../../../components/AdministrationWorkspace";
 
 export default async function AdministrationPage({searchParams}:{searchParams:Promise<{adminSection?:string}>}){
@@ -12,7 +12,7 @@ export default async function AdministrationPage({searchParams}:{searchParams:Pr
  if(adminSection==="users"&&!canOpenTeam(user))redirect("/dashboard");
  if(adminSection==="settings"&&!canOpenSettings(user))redirect("/dashboard");
  if(adminSection==="properties"&&!canOpenProperties(user))redirect("/dashboard");
- if(adminSection==="role-mapping"&&!user.isOrganizationAdmin)redirect("/dashboard");
+ if(adminSection==="role-mapping"&&!canOpenRoleMapping(user))redirect("/dashboard");
  if(!["reports","audit-log","workspace","users","settings","properties","role-mapping"].includes(adminSection))redirect("/dashboard");
  return <AdministrationWorkspace user={user} initialSection={adminSection}/>;
 }

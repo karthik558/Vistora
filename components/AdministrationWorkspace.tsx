@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { AppShell, WorkspaceUser } from "./Dashboard";
 import { FeedbackShellContext } from "./FeedbackShellContext";
-import { canOpenTeam, canOpenSettings, canOpenProperties, canOpenWorkspace } from "../lib/auth/administration";
+import { canOpenTeam, canOpenSettings, canOpenProperties, canOpenWorkspace, canOpenRoleMapping } from "../lib/auth/administration";
 import WorkspacePage from "./WorkspacePage";
 import UserManagementPage from "./UserManagementPage";
 import SystemSettingsPage from "./SystemSettingsPage";
@@ -16,7 +16,7 @@ const labels: Record<string,string> = {workspace:"Workspace",users:"Team & users
 export default function AdministrationWorkspace({ user, initialSection }: { user: WorkspaceUser; initialSection: string }) {
   const params = useSearchParams(), pathname = usePathname();
   const section = params.get("adminSection") || initialSection;
-  const permissions: Record<string,boolean> = {workspace:canOpenWorkspace(user),users:canOpenTeam(user),settings:canOpenSettings(user),properties:canOpenProperties(user),"role-mapping":!!user.isOrganizationAdmin,reports:canOpenReports(user),"audit-log":canOpenAuditLog(user)};
+  const permissions: Record<string,boolean> = {workspace:canOpenWorkspace(user),users:canOpenTeam(user),settings:canOpenSettings(user),properties:canOpenProperties(user),"role-mapping":canOpenRoleMapping(user),reports:canOpenReports(user),"audit-log":canOpenAuditLog(user)};
   const allowed = (name: string) => Object.hasOwn(permissions,name) && permissions[name] === true;
   const [visited, setVisited] = useState<string[]>([section]);
   // Keep visited forms mounted, but do not fetch every administration screen on entry.

@@ -49,9 +49,11 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deletingProperty, setDeletingProperty] = useState(false);
 
-  const isUserAdmin = activeUser?.role === "admin" || currentUserRole === "admin";
+  const isSuperAdminUser = activeUser?.role === "super_admin" || currentUserRole === "super_admin" || activeUser?.isOrganizationAdmin === true || (Array.isArray(activeUser?.rights) && activeUser.rights.includes("org_role:super_admin"));
+  const isUserAdmin = isSuperAdminUser || activeUser?.role === "admin" || currentUserRole === "admin";
   const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
   const canManageProperties = isUserAdmin || userRights.has("manage_properties");
+  const canViewProperties = canManageProperties || userRights.has("view_properties");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -331,12 +333,12 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Portfolio Management</p>
             <h2 style={{ fontSize: "20px", margin: "10px 0" }}>Verifying access…</h2>
           </div>
-        ) : !canManageProperties ? (
+        ) : !canViewProperties ? (
           <div className="panel" style={{ padding: "50px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Access & Administration</p>
             <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
-              Your account does not have permission to manage hotel property locations.
+              Your account does not have permission to view or manage hotel property locations.
             </p>
             <a className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
               ← Return to Dashboard
@@ -352,18 +354,26 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                   Manage hotel properties, operational location codes, and assign staff member access.
                 </p>
               </div>
-              <button
-                className="button button-dark compact"
-                onClick={() => {
-                  setError(null);
-                  setSuccess(null);
-                  setShowAddModal(true);
-                }}
-              >
-                <Plus size={14} strokeWidth={2} style={{ marginRight: "6px" }} />
-                New property
-              </button>
+              {canManageProperties && (
+                <button
+                  className="button button-dark compact"
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setShowAddModal(true);
+                  }}
+                >
+                  <Plus size={14} strokeWidth={2} style={{ marginRight: "6px" }} />
+                  New property
+                </button>
+              )}
             </div>
+
+            {!canManageProperties && (
+              <div className="panel notice" style={{ marginBottom: "16px", fontSize: "12.5px" }}>
+                View-only access: Contact an administrator to add, edit, or remove hotel properties.
+              </div>
+            )}
 
             {error && (
               <div className="panel notice notice-error">{error}</div>
@@ -422,42 +432,72 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                             {prop.code}
                           </span>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleActive(prop.id, isActive)}
-                              style={{
-                                border: "1px solid",
-                                borderColor: isActive ? "var(--sage)" : "var(--red)",
-                                cursor: "pointer",
-                                padding: "2px 8px",
-                                borderRadius: "6px",
-                                fontSize: "10px",
-                                fontFamily: "var(--font-dm-mono)",
-                                letterSpacing: "0.04em",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                                background: isActive ? "var(--sage-soft)" : "var(--red-soft)",
-                                color: isActive ? "var(--sage-deep)" : "var(--red)",
-                                fontWeight: 600,
-                                transition: "all 0.15s ease",
-                              }}
-                              title={
-                                isActive
-                                  ? "Property is active. Click to disable (hides from public feedback forms)."
-                                  : "Property is disabled. Click to activate."
-                              }
-                            >
+                            {canManageProperties ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActive(prop.id, isActive)}
+                                style={{
+                                  border: "1px solid",
+                                  borderColor: isActive ? "var(--sage)" : "var(--red)",
+                                  cursor: "pointer",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "10px",
+                                  fontFamily: "var(--font-dm-mono)",
+                                  letterSpacing: "0.04em",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  background: isActive ? "var(--sage-soft)" : "var(--red-soft)",
+                                  color: isActive ? "var(--sage-deep)" : "var(--red)",
+                                  fontWeight: 600,
+                                  transition: "all 0.15s ease",
+                                }}
+                                title={
+                                  isActive
+                                    ? "Property is active. Click to disable (hides from public feedback forms)."
+                                    : "Property is disabled. Click to activate."
+                                }
+                              >
+                                <span
+                                  style={{
+                                    width: "6px",
+                                    height: "6px",
+                                    borderRadius: "50%",
+                                    background: isActive ? "var(--sage)" : "var(--red)",
+                                  }}
+                                />
+                                {isActive ? "ACTIVE" : "DISABLED"}
+                              </button>
+                            ) : (
                               <span
                                 style={{
-                                  width: "6px",
-                                  height: "6px",
-                                  borderRadius: "50%",
-                                  background: isActive ? "var(--sage)" : "var(--red)",
+                                  border: "1px solid",
+                                  borderColor: isActive ? "var(--sage)" : "var(--red)",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "10px",
+                                  fontFamily: "var(--font-dm-mono)",
+                                  letterSpacing: "0.04em",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  background: isActive ? "var(--sage-soft)" : "var(--red-soft)",
+                                  color: isActive ? "var(--sage-deep)" : "var(--red)",
+                                  fontWeight: 600,
                                 }}
-                              />
-                              {isActive ? "ACTIVE" : "DISABLED"}
-                            </button>
+                              >
+                                <span
+                                  style={{
+                                    width: "6px",
+                                    height: "6px",
+                                    borderRadius: "50%",
+                                    background: isActive ? "var(--sage)" : "var(--red)",
+                                  }}
+                                />
+                                {isActive ? "ACTIVE" : "DISABLED"}
+                              </span>
+                            )}
                             <span style={{ fontSize: "11px", color: "var(--muted)" }}>
                               {prop.total_rooms} keys
                             </span>
@@ -467,9 +507,14 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                         <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)", margin: "0 0 4px 0" }}>
                           {prop.name}
                         </h2>
-                        <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 12px 0" }}>
+                        <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 4px 0" }}>
                           {prop.location}, {prop.country} · {prop.brand}
                         </p>
+                        {prop.created_at && (
+                          <p style={{ fontSize: "10px", color: "var(--muted)", margin: "0 0 12px 0", fontFamily: "var(--font-dm-mono)" }}>
+                            Configured {new Date(prop.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} at {new Date(prop.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        )}
 
                         {!isActive && (
                           <div
@@ -506,21 +551,23 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                             onClick={() => handleOpenRooms(prop)}
                             className="button button-outline compact"
                             style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                            title="Manage and create rooms for this property"
+                            title={canManageProperties ? "Manage and create rooms for this property" : "View configured rooms for this property"}
                           >
                             <BedDouble size={12} strokeWidth={1.75} />
                             Rooms
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSettings(prop)}
-                            className="button button-outline compact"
-                            style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                            title="Configure property-specific operational settings"
-                          >
-                            <Settings size={11} strokeWidth={1.75} />
-                            Settings
-                          </button>
+                          {canManageProperties && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSettings(prop)}
+                              className="button button-outline compact"
+                              style={{ fontSize: "11px", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                              title="Configure property-specific operational settings"
+                            >
+                              <Settings size={11} strokeWidth={1.75} />
+                              Settings
+                            </button>
+                          )}
                           <a
                             href={`/dashboard/hospitality?property=${prop.id}&section=Rooms`}
                             className="button button-outline compact"
@@ -530,15 +577,17 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
                             View Ops ↗
                           </a>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDelete({ id: prop.id, name: prop.name })}
-                          className="button button-outline compact"
-                          style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "var(--red)" }}
-                          title="Delete property"
-                        >
-                          <Trash2 size={12} strokeWidth={1.75} />
-                        </button>
+                        {canManageProperties && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingDelete({ id: prop.id, name: prop.name })}
+                            className="button button-outline compact"
+                            style={{ fontSize: "11px", padding: "4px 8px", color: "var(--red)", borderColor: "var(--red)" }}
+                            title="Delete property"
+                          >
+                            <Trash2 size={12} strokeWidth={1.75} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1002,6 +1051,7 @@ export default function PropertiesPage({ initialUser }: { initialUser?: Workspac
         properties={properties}
         selectedPropertyId={selectedRoomsProperty?.id || ""}
         onRoomsUpdated={loadData}
+        readOnly={!canManageProperties}
       />
       <ConfirmDrawer
         open={pendingDelete !== null}

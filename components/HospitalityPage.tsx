@@ -284,7 +284,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  }
 
  const config=hospitalityConfig(data?.config||appearance.config);
- const canManage=user.isOrganizationAdmin===true;
+ const canManage=user.isOrganizationAdmin===true||(user.rights||[]).includes("manage_properties");
+ const canImport=user.isOrganizationAdmin===true||(user.rights||[]).includes("import_guests")||(user.rights||[]).includes("manage_properties");
  const canAttend=canManageServiceJobs(user)&&data?.complaintsReady===true;
  const descriptions:Record<Tab,string>={
   Overview:"A clear view of guest stays, room readiness, and immediate service requests.",
@@ -332,7 +333,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     }}
     manageHref="/dashboard/properties?workspace=operations"
   />
-  {!suiteTabs.includes(tab)&&(canManage||canAttend)&&(
+  {!suiteTabs.includes(tab)&&canImport&&(
    <>
     <button
      type="button"
@@ -412,7 +413,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     </button>
    </nav>
    <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"2px"}}>
-    {(canManage||canAttend)&&<button
+    {canImport&&<button
      type="button"
      className="button button-dark compact"
      onClick={()=>{setDailyImportTab("file");setShowDailyImportModal(true);}}
@@ -422,7 +423,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
      <Upload size={13}/>
      <span>Import for the day</span>
     </button>}
-    {canManage&&<button
+    {canImport&&<button
      type="button"
      className="button button-outline compact"
      onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}
@@ -446,7 +447,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {activeStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in{property!=="all"?` at ${nameOf(property)}`:""}. Checked-out guests have been cleared from this view.</p>
-      {canManage&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Check In Guest</button>}
+      {canImport&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Check In Guest</button>}
      </div>
     ):(
      <div className="platform-table">
@@ -547,7 +548,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     {reservedStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
       <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No upcoming reservations{property!=="all"?` for ${nameOf(property)}`:""}. Booked reservations will appear here awaiting guest arrival.</p>
-      {canManage&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Reserve Guest</button>}
+      {canImport&&<button className="button button-outline compact" onClick={()=>{setDailyImportTab("manual");setShowDailyImportModal(true);}}>+ Quick Add / Reserve Guest</button>}
      </div>
     ):(
      <div className="platform-table">

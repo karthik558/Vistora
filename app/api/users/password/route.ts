@@ -11,7 +11,10 @@ const supabaseServiceKey =
 
 async function POSTImpl(request: NextRequest) {
   try {
-    if (!workspaceUser().isOrganizationAdmin) throw new PlatformError("Administrator access required.",403);
+    const caller = workspaceUser();
+    const callerIsSuperAdmin = caller.isOrganizationAdmin || caller.orgRole === "super_admin" || (caller.rights || []).includes("org_role:super_admin");
+    const canManage = callerIsSuperAdmin || caller.rights?.includes("manage_users");
+    if (!canManage) throw new PlatformError("Administrator access required.",403);
     const { email, userId, newPassword } = await request.json();
 
     if (typeof newPassword!=="string" || newPassword.length < 10) {
@@ -33,7 +36,7 @@ async function POSTImpl(request: NextRequest) {
     });
 
     // 1. Fetch profile to ensure target exists
-    let profileQuery = workspaceDb().from("profiles").select("id, email, full_name, role, avatar_url");
+    let profileQuery = workspaceDb().from("profiles").select("id, email, full_name, role, rights, avatar_url");
     if (userId) {
       profileQuery = profileQuery.eq("id", userId);
     } else {
@@ -46,6 +49,14 @@ async function POSTImpl(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: profileErr?.message || "User profile not found in Supabase." },
         { status: 404 }
+      );
+    }
+
+    const targetRights = Array.isArray(targetProfile.rights) ? targetProfile.rights : [];
+    if ((targetProfile.role === "super_admin" || targetRights.includes("org_role:super_admin")) && !callerIsSuperAdmin) {
+      return NextResponse.json(
+        { success: false, error: "You cannot change credentials for super administrator accounts." },
+        { status: 403 }
       );
     }
 

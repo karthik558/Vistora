@@ -3,7 +3,7 @@
 import Image from "next/image";
 import DashboardPageHeading from "./DashboardPageHeading";
 import {operationTabs} from "../lib/omniops/types";
-import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,isAdministrationPath} from "../lib/auth/administration";
+import {canOpenSettings,canOpenTeam,canOpenProperties,canOpenWorkspace,canOpenRoleMapping,isAdministrationPath} from "../lib/auth/administration";
 import Link from "next/link";
 import { useEffect, useState, useMemo, useRef, useContext } from "react";
 import { FeedbackShellContext } from "./FeedbackShellContext";
@@ -88,7 +88,7 @@ export interface NavItemConfig {
 }
 
 const nav: readonly NavItemConfig[] = [
-  {label:"Role mapping",href:"/dashboard/role-mapping",group:"Settings",icon:Users,adminOnly:true},
+  {label:"Role mapping",href:"/dashboard/role-mapping",group:"Settings",icon:Users,requiredRight:"view_role_mapping"},
   { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "Reports", href: "/dashboard/reports", group: "Overview", icon: FileSpreadsheet, requiredRight: "export_reports" },
@@ -102,9 +102,9 @@ const nav: readonly NavItemConfig[] = [
   { label: "QR codes", href: "/dashboard/qr-codes", group: "Collection", icon: QrCode, requiredRight: "manage_questionnaire" },
   { label: "Hotel operations", href: "/dashboard/hospitality", group: "Operations", icon: ClipboardList, adminOnly: true },
   { label: "Rooms & inventory", href: "/dashboard/hospitality?section=Rooms", group: "Operations", icon: BedDouble, adminOnly: true },
-  { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "manage_properties" },
-  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "manage_users" },
-  { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "manage_settings" },
+  { label: "Properties", href: "/dashboard/properties", group: "Settings", icon: Building2, requiredRight: "view_properties" },
+  { label: "Team & users", href: "/dashboard/users", group: "Settings", icon: ShieldCheck, requiredRight: "view_users" },
+  { label: "Settings", href: "/dashboard/settings", group: "Settings", icon: Settings, requiredRight: "view_settings" },
   { label: "Workspace", href: "/dashboard/workspace", group: "Settings", icon: Building2, adminOnly: true },
 ];
 
@@ -359,6 +359,7 @@ function StandaloneAppShell({
   // Dynamic rights-based sidebar navigation filtering for 9 organizational roles
   const effectiveRole = currentUser?.orgRole || currentUser?.role;
   const isSuperAdmin =
+    currentUser?.isOrganizationAdmin === true ||
     effectiveRole === "super_admin" ||
     (currentUser?.rights || []).includes("org_role:super_admin");
   const isAnalyst = effectiveRole === "analyst";
@@ -371,11 +372,17 @@ function StandaloneAppShell({
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
-    if(isAdministration)return item.label==="Settings"?canOpenSettings(currentUser):["Workspace","Role mapping"].includes(item.label)?canOpenWorkspace(currentUser):item.label==="Properties"?canOpenProperties(currentUser):canOpenTeam(currentUser);
+    if(isAdministration) {
+      if(item.label==="Settings") return canOpenSettings(currentUser);
+      if(item.label==="Role mapping") return canOpenRoleMapping(currentUser);
+      if(item.label==="Workspace") return canOpenWorkspace(currentUser);
+      if(item.label==="Properties") return canOpenProperties(currentUser);
+      return canOpenTeam(currentUser);
+    }
     if (item.adminOnly && !currentUser?.isOrganizationAdmin) return false;
     if(workspaceArea==="operations"&&item.href.startsWith("/dashboard/hospitality"))return hasModuleAccess(currentUser,"hospitality");
     // Super Admin holds unconditional full platform capabilities
-    if (isSuperAdmin || currentUser?.role==="admin") return true;
+    if (isSuperAdmin) return true;
 
     // Strict organizational role restrictions:
     if (isAnalyst) {
@@ -385,13 +392,25 @@ function StandaloneAppShell({
       return ["Dashboard", "Reports", "Workspace"].includes(item.label);
     }
 
-    // Settings is strictly for super admin or explicit manage_settings capability
-    if ((item.label === "Settings" || item.label === "System settings") && !isSuperAdmin && !userRights.has("manage_settings")) {
+    // Settings is strictly for super admin or explicit view_settings / manage_settings capability
+    if ((item.label === "Settings" || item.label === "System settings") && !isSuperAdmin && !userRights.has("view_settings") && !userRights.has("manage_settings")) {
       return false;
     }
 
     // Strict right-based visibility
     if (item.requiredRight) {
+      if (item.requiredRight === "view_properties") {
+        return userRights.has("view_properties") || userRights.has("manage_properties");
+      }
+      if (item.requiredRight === "view_settings") {
+        return userRights.has("view_settings") || userRights.has("manage_settings");
+      }
+      if (item.requiredRight === "view_role_mapping") {
+        return userRights.has("view_role_mapping") || userRights.has("manage_role_mapping");
+      }
+      if (item.requiredRight === "view_users") {
+        return userRights.has("view_users") || userRights.has("manage_users");
+      }
       return userRights.has(item.requiredRight);
     }
 

@@ -88,6 +88,8 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
   if(!user.isOrganizationAdmin&&!canManageServiceJobs(user))throw new PlatformError("Company administrator or service job management access required.",403);
  }else if(b.action==="room"){
   if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
+ }else if(b.action==="stay"||b.action==="guest"){
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests")&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or guest management access required.",403);
  }else{
   admin();
  }
@@ -127,6 +129,12 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
   if(countRes.count!==null&&countRes.count>0)await db.from("properties").update({total_rooms:countRes.count}).eq("id",b.property_id);
  }else if(b.action==="stay"){
   const selected=await room(b.room_id);await property(selected.property_id);
+  if(!user.isOrganizationAdmin){
+   const allowed=user.propertyIds?.length?user.propertyIds:(user.propertyId?[user.propertyId]:[]);
+   if(allowed.length>0&&!allowed.includes(selected.property_id)){
+    throw new PlatformError("Access to this property is not authorized.",403);
+   }
+  }
   let guestId=b.guest_id;
   if(!guestId&&b.guest_name){
    const newGuest=checked(await db.from("guests").insert({
@@ -184,6 +192,8 @@ export const PATCH=withWorkspace(async(request:NextRequest)=>{
   if(!user.isOrganizationAdmin&&!canManageServiceJobs(user))throw new PlatformError("Company administrator or service job management access required.",403);
  }else if(b.action==="room"){
   if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or property management access required.",403);
+ }else if(b.action==="stay"||b.action==="guest"){
+  if(!user.isOrganizationAdmin&&!user.rights?.includes("import_guests")&&!user.rights?.includes("manage_properties"))throw new PlatformError("Company administrator or guest management access required.",403);
  }else{
   admin();
  }

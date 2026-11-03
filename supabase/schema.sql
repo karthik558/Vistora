@@ -41,6 +41,18 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+DO $$ BEGIN
+    ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'admin';
+EXCEPTION WHEN others THEN null; END $$;
+
+DO $$ BEGIN
+    ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'staff';
+EXCEPTION WHEN others THEN null; END $$;
+
+DO $$ BEGIN
+    ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'visitor';
+EXCEPTION WHEN others THEN null; END $$;
+
 -- ------------------------------------------------------------------------------
 -- 3. TABLES
 -- ------------------------------------------------------------------------------
@@ -64,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     full_name TEXT NOT NULL DEFAULT 'Operations User',
-    role user_role NOT NULL DEFAULT 'visitor',
+    role TEXT NOT NULL DEFAULT 'visitor',
     property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
     avatar_url TEXT,
     rights TEXT[] DEFAULT '{}',
@@ -90,6 +102,11 @@ WHERE property_id IS NOT NULL AND (property_ids IS NULL OR cardinality(property_
 DROP VIEW IF EXISTS public.users CASCADE;
 DROP TABLE IF EXISTS public.user_credentials CASCADE;
 DROP TABLE IF EXISTS public.user_rights CASCADE;
+
+-- Ensure profile role column is converted to TEXT so it can accept any role without enum errors
+ALTER TABLE public.profiles ALTER COLUMN role DROP DEFAULT;
+ALTER TABLE public.profiles ALTER COLUMN role TYPE TEXT USING role::text;
+ALTER TABLE public.profiles ALTER COLUMN role SET DEFAULT 'visitor';
 
 -- Cleanup: ensure avatar_url contains only legitimate image URLs and never JSON or password hashes
 UPDATE public.profiles
@@ -237,16 +254,16 @@ SET search_path = public, auth
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    assigned_role public.user_role := 'visitor'::public.user_role;
+    assigned_role text := 'visitor';
     meta_role text;
 BEGIN
     meta_role := NEW.raw_user_meta_data->>'role';
     IF meta_role = 'admin' THEN
-        assigned_role := 'admin'::public.user_role;
+        assigned_role := 'admin';
     ELSIF meta_role = 'staff' THEN
-        assigned_role := 'staff'::public.user_role;
+        assigned_role := 'staff';
     ELSE
-        assigned_role := 'visitor'::public.user_role;
+        assigned_role := 'visitor';
     END IF;
 
     INSERT INTO public.profiles (id, email, full_name, role, property_id)
@@ -281,9 +298,9 @@ SELECT
     email, 
     COALESCE(raw_user_meta_data->>'full_name', SPLIT_PART(email, '@', 1)),
     CASE 
-        WHEN raw_user_meta_data->>'role' = 'staff' THEN 'staff'::user_role
-        WHEN raw_user_meta_data->>'role' = 'admin' THEN 'admin'::user_role
-        ELSE 'visitor'::user_role
+        WHEN raw_user_meta_data->>'role' = 'staff' THEN 'staff'
+        WHEN raw_user_meta_data->>'role' = 'admin' THEN 'admin'
+        ELSE 'visitor'
     END
 FROM auth.users
 ON CONFLICT (id) DO NOTHING;
@@ -731,11 +748,10 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
   is_active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(organization_id,user_id)
 );
-DO $$ DECLARE t text; fresh boolean; BEGIN
+DO $$ DECLARE t text; BEGIN
   FOREACH t IN ARRAY ARRAY['properties','profiles','guests','stays','feedback','feedback_questions','feedback_answers','audit_logs','property_access'] LOOP
-    SELECT NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id') INTO fresh;
     EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES public.organizations(id)',t);
-    IF fresh THEN EXECUTE format('UPDATE public.%I SET organization_id = %L WHERE organization_id IS NULL',t,'00000000-0000-4000-8000-000000000001'); END IF;
+    EXECUTE format('UPDATE public.%I SET organization_id = %L WHERE organization_id IS NULL',t,'00000000-0000-4000-8000-000000000001');
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON public.%I(organization_id)',t||'_organization_idx',t);
   END LOOP;
 END $$;
@@ -769,7 +785,13 @@ CREATE OR REPLACE FUNCTION public.workspace_department(dept text) RETURNS boolea
 $$;
 CREATE OR REPLACE FUNCTION public.stamp_workspace() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$
 BEGIN
- IF TG_OP='INSERT' AND NEW.organization_id IS NULL THEN NEW.organization_id:=public.workspace_org(); END IF;
+ IF NEW.organization_id IS NULL THEN
+  IF TG_OP='UPDATE' AND OLD.organization_id IS NOT NULL THEN
+   NEW.organization_id:=OLD.organization_id;
+  ELSE
+   NEW.organization_id:=COALESCE(public.workspace_org(), (SELECT id FROM public.organizations ORDER BY created_at LIMIT 1));
+  END IF;
+ END IF;
  IF TG_TABLE_NAME='profiles' AND NEW.organization_id IS NULL THEN RETURN NEW; END IF;
  IF NEW.organization_id IS NULL THEN RAISE EXCEPTION 'Workspace is required'; END IF;
  IF TG_OP='UPDATE' AND OLD.organization_id IS NOT NULL AND NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN RAISE EXCEPTION 'Moving records between companies is prohibited'; END IF;
@@ -929,7 +951,7 @@ CREATE POLICY org_read ON public.organizations FOR SELECT TO authenticated USING
 CREATE POLICY org_update ON public.organizations FOR UPDATE TO authenticated USING(id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(id=public.workspace_org());
 CREATE POLICY members_read ON public.organization_members FOR SELECT TO authenticated USING(organization_id=public.workspace_org());
 CREATE POLICY profiles_read ON public.profiles FOR SELECT TO authenticated USING(organization_id=public.workspace_org());
-CREATE POLICY profiles_manage ON public.profiles FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin());
+CREATE POLICY profiles_manage ON public.profiles FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND (public.workspace_admin() OR public.workspace_right('manage_users'))) WITH CHECK(organization_id=public.workspace_org() AND (public.workspace_admin() OR public.workspace_right('manage_users')));
 CREATE POLICY properties_read ON public.properties FOR SELECT TO authenticated USING(public.workspace_property(id));
 CREATE POLICY properties_manage ON public.properties FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_right('manage_properties')) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_right('manage_properties'));
 CREATE POLICY feedback_read ON public.feedback FOR SELECT TO authenticated USING(public.workspace_property(property_id) AND public.workspace_department(department::text) AND (public.workspace_right('view_feedback') OR public.workspace_right('manage_complaints') OR public.workspace_right('export_reports')));
@@ -977,7 +999,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=p_user AND organization_id<>p_org) THEN RAISE EXCEPTION 'Account already belongs to another company'; END IF;
  IF EXISTS(SELECT 1 FROM unnest(p_properties) x LEFT JOIN public.properties h ON h.id=x WHERE h.organization_id IS DISTINCT FROM p_org) THEN RAISE EXCEPTION 'Invalid property assignment'; END IF;
  -- New Auth profiles have no organization. They are assigned only through this service-only function.
- UPDATE public.profiles SET organization_id=p_org,email=p_email,full_name=p_name,role=CASE WHEN p_admin THEN 'admin'::user_role ELSE 'staff'::user_role END,
+ UPDATE public.profiles SET organization_id=p_org,email=p_email,full_name=p_name,role=CASE WHEN p_admin THEN 'admin' ELSE 'staff' END,
  property_ids=p_properties,property_id=p_properties[1],rights=p_rights WHERE id=p_user AND (organization_id IS NULL OR organization_id=p_org);
  INSERT INTO public.organization_members(organization_id,user_id,role) VALUES(p_org,p_user,CASE WHEN p_admin THEN 'admin' ELSE 'member' END)
  ON CONFLICT(user_id) DO UPDATE SET role=CASE WHEN organization_members.role='owner' THEN 'owner' ELSE excluded.role END,is_active=true;
@@ -1110,7 +1132,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.organization_members WHERE user_id=p_user) THEN RAISE EXCEPTION 'Account already has a workspace'; END IF;
  SELECT id,email,raw_user_meta_data INTO STRICT person FROM auth.users WHERE id=p_user;
  INSERT INTO public.organizations(name,slug) VALUES(p_name,p_slug) RETURNING id INTO org;
- PERFORM public.provision_workspace_user(p_user,org,person.email,COALESCE(person.raw_user_meta_data->>'full_name','Owner'),true,'{}',ARRAY['view_feedback','manage_complaints','manage_users','manage_properties','manage_questionnaire','manage_settings','export_reports','view_guest_pii','view_audit_log','org_role:super_admin']);
+ PERFORM public.provision_workspace_user(p_user,org,person.email,COALESCE(person.raw_user_meta_data->>'full_name','Owner'),true,'{}',ARRAY['view_feedback','manage_complaints','view_users','manage_users','view_properties','manage_properties','view_role_mapping','manage_role_mapping','manage_questionnaire','view_settings','manage_settings','export_reports','view_guest_pii','view_audit_log','import_guests','reassign_property','manage_service_jobs','org_role:super_admin']);
  UPDATE public.organization_members SET role='owner' WHERE user_id=p_user;
  INSERT INTO public.organization_settings(organization_id,settings) VALUES(org,jsonb_build_object('organizationName',p_name,'autoGuestFollowUp',true,'alertEmail',person.email));
  RETURN org;
@@ -1675,12 +1697,15 @@ CREATE TABLE IF NOT EXISTS public.role_mappings (
 CREATE UNIQUE INDEX IF NOT EXISTS role_mapping_scope ON public.role_mappings(organization_id,module,COALESCE(property_id,'00000000-0000-0000-0000-000000000000'::uuid),lower(country),department);
 ALTER TABLE public.role_mappings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS role_mapping_admin ON public.role_mappings;
-CREATE POLICY role_mapping_admin ON public.role_mappings FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND public.workspace_admin()) WITH CHECK(organization_id=public.workspace_org() AND public.workspace_admin());
+DROP POLICY IF EXISTS role_mapping_read ON public.role_mappings;
+DROP POLICY IF EXISTS role_mapping_manage ON public.role_mappings;
+CREATE POLICY role_mapping_read ON public.role_mappings FOR SELECT TO authenticated USING(organization_id=public.workspace_org() AND (public.workspace_admin() OR public.workspace_right('view_role_mapping') OR public.workspace_right('manage_role_mapping')));
+CREATE POLICY role_mapping_manage ON public.role_mappings FOR ALL TO authenticated USING(organization_id=public.workspace_org() AND (public.workspace_admin() OR public.workspace_right('manage_role_mapping'))) WITH CHECK(organization_id=public.workspace_org() AND (public.workspace_admin() OR public.workspace_right('manage_role_mapping')));
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.role_mappings TO authenticated;
 GRANT ALL ON public.role_mappings TO service_role;
 CREATE OR REPLACE FUNCTION public.guard_role_mapping() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 BEGIN
- IF auth.uid() IS NOT NULL AND (NOT public.workspace_admin() OR NEW.organization_id IS DISTINCT FROM public.workspace_org()) THEN RAISE EXCEPTION 'Company administrator access required' USING ERRCODE='42501'; END IF;
+ IF auth.uid() IS NOT NULL AND (NOT (public.workspace_admin() OR public.workspace_right('manage_role_mapping')) OR NEW.organization_id IS DISTINCT FROM public.workspace_org()) THEN RAISE EXCEPTION 'Role mapping management access required' USING ERRCODE='42501'; END IF;
  NEW.country:=trim(NEW.country); NEW.role_name:=trim(NEW.role_name);
  IF NEW.property_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.properties WHERE id=NEW.property_id AND organization_id=NEW.organization_id AND is_active) THEN RAISE EXCEPTION 'Choose an active property in this company'; END IF;
  IF NEW.country<>'' AND NOT EXISTS(SELECT 1 FROM public.properties WHERE organization_id=NEW.organization_id AND lower(country)=lower(NEW.country) AND is_active) THEN RAISE EXCEPTION 'Choose a country with active properties in this company'; END IF;

@@ -55,10 +55,10 @@ export default function PropertyFilter({
   }, [isOpen]);
 
   // Label calculation
-  let currentLabel = "All properties";
+  let currentLabel = properties.length === 1 ? properties[0]?.name || "All properties" : "All properties";
   let countBadge = 0;
 
-  if (!isAll) {
+  if (properties.length > 1 && !isAll) {
     if (activeIds.length === 1) {
       const match = properties.find((p) => p.id === activeIds[0]);
       currentLabel = match?.name || "Selected property";
@@ -148,8 +148,8 @@ export default function PropertyFilter({
             transition={{ duration: 0.16, ease: "easeOut" }}
           >
             <div className="property-filter-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>Filter by location</span>
-              {!isAll && (
+              <span>{properties.length === 1 ? "Assigned property" : "Filter by location"}</span>
+              {!isAll && properties.length > 1 && (
                 <button
                   type="button"
                   onClick={handleSelectAll}
@@ -170,33 +170,35 @@ export default function PropertyFilter({
 
             <div className="property-filter-list">
               {/* All properties option */}
-              <button
-                type="button"
-                className={`property-filter-item ${isAll ? "selected" : ""}`}
-                onClick={handleSelectAll}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span
-                    style={{
-                      width: "14px",
-                      height: "14px",
-                      border: "1px solid var(--line-strong)",
-                      borderRadius: "3px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: isAll ? "var(--sage, #4e6f5b)" : "transparent",
-                      color: "#fff",
-                    }}
-                  >
-                    {isAll && <Check size={11} strokeWidth={3} />}
-                  </span>
-                  <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
-                    <span className="prop-name">All properties</span>
-                    <small className="prop-detail">Global portfolio overview</small>
+              {properties.length > 1 && (
+                <button
+                  type="button"
+                  className={`property-filter-item ${isAll ? "selected" : ""}`}
+                  onClick={handleSelectAll}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "1px solid var(--line-strong)",
+                        borderRadius: "3px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: isAll ? "var(--sage, #4e6f5b)" : "transparent",
+                        color: "#fff",
+                      }}
+                    >
+                      {isAll && <Check size={11} strokeWidth={3} />}
+                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                      <span className="prop-name">All properties</span>
+                      <small className="prop-detail">Global portfolio overview</small>
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
 
               {/* Individual properties with multi-select */}
               {properties.map((prop) => {

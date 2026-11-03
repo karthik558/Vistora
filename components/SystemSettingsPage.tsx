@@ -72,7 +72,9 @@ export default function SystemSettingsPage({
     dataRetentionDays: 365,
   });
 
-  const isAdmin = user?.isOrganizationAdmin===true;
+  const userRights = new Set(Array.isArray(user?.rights) ? user.rights : []);
+  const canManageSettings = user?.isOrganizationAdmin === true || userRights.has("manage_settings");
+  const canViewSettings = canManageSettings || userRights.has("view_settings");
 
   useEffect(() => {
     const local = getClientUser();
@@ -192,12 +194,12 @@ export default function SystemSettingsPage({
 
         {/* Application Settings Section */}
         <div>
-          {!isAdmin ? (
+          {!canViewSettings ? (
             <div className="panel" style={{ padding: "48px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
               <ShieldAlert size={36} style={{ color: "var(--amber)", margin: "0 auto 12px" }} />
-              <h3 style={{ fontSize: "18px", margin: "0 0 8px" }}>Administrator Access Required</h3>
+              <h3 style={{ fontSize: "18px", margin: "0 0 8px" }}>Access Restricted</h3>
               <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6" }}>
-                System settings control global organization naming, project titles, and platform-wide SLA parameters. Only verified Administrators can modify these parameters.
+                System settings control global organization naming, project titles, and platform-wide SLA parameters. Your account does not have permission to view or manage these parameters.
               </p>
             </div>
           ) : (
@@ -266,8 +268,14 @@ export default function SystemSettingsPage({
                   </div>
                 ) : (
                   <form onSubmit={handleSaveAppSettings}>
-                <HospitalitySettings value={hospitalityConfig(appSettings.hospitality)} onChange={hospitality=>setAppSettings({...appSettings,hospitality})}/>
-                <div className="hospitality-settings hotel-settings-fields"><label>Company logo URL<input type="url" placeholder="https://…" value={appSettings.logoUrl||""} onChange={e=>setAppSettings({...appSettings,logoUrl:e.target.value})}/></label><label>Guest welcome message<input maxLength={160} value={appSettings.guestWelcomeMessage||""} onChange={e=>setAppSettings({...appSettings,guestWelcomeMessage:e.target.value})}/></label></div>
+                    {!canManageSettings && (
+                      <div className="panel notice" style={{ marginBottom: "20px", fontSize: "12.5px" }}>
+                        View-only configuration: Contact a workspace administrator to modify platform settings and SLA recovery targets.
+                      </div>
+                    )}
+                    <fieldset disabled={!canManageSettings} style={{ border: "none", padding: 0, margin: 0 }}>
+                      <HospitalitySettings value={hospitalityConfig(appSettings.hospitality)} onChange={hospitality=>setAppSettings({...appSettings,hospitality})}/>
+                      <div className="hospitality-settings hotel-settings-fields"><label>Company logo URL<input type="url" placeholder="https://…" value={appSettings.logoUrl||""} onChange={e=>setAppSettings({...appSettings,logoUrl:e.target.value})}/></label><label>Guest welcome message<input maxLength={160} value={appSettings.guestWelcomeMessage||""} onChange={e=>setAppSettings({...appSettings,guestWelcomeMessage:e.target.value})}/></label></div>
 
                 {/* Organization Identity */}
                 <div style={{ marginBottom: "24px", borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
@@ -476,17 +484,24 @@ export default function SystemSettingsPage({
                     </button>
                   </div>
                 </div>
+                </fieldset>
 
                 <div style={{ marginTop: "32px", display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="submit"
-                    disabled={saving || loading || !settingsLoaded}
-                    className="button button-dark"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px" }}
-                  >
-                    <Save size={15} />
-                    <span>{saving ? "Saving Changes…" : "Save Settings"}</span>
-                  </button>
+                  {!canManageSettings ? (
+                    <span className="status" style={{ padding: "8px 18px", borderRadius: "6px", fontSize: "12px", fontWeight: 600 }}>
+                      Read-Only Configuration
+                    </span>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={saving || loading || !settingsLoaded}
+                      className="button button-dark"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px" }}
+                    >
+                      <Save size={15} />
+                      <span>{saving ? "Saving Changes…" : "Save Settings"}</span>
+                    </button>
+                  )}
                 </div>
                   </form>
                 )}

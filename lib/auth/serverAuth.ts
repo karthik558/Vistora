@@ -62,14 +62,21 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
   if(!membership)return null;
   if (!membership.organization_id || membership.organization_id !== profile.organization_id) throw new PlatformError("Your workspace membership is not configured.", 403);
   const rights = Array.isArray(profile.rights) ? profile.rights.filter((r: unknown) => typeof r === "string") : [];
-  const isAdmin = ["owner", "admin"].includes(membership.role);
+  const orgRole = rights.find((r: string) => r.startsWith("org_role:"))?.slice(9) || profile.role;
+  const isSuperAdmin = membership.role === "owner" || profile.role === "super_admin" || orgRole === "super_admin";
   const { data: properties, error: propError } = await sessionDb(token).from("properties").select("id");
   if (propError) checked({data: properties, error: propError});
+  const allPropertyIds = (properties || []).map(p => p.id);
+  const assignedPropertyIds: string[] = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
+    ? profile.property_ids
+    : (profile.property_id ? [profile.property_id] : []);
+  const effectivePropertyIds: string[] = isSuperAdmin ? allPropertyIds : assignedPropertyIds;
+
   const verified: VerifiedUser = {
     id: data.user.id, email: data.user.email || "", fullName: profile.full_name,
-    role: isAdmin ? "admin" : profile.role, orgRole: rights.find((r: string) => r.startsWith("org_role:"))?.slice(9) || profile.role,
-    organizationId: membership.organization_id, isOrganizationAdmin: isAdmin, accessToken: token,
-    propertyId: profile.property_id, propertyIds: (properties || []).map(p => p.id), rights:effectiveModuleRights(rights,isAdmin)
+    role: orgRole || (isSuperAdmin ? "super_admin" : profile.role), orgRole,
+    organizationId: membership.organization_id, isOrganizationAdmin: isSuperAdmin, accessToken: token,
+    propertyId: effectivePropertyIds[0] || profile.property_id || null, propertyIds: effectivePropertyIds, rights:effectiveModuleRights(rights,isSuperAdmin)
   };
   userAuthCache.set(token, { user: verified, expiresAt: now + 15_000 });
   return verified;
@@ -91,5 +98,5 @@ export async function requireAdminOrRight(request: NextRequest, right: string): 
   return {user};
 }
 export function getPropertyAccessScope(user: VerifiedUser | null) {
-  return { isGlobal: false, allowedPropertyIds: user?.propertyIds || [] };
+  return { isGlobal: !!user?.isOrganizationAdmin, allowedPropertyIds: user?.propertyIds || [] };
 }

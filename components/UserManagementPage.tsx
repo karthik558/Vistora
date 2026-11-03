@@ -17,17 +17,23 @@ export interface UserRight {
 }
 
 const SYSTEM_RIGHTS: UserRight[] = [
-  {id:"manage_service_jobs",name:"Hotel complaints & assigned work",description:"Log complaints in assigned properties; acknowledge, start and complete jobs assigned to you"},
+  { id: "manage_service_jobs", name: "Hotel complaints & assigned work", description: "Log complaints in assigned properties; acknowledge, start and complete jobs assigned to you" },
+  { id: "import_guests", name: "Daily Guest Import & Quick Add", description: "Import CSV/Excel arrival reports and perform quick guest/NC check-ins" },
   { id: "view_feedback", name: "View Guest Feedback", description: "Read reviews, ratings, and guest sentiment" },
   { id: "view_guest_pii", name: "View Unmasked Guest PII (GDPR)", description: "Reveal guest phone numbers and email addresses (audit logged)" },
   { id: "manage_complaints", name: "Complaints & Service Recovery", description: "Resolve escalations, assign duty staff & add recovery notes" },
   { id: "reassign_property", name: "Reassign Feedback Property", description: "Change hotel property assignment on feedback records" },
-  { id: "manage_properties", name: "Manage Hotel Properties", description: "Create new hotel locations and assign staff access" },
+  { id: "view_properties", name: "View Hotel Properties", description: "View assigned hotel properties, room inventory, and codes (read-only)" },
+  { id: "manage_properties", name: "Manage Hotel Properties", description: "Create new hotel locations, edit configurations and delete properties" },
   { id: "manage_questionnaire", name: "Manage Questionnaire & QR Studio", description: "Design custom feedback questions, touchpoints, and invitations" },
   { id: "export_reports", name: "Export Operational Reports", description: "Download date-wise CSV, Excel and PDF executive audits" },
   { id: "view_audit_log", name: "View Audit Log", description: "Inspect chronological workspace operational audit trails" },
-  { id: "manage_settings", name: "System Settings", description: "Configure organization and enterprise platform defaults" },
-  { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members and assign permissions" },
+  { id: "view_settings", name: "View System Settings", description: "Inspect organization defaults, SLA parameters and setup (read-only)" },
+  { id: "manage_settings", name: "Manage System Settings", description: "Configure organization and enterprise platform defaults" },
+  { id: "view_role_mapping", name: "View Role & Department Mapping", description: "Inspect escalation chains and department routing rules (read-only)" },
+  { id: "manage_role_mapping", name: "Manage Role & Department Mapping", description: "Create, edit and remove escalation routing rules" },
+  { id: "view_users", name: "View Team Members", description: "Inspect workspace members and assigned property scope (read-only)" },
+  { id: "manage_users", name: "Manage Team & Rights", description: "Invite new team members, configure rights and manage credentials" },
 ];
 
 const HOTEL_DEPARTMENTS = [
@@ -77,17 +83,18 @@ const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
     id: "admin",
     name: "Hotel Admin",
     tagline: "Assigned Property Administrator",
-    description: "Full management within assigned hotel property/properties: complaints, questionnaires, feedback, reports, and staff access.",
+    description: "Property-level operational administrator: complaints, questionnaires, arrivals import, feedback, and reports within assigned property.",
     mappedRole: "admin",
     defaultRights: [
+      "manage_service_jobs",
+      "import_guests",
       "view_feedback",
       "view_guest_pii",
       "manage_complaints",
       "reassign_property",
+      "view_properties",
       "manage_questionnaire",
       "export_reports",
-      "view_audit_log",
-      "manage_users",
     ],
   },
   {
@@ -151,15 +158,15 @@ const ORGANIZATIONAL_ROLES: OrganizationalRoleDef[] = [
 const ROLE_DEFAULT_RIGHTS: Record<string, string[]> = {
   super_admin: SYSTEM_RIGHTS.map((r) => r.id),
   admin: [
+    "manage_service_jobs",
+    "import_guests",
     "view_feedback",
     "view_guest_pii",
     "manage_complaints",
     "reassign_property",
-    "manage_properties",
+    "view_properties",
     "manage_questionnaire",
     "export_reports",
-    "view_audit_log",
-    "manage_users",
   ],
   general_manager: ["view_feedback", "view_guest_pii", "manage_complaints", "export_reports", "view_audit_log"],
   department_head: ["view_feedback", "view_guest_pii", "manage_complaints", "export_reports"],
@@ -217,9 +224,32 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(initialUser?.role || activeUser?.role || null);
   const [sessionLoading, setSessionLoading] = useState(!initialUser?.role && !activeUser?.role);
 
-  const isUserAdmin = activeUser?.role === "admin" || currentUserRole === "admin";
+  const isSuperAdminUser =
+    activeUser?.isOrganizationAdmin === true ||
+    activeUser?.orgRole === "super_admin" ||
+    (activeUser?.rights || []).includes("org_role:super_admin");
   const userRights = new Set(Array.isArray(activeUser?.rights) ? activeUser.rights : []);
-  const canManageUsers = isUserAdmin || userRights.has("manage_users");
+  const canManageUsers = isSuperAdminUser || userRights.has("manage_users");
+  const canViewUsers = canManageUsers || userRights.has("view_users");
+  const availableRoles = isSuperAdminUser ? ORGANIZATIONAL_ROLES : ORGANIZATIONAL_ROLES.filter((r) => r.id !== "super_admin");
+
+  function toggleRight(currentRights: string[], id: string, checked: boolean): string[] {
+    if (checked) {
+      const next = [...currentRights, id];
+      if (id === "manage_properties" && !next.includes("view_properties")) next.push("view_properties");
+      if (id === "manage_settings" && !next.includes("view_settings")) next.push("view_settings");
+      if (id === "manage_role_mapping" && !next.includes("view_role_mapping")) next.push("view_role_mapping");
+      if (id === "manage_users" && !next.includes("view_users")) next.push("view_users");
+      return Array.from(new Set(next));
+    } else {
+      let next = currentRights.filter((r) => r !== id);
+      if (id === "view_properties") next = next.filter((r) => r !== "manage_properties");
+      if (id === "view_settings") next = next.filter((r) => r !== "manage_settings");
+      if (id === "view_role_mapping") next = next.filter((r) => r !== "manage_role_mapping");
+      if (id === "view_users") next = next.filter((r) => r !== "manage_users");
+      return next;
+    }
+  }
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -554,12 +584,12 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
             <h2 style={{ fontSize: "20px", margin: "10px 0" }}>Verifying credentials…</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px" }}>Loading workspace permissions…</p>
           </div>
-        ) : !canManageUsers ? (
+        ) : !canViewUsers ? (
           <div className="panel" style={{ padding: "50px 24px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
             <p className="eyebrow" style={{ color: "var(--muted)" }}>Access & Administration</p>
             <h2 style={{ fontSize: "22px", margin: "10px 0" }}>Access Restricted</h2>
             <p style={{ color: "var(--muted)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
-              Your account does not have permission to manage team members or configure access rights.
+              Your account does not have permission to view team members or configure access rights.
             </p>
             <a className="button button-dark" href="/dashboard" style={{ display: "inline-flex" }}>
               ← Return to Dashboard
@@ -575,31 +605,54 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                   Manage workspace members, property access assignments, and authentication credentials.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  className="button button-outline compact"
-                  onClick={() => {
-                    setError(null);
-                    setSuccess(null);
-                    setShowPropertyModal(true);
-                  }}
-                >
-                  <Building2 size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
-                  Create property
-                </button>
-                <button
-                  className="button button-dark compact"
-                  onClick={() => {
-                    setError(null);
-                    setSuccess(null);
-                    setShowAddModal(true);
-                  }}
-                >
-                  <UserPlus size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
-                  Add member
-                </button>
-              </div>
+              {canManageUsers && (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    className="button button-outline compact"
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      setShowPropertyModal(true);
+                    }}
+                  >
+                    <Building2 size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
+                    Create property
+                  </button>
+                  <button
+                    className="button button-dark compact"
+                    onClick={() => {
+                      setError(null);
+                      setSuccess(null);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <UserPlus size={14} strokeWidth={1.75} style={{ marginRight: "6px" }} />
+                    Add member
+                  </button>
+                </div>
+              )}
             </div>
+
+            {!canManageUsers && (
+              <div
+                className="panel"
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--canvas-alt)",
+                  border: "1px solid var(--line)",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  color: "var(--muted)",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <Shield size={14} style={{ color: "var(--sage)" }} />
+                <span>View-only mode: You have permission to inspect team members within your authorized properties. Contact an administrator to invite members or configure rights.</span>
+              </div>
+            )}
 
             {error && (
               <div className="panel notice notice-error">{error}</div>
@@ -612,47 +665,58 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
               </div>
             )}
 
-            <section className="panel table-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>Workspace members</h2>
-                  <p>Active accounts with operational and property-level access to Vistora</p>
-                </div>
-                <span className="panel-action">{users.length} members</span>
-              </div>
+            {(() => {
+              const visibleUsers = users.filter((u) => {
+                if (isSuperAdminUser) return true;
+                const org = getUserOrgRole(u);
+                if (org === "super_admin" || (u.rights || []).includes("org_role:super_admin") || u.role === "super_admin") {
+                  return false;
+                }
+                return true;
+              });
 
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Member</th>
-                      <th>Email ID</th>
-                      <th>Assigned Role</th>
-                      <th>Department Scope</th>
-                      <th>Property Access</th>
-                      <th>Created</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <TableLoadingRows columns={7} />
-                    ) : users.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
-                          No members found. Click &ldquo;Add member&rdquo; above to invite a user.
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((user) => {
-                        const initials = (user.full_name || user.email)
-                          .split(" ")
-                          .map((p) => p[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase();
+              return (
+                <section className="panel table-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Workspace members</h2>
+                      <p>Active accounts with operational and property-level access to Vistora</p>
+                    </div>
+                    <span className="panel-action">{visibleUsers.length} members</span>
+                  </div>
 
-                        return (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Member</th>
+                          <th>Email ID</th>
+                          <th>Assigned Role</th>
+                          <th>Department Scope</th>
+                          <th>Property Access</th>
+                          <th>Created</th>
+                          <th style={{ textAlign: "right" }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading ? (
+                          <TableLoadingRows columns={7} />
+                        ) : visibleUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} style={{ textAlign: "center", padding: "28px", color: "var(--muted)" }}>
+                              No members found. Click &ldquo;Add member&rdquo; above to invite a user.
+                            </td>
+                          </tr>
+                        ) : (
+                          visibleUsers.map((user) => {
+                            const initials = (user.full_name || user.email)
+                              .split(" ")
+                              .map((p) => p[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase();
+
+                            return (
                           <tr key={user.id}>
                             <td>
                               <div className="guest-cell">
@@ -849,71 +913,94 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             })()}
                           </td>
                             <td>
-                              <span style={{ color: "var(--muted)", fontSize: "11px" }}>
-                                {user.created_at ? new Date(user.created_at).toLocaleDateString() : "Active"}
-                              </span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                <span style={{ color: "var(--ink)", fontSize: "11px", fontWeight: 500 }}>
+                                  {user.created_at ? new Date(user.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Active"}
+                                </span>
+                                {user.created_at && (
+                                  <span style={{ color: "var(--muted)", fontSize: "10px", fontFamily: "var(--font-dm-mono)" }}>
+                                    {new Date(user.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td style={{ textAlign: "right" }}>
-                              <div style={{ display: "inline-flex", gap: "6px" }}>
-                                <button
-                                  type="button"
-                                  className="button button-outline compact"
-                                  style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                                  onClick={() => {
-                                    const org = getUserOrgRole(user);
-                                    const dept = getUserDepartment(user);
-                                    setEditAccessUser(user);
-                                    setEditName(user.full_name || "");
-                                    setEditRole(org);
-                                    setEditDepartment(dept);
-                                    setEditPropertyId(user.property_id || "");
-                                    const initialPropIds = user.property_ids && user.property_ids.length > 0
-                                      ? user.property_ids
-                                      : user.property_id
-                                      ? [user.property_id]
-                                      : [];
-                                    setEditPropertyIds(initialPropIds);
-                                    const isSuper = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
-                                    setEditRights(
-                                      isSuper
-                                        ? SYSTEM_RIGHTS.map((r) => r.id)
-                                        : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
-                                        ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:"))
-                                        : ROLE_DEFAULT_RIGHTS[org] || ROLE_DEFAULT_RIGHTS.admin || []
-                                    );
-                                    setError(null);
-                                    setSuccess(null);
+                              {canManageUsers ? (
+                                <div style={{ display: "inline-flex", gap: "6px" }}>
+                                  <button
+                                    type="button"
+                                    className="button button-outline compact"
+                                    style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => {
+                                      const org = getUserOrgRole(user);
+                                      const dept = getUserDepartment(user);
+                                      setEditAccessUser(user);
+                                      setEditName(user.full_name || "");
+                                      setEditRole(org);
+                                      setEditDepartment(dept);
+                                      setEditPropertyId(user.property_id || "");
+                                      const initialPropIds = user.property_ids && user.property_ids.length > 0
+                                        ? user.property_ids
+                                        : user.property_id
+                                        ? [user.property_id]
+                                        : [];
+                                      setEditPropertyIds(initialPropIds);
+                                      const isSuper = org === "super_admin" || (user.rights || []).includes("org_role:super_admin");
+                                      setEditRights(
+                                        isSuper
+                                          ? SYSTEM_RIGHTS.map((r) => r.id)
+                                          : Array.isArray(user.rights) && user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:")).length > 0
+                                          ? user.rights.filter((r) => !r.startsWith("org_role:") && !r.startsWith("dept_scope:"))
+                                          : ROLE_DEFAULT_RIGHTS[org] || ROLE_DEFAULT_RIGHTS.admin || []
+                                      );
+                                      setError(null);
+                                      setSuccess(null);
+                                    }}
+                                    title="Edit role, rights and property access"
+                                  >
+                                    <Settings2 size={12} strokeWidth={1.75} />
+                                    Access & Rights
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button button-outline compact"
+                                    style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => {
+                                      setShowPasswordModal(user);
+                                      setNewPassword("");
+                                      setError(null);
+                                      setSuccess(null);
+                                    }}
+                                    title="Change password"
+                                  >
+                                    <Key size={12} strokeWidth={1.75} />
+                                    Password
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button compact"
+                                    style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
+                                    onClick={() => setPendingDelete(user)}
+                                    title="Remove user"
+                                  >
+                                    <Trash2 size={12} strokeWidth={1.75} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontFamily: "var(--font-dm-mono)",
+                                    padding: "3px 8px",
+                                    background: "var(--canvas-alt)",
+                                    color: "var(--muted)",
+                                    borderRadius: "3px",
+                                    border: "1px solid var(--line)",
                                   }}
-                                  title="Edit role, rights and property access"
                                 >
-                                  <Settings2 size={12} strokeWidth={1.75} />
-                                  Access & Rights
-                                </button>
-                                <button
-                                  type="button"
-                                  className="button button-outline compact"
-                                  style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                                  onClick={() => {
-                                    setShowPasswordModal(user);
-                                    setNewPassword("");
-                                    setError(null);
-                                    setSuccess(null);
-                                  }}
-                                  title="Change password"
-                                >
-                                  <Key size={12} strokeWidth={1.75} />
-                                  Password
-                                </button>
-                                <button
-                                  type="button"
-                                  className="button compact"
-                                  style={{ padding: "4px 8px", fontSize: "11px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
-                                  onClick={() => setPendingDelete(user)}
-                                  title="Remove user"
-                                >
-                                  <Trash2 size={12} strokeWidth={1.75} />
-                                </button>
-                              </div>
+                                  Read-only
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -923,6 +1010,8 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                 </table>
               </div>
             </section>
+          );
+        })()}
 
             {/* MODAL: ADD MEMBER */}
             <AnimatePresence>
@@ -1005,7 +1094,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             }
                           }}
                           header="Select Organizational Role"
-                          options={ORGANIZATIONAL_ROLES.map((r) => ({
+                          options={availableRoles.map((r) => ({
                             value: r.id,
                             label: r.name,
                             detail: r.tagline,
@@ -1139,7 +1228,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         />
                       </label>
 
-                      <ModuleAccessFields rights={addRights} onChange={setAddRights} admin={["admin","super_admin"].includes(addRole)}/>
+                      <ModuleAccessFields rights={addRights} onChange={setAddRights} admin={addRole === "super_admin"}/>
                       {addRole === "super_admin" ? (
                         <div
                           style={{
@@ -1242,11 +1331,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     type="checkbox"
                                     checked={checked}
                                     onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setAddRights([...addRights, right.id]);
-                                      } else {
-                                        setAddRights(addRights.filter((id) => id !== right.id));
-                                      }
+                                      setAddRights(toggleRight(addRights, right.id, e.target.checked));
                                     }}
                                     style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
                                   />
@@ -1355,7 +1440,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                             }
                           }}
                           header="Assign Role"
-                          options={ORGANIZATIONAL_ROLES.map((r) => ({
+                          options={availableRoles.map((r) => ({
                             value: r.id,
                             label: r.name,
                             detail: r.tagline,
@@ -1476,7 +1561,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                         </div>
                       )}
 
-                      <ModuleAccessFields rights={editRights} onChange={setEditRights} admin={["admin","super_admin"].includes(editRole)}/>
+                      <ModuleAccessFields rights={editRights} onChange={setEditRights} admin={editRole === "super_admin"}/>
                       {editRole === "super_admin" ? (
                         <div
                           style={{
@@ -1579,11 +1664,7 @@ export default function UserManagementPage({ initialUser }: { initialUser?: Work
                                     type="checkbox"
                                     checked={checked}
                                     onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setEditRights([...editRights, right.id]);
-                                      } else {
-                                        setEditRights(editRights.filter((id) => id !== right.id));
-                                      }
+                                      setEditRights(toggleRight(editRights, right.id, e.target.checked));
                                     }}
                                     style={{ marginTop: "2px", accentColor: "var(--module-accent)" }}
                                   />

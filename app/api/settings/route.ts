@@ -4,12 +4,14 @@ import {getApplicationSettings,updateApplicationSettings,getPropertySetting,getA
 import {assertProperty,PlatformError,workspaceUser} from "../../../lib/platform/db";
 import {validateHospitality} from "../../../lib/hospitality/config";
 export const GET=withWorkspace(async(request:NextRequest)=>{
- if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Workspace administrator required.",403);
+ const user=workspaceUser();
+ if(!user.isOrganizationAdmin&&!user.rights?.includes("view_settings"))throw new PlatformError("Workspace administrator or view_settings permission required.",403);
  const propertyId=request.nextUrl.searchParams.get("propertyId");
  return NextResponse.json({success:true,appSettings:await getApplicationSettings(),...(propertyId?{propertySetting:await getPropertySetting(propertyId)}:{propertySettings:await getAllPropertySettings()})});
-},"manage_settings");
+},"view_settings");
 export const PATCH=withWorkspace(async(request:NextRequest)=>{
- if(!workspaceUser().isOrganizationAdmin)throw new PlatformError("Workspace administrator required.",403);
+ const user=workspaceUser();
+ if(!user.isOrganizationAdmin&&!user.rights?.includes("manage_settings"))throw new PlatformError("Workspace administrator or manage_settings permission required.",403);
  const b=await request.json();
  if(b.type==="application"){
    const p=b.appSettings||{},patch:Record<string,unknown>={};

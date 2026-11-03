@@ -136,14 +136,18 @@ export default function RoomManagerModal({
   properties = [],
   selectedPropertyId = "",
   onRoomsUpdated,
+  readOnly = false,
 }: {
   open: boolean;
   onClose: () => void;
   properties?: Array<{ id: string; name: string; code: string }>;
   selectedPropertyId?: string;
   onRoomsUpdated?: () => void;
+  readOnly?: boolean;
 }) {
-  const [tab, setTab] = useState<"import" | "generator" | "single" | "inventory">("import");
+  const [tab, setTab] = useState<"import" | "generator" | "single" | "inventory">(
+    readOnly ? "inventory" : "import"
+  );
   const [activePropertyId, setActivePropertyId] = useState<string>(
     selectedPropertyId || (properties.length > 0 ? properties[0].id : "")
   );
@@ -191,10 +195,11 @@ export default function RoomManagerModal({
   }, [selectedPropertyId, properties]);
 
   useEffect(() => {
-    if (open && activePropertyId) {
-      loadRooms(activePropertyId);
+    if (open) {
+      if (readOnly) setTab("inventory");
+      if (activePropertyId) loadRooms(activePropertyId);
     }
-  }, [open, activePropertyId]);
+  }, [open, activePropertyId, readOnly]);
 
   async function loadRooms(propId: string) {
     if (!propId) return;
@@ -550,36 +555,47 @@ export default function RoomManagerModal({
             )}
 
             {/* Navigation Tabs - Platform standard */}
-            <nav className="platform-tabs" aria-label="Room setup tabs" style={{ marginBottom: "18px" }}>
-              <button
-                type="button"
-                aria-current={tab === "import" ? "page" : undefined}
-                onClick={() => { setTab("import"); setError(null); setSuccess(null); }}
-              >
-                Bulk CSV import
-              </button>
-              <button
-                type="button"
-                aria-current={tab === "generator" ? "page" : undefined}
-                onClick={() => { setTab("generator"); setError(null); setSuccess(null); }}
-              >
-                Floor generator
-              </button>
-              <button
-                type="button"
-                aria-current={tab === "single" ? "page" : undefined}
-                onClick={() => { setTab("single"); setError(null); setSuccess(null); }}
-              >
-                Add single room
-              </button>
-              <button
-                type="button"
-                aria-current={tab === "inventory" ? "page" : undefined}
-                onClick={() => { setTab("inventory"); setError(null); setSuccess(null); }}
-              >
-                Configured rooms ({existingRooms.length})
-              </button>
-            </nav>
+            {!readOnly ? (
+              <nav className="platform-tabs" aria-label="Room setup tabs" style={{ marginBottom: "18px" }}>
+                <button
+                  type="button"
+                  aria-current={tab === "import" ? "page" : undefined}
+                  onClick={() => { setTab("import"); setError(null); setSuccess(null); }}
+                >
+                  Bulk CSV import
+                </button>
+                <button
+                  type="button"
+                  aria-current={tab === "generator" ? "page" : undefined}
+                  onClick={() => { setTab("generator"); setError(null); setSuccess(null); }}
+                >
+                  Floor generator
+                </button>
+                <button
+                  type="button"
+                  aria-current={tab === "single" ? "page" : undefined}
+                  onClick={() => { setTab("single"); setError(null); setSuccess(null); }}
+                >
+                  Add single room
+                </button>
+                <button
+                  type="button"
+                  aria-current={tab === "inventory" ? "page" : undefined}
+                  onClick={() => { setTab("inventory"); setError(null); setSuccess(null); }}
+                >
+                  Configured rooms ({existingRooms.length})
+                </button>
+              </nav>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <span className="status" style={{ fontSize: "11px", fontWeight: 600 }}>
+                  View-Only Room Inventory
+                </span>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  Only authorized managers can add or reconfigure rooms.
+                </span>
+              </div>
+            )}
 
             {/* TAB 1: BULK CSV IMPORT */}
             {tab === "import" && (
@@ -977,9 +993,11 @@ export default function RoomManagerModal({
                     <p style={{ margin: "0 0 10px 0", color: "var(--muted)", fontSize: "12px" }}>
                       No individual rooms registered for this property yet.
                     </p>
-                    <button type="button" className="button button-dark compact" onClick={() => setTab("import")}>
-                      Bulk import via CSV
-                    </button>
+                    {!readOnly && (
+                      <button type="button" className="button button-dark compact" onClick={() => setTab("import")}>
+                        Bulk import via CSV
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="platform-table" style={{ maxHeight: "320px", overflowY: "auto" }}>
@@ -991,7 +1009,7 @@ export default function RoomManagerModal({
                           <th>Floor</th>
                           <th>Notes / View</th>
                           <th>Readiness</th>
-                          <th style={{ textAlign: "right" }}>Action</th>
+                          {!readOnly && <th style={{ textAlign: "right" }}>Action</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -1004,26 +1022,45 @@ export default function RoomManagerModal({
                               {r.notes || "—"}
                             </td>
                             <td>
-                              <WorkspaceSelect
-                                label={"Update room " + r.room_number}
-                                value={r.status}
-                                onChange={(s) => handleUpdateRoomStatus(r.id, s)}
-                                options={[
-                                  ...(r.status === "inspected" ? [{ value: "inspected", label: "Inspected" }] : []),
-                                  ...STATUS_OPTIONS,
-                                ]}
-                              />
+                              {!readOnly ? (
+                                <WorkspaceSelect
+                                  label={"Update room " + r.room_number}
+                                  value={r.status}
+                                  onChange={(s) => handleUpdateRoomStatus(r.id, s)}
+                                  options={[
+                                    ...(r.status === "inspected" ? [{ value: "inspected", label: "Inspected" }] : []),
+                                    ...STATUS_OPTIONS,
+                                  ]}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.04em",
+                                    padding: "2px 8px",
+                                    borderRadius: "4px",
+                                    background: r.status === "clean" || r.status === "inspected" ? "var(--sage-soft)" : "var(--canvas-alt)",
+                                    color: r.status === "clean" || r.status === "inspected" ? "var(--sage-deep)" : "var(--muted)",
+                                  }}
+                                >
+                                  {STATUS_OPTIONS.find((o) => o.value === r.status)?.label || r.status}
+                                </span>
+                              )}
                             </td>
-                            <td style={{ textAlign: "right" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteRoom(r.id, r.room_number)}
-                                style={{ background: "transparent", border: "none", color: "var(--red)", cursor: "pointer", padding: "4px" }}
-                                title="Delete room"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </td>
+                            {!readOnly && (
+                              <td style={{ textAlign: "right" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRoom(r.id, r.room_number)}
+                                  style={{ background: "transparent", border: "none", color: "var(--red)", cursor: "pointer", padding: "4px" }}
+                                  title="Delete room"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
