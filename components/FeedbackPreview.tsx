@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, Check, MessageSquareText } from "lucide-react";
+import { Check, MessageSquareText } from "lucide-react";
 
 const previews = [
   { label: "Listen", title: "A better stay starts with listening.", detail: "Invite honest feedback with guest surveys, shareable links and property QR codes.", guest: "The welcome was wonderful. Breakfast could use more vegetarian options.", tag: "New guest feedback", action: "Feedback received", score: "4 / 5", metric: "Guest rating" },
@@ -13,11 +12,10 @@ const previews = [
 export default function FeedbackPreview() {
   const [active, setActive] = useState(0);
   const preview = previews[active];
-  const reducedMotion = useReducedMotion();
   return <div className="vp-product">
     <div className="vp-switcher" aria-label="Explore the feedback workflow">{previews.map((item, index) => <button key={item.label} aria-pressed={index === active} onClick={() => setActive(index)}><span>0{index + 1}</span>{item.label}</button>)}</div>
-    <div aria-live="polite"><AnimatePresence mode="wait" initial={false}><motion.div key={active} className="vp-preview-body" initial={{opacity:0,x:reducedMotion?0:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:reducedMotion?0:-20}} transition={{duration:reducedMotion?0:.24,ease:[.22,1,.36,1]}}><div className="vp-preview-copy"><p className="vp-kicker">FROM SIGNAL TO SERVICE</p><h3>{preview.title}</h3><p>{preview.detail}</p><span className="vp-demo-label">Illustrative product preview · sample data</span></div>
-      <div className="vp-preview-card"><div className="vp-card-top"><span><MessageSquareText size={17} /> {preview.tag}</span><ArrowUpRight size={18} /></div><blockquote>“{preview.guest}”</blockquote><div className="vp-preview-bottom"><span><Check size={15} />{preview.action}</span><div><strong>{preview.score}</strong><small>{preview.metric}</small></div></div></div>
-    </motion.div></AnimatePresence></div>
+    <div aria-live="polite"><div className="vp-preview-body"><div className="vp-preview-copy"><p className="vp-kicker">STEP 0{active + 1} · {preview.label}</p><h3>{preview.title}</h3><p>{preview.detail}</p><span className="vp-demo-label">Illustrative product preview · sample data</span></div>
+      <div className="vp-preview-card"><div className="vp-card-top"><span><MessageSquareText size={17} /> {preview.tag}</span></div>{active === 0 ? <blockquote>“{preview.guest}”</blockquote> : <p className="vp-preview-statement">{preview.guest}</p>}<div className="vp-preview-bottom"><span><Check size={15} />{preview.action}</span><div><strong>{preview.score}</strong><small>{preview.metric}</small></div></div></div>
+    </div></div>
   </div>;
 }
