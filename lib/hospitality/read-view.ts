@@ -12,10 +12,20 @@ export async function hotelReadView(request:NextRequest){
  if(request.nextUrl.searchParams.get("complaints")==="true"&&(readiness.error||readiness.data!==true))throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
  const property=request.nextUrl.searchParams.get("property")||"all",view=request.nextUrl.searchParams.get("jobs")||"active";
  if(!["active","closed"].includes(view))throw new PlatformError("Choose a valid job view.");
- const scoped=(query:any)=>property==="all"?query:query.eq("property_id",property);
+ const userPropertyIds = Array.isArray(user.propertyIds) && user.propertyIds.length > 0 ? user.propertyIds : null;
+ if(property!=="all" && userPropertyIds && !userPropertyIds.includes(property)) {
+  throw new PlatformError("Access to this property is not authorized.", 403);
+ }
+ const scoped=(query:any)=>{
+  if(property!=="all")return query.eq("property_id",property);
+  if(userPropertyIds)return query.in("property_id",userPropertyIds);
+  return query;
+ };
  if(property!=="all")checked(await db.from("properties").select("id").eq("id",property).single());
+ const propQuery = db.from("properties").select("id,name,is_active").order("name");
+ const propertiesQuery = userPropertyIds ? propQuery.in("id", userPropertyIds) : propQuery;
  const [properties,rooms,stays,jobs,inspections,counts]=await Promise.all([
-  db.from("properties").select("id,name,is_active").order("name"),
+  propertiesQuery,
   scoped(db.from("hotel_rooms").select("*").order("room_number").limit(200)),
   scoped(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,guests(full_name)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100)),
   scoped((request.nextUrl.searchParams.get("complaints")==="true"?db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").not("issue_type","is",null):db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)")).in("status",view==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:view==="active"}).limit(100)),

@@ -127,10 +127,23 @@ export const POST=withWorkspace(async(request:NextRequest)=>{
   if(countRes.count!==null&&countRes.count>0)await db.from("properties").update({total_rooms:countRes.count}).eq("id",b.property_id);
  }else if(b.action==="stay"){
   const selected=await room(b.room_id);await property(selected.property_id);
-  checked(await db.from("guests").select("id").eq("id",b.guest_id).single());
+  let guestId=b.guest_id;
+  if(!guestId&&b.guest_name){
+   const newGuest=checked(await db.from("guests").insert({
+    organization_id:user.organizationId,
+    full_name:text(b.guest_name,"Guest name",100),
+    email:b.email?email(b.email):null,
+    phone:text(b.phone,"Phone",40,false)||null,
+    vip_tier:text(b.vip_tier||"Standard","Guest tier",30),
+    preferences:text(b.preferences,"Preferences",2000,false)
+   }).select("id").single());
+   guestId=newGuest.id;
+  }else{
+   checked(await db.from("guests").select("id").eq("id",guestId).single());
+  }
   const arrival=date(b.check_in_date,"Arrival date"),departure=date(b.check_out_date,"Departure date");
   if(departure<=arrival)throw new PlatformError("Departure must follow arrival.");
-  result=checked(await db.from("stays").insert({organization_id:user.organizationId,property_id:selected.property_id,room_id:selected.id,guest_id:b.guest_id,room_number:selected.room_number,guest_count:number(Number(b.guest_count),"Guest count",1,20),check_in_date:arrival,check_out_date:departure,public_token:newToken(),status:"reserved"}).select("id").single());
+  result=checked(await db.from("stays").insert({organization_id:user.organizationId,property_id:selected.property_id,room_id:selected.id,guest_id:guestId,room_number:selected.room_number,guest_count:number(Number(b.guest_count),"Guest count",1,20),check_in_date:arrival,check_out_date:departure,public_token:newToken(),status:"reserved"}).select("id").single());
  }else if(b.action==="job"){
   await property(b.property_id);
   if(!["guest_request","cleaning","maintenance","inspection"].includes(b.kind))throw new PlatformError("Choose a valid job type.");

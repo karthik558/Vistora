@@ -178,6 +178,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const [jobView,setJobView]=useState("active");
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
  const [showReserveModal,setShowReserveModal]=useState(false);
+ const [reserveGuestMode,setReserveGuestMode]=useState<"new"|"existing">("new");
+ const [modalPropertyId,setModalPropertyId]=useState("");
  const [showRoomManagerModal,setShowRoomManagerModal]=useState(false);
  const [roomManagerPropertyId,setRoomManagerPropertyId]=useState("");
  const [qrModalData,setQrModalData]=useState<{title:string;roomNumber?:string;propertyName?:string;url:string}|null>(null);
@@ -301,9 +303,15 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const sectionKey=tab==="Guests"?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
  const enabled=tab==="Overview"||config.modules[sectionKey as keyof typeof config.modules]!==false;
  const propertySelect=(name="property_id")=><WorkspaceSelect label="Property" name={name} defaultValue={property==="all"?"":property} placeholder="Choose property" options={(data?.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}/>;
- const roomOptions=(data?.rooms||[]).map((r:any)=>({value:r.id,label:r.room_number+" · "+(data.properties.find((p:any)=>p.id===r.property_id)?.name||"")+" · "+label(r.status)}));
- const nameOf=(id:string)=>data?.properties.find((p:any)=>p.id===id)?.name||"—";
- const roomOf=(id:string)=>data?.rooms.find((r:any)=>r.id===id)?.room_number||"—";
+ const nameOf=(id:string)=>data?.properties?.find((p:any)=>p.id===id)?.name||"—";
+ const roomOf=(id:string)=>data?.rooms?.find((r:any)=>r.id===id)?.room_number||"—";
+ const activeReserveProp=modalPropertyId||(property!=="all"?property:(data?.properties?.[0]?.id||""));
+ const modalRooms=(data?.rooms||[]).filter((r:any)=>!activeReserveProp||r.property_id===activeReserveProp);
+ const modalRoomOptions=modalRooms.map((r:any)=>({
+  value:r.id,
+  label:`Room ${r.room_number}${r.room_type?` · ${r.room_type}`:""}${r.floor?` · Floor ${r.floor}`:""}${r.status!=="clean"?` · (${label(r.status)})`:""}`
+ }));
+ const roomOptions=(data?.rooms||[]).map((r:any)=>({value:r.id,label:`Room ${r.room_number}${r.room_type?` · ${r.room_type}`:""} · ${nameOf(r.property_id)} · ${label(r.status)}`}));
  const submit=(action:string)=>(e:FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget,fields=Object.fromEntries(new FormData(form));
   save({action,...fields}).then(ok=>{if(ok)form.reset();});
@@ -388,7 +396,11 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
    {canManage&&<button
     type="button"
     className="button button-outline compact"
-    onClick={()=>setShowReserveModal(true)}
+    onClick={()=>{
+     setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));
+     setReserveGuestMode("new");
+     setShowReserveModal(true);
+    }}
     style={{display:"inline-flex",alignItems:"center",gap:"5px",marginBottom:"2px"}}
    >
     <Calendar size={13}/>
@@ -406,8 +418,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
     <p>Guests currently staying in your rooms. Once checked out, they are safely moved to history and room is flagged dirty.</p>
     {activeStays.length===0?(
      <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
-      <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in. Checked-out guests have been cleared from this view.</p>
-      {canManage&&<button className="button button-outline compact" onClick={()=>setShowReserveModal(true)}>Check in a guest</button>}
+      <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No active guests currently checked in{property!=="all"?` at ${nameOf(property)}`:""}. Checked-out guests have been cleared from this view.</p>
+      {canManage&&<button className="button button-outline compact" onClick={()=>{setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));setReserveGuestMode("new");setShowReserveModal(true);}}>Check in a guest</button>}
      </div>
     ):(
      <div className="platform-table">
@@ -504,9 +516,12 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
      <h2 style={{margin:0}}>Upcoming Reservations</h2>
      <span style={{fontSize:"12px",color:"var(--muted)"}}>{reservedStays.length} reservation{reservedStays.length===1?"":"s"}</span>
     </div>
-    <p>Confirmed reservations awaiting check-in. Room readiness is required before check-in.</p>
+    <p>Confirmed reservations awaiting arrival. Each reservation links a guest to a room. Click &quot;Check in&quot; upon guest arrival to move them into In-House Guests.</p>
     {reservedStays.length===0?(
-     <p style={{padding:"16px",color:"var(--muted)"}}>No upcoming reservations.</p>
+     <div style={{padding:"24px",textAlign:"center",background:"var(--canvas)",borderRadius:"6px",border:"1px dashed var(--line)"}}>
+      <p style={{margin:"0 0 10px 0",color:"var(--muted)",fontSize:"13px"}}>No upcoming reservations{property!=="all"?` for ${nameOf(property)}`:""}. Booked reservations will appear here awaiting guest arrival.</p>
+      {canManage&&<button className="button button-outline compact" onClick={()=>{setModalPropertyId(property!=="all"?property:(data?.properties?.[0]?.id||""));setReserveGuestMode("new");setShowReserveModal(true);}}>+ Reserve / Check-In</button>}
+     </div>
     ):(
      <div className="platform-table">
       <table>
@@ -526,7 +541,10 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
            <strong>{s.guests?.full_name||"Guest"}</strong>
            <small style={{display:"block",color:"var(--muted)"}}>{s.guests?.vip_tier||"Standard"}</small>
           </td>
-          <td>{nameOf(s.property_id)}<small>Room {s.room_number}</small></td>
+          <td>
+           <strong style={{fontSize:"13px",color:"var(--ink)"}}>Room {s.room_number}</strong>
+           <small style={{display:"block",color:"var(--muted)"}}>{nameOf(s.property_id)}</small>
+          </td>
           <td>{s.check_in_date} → {s.check_out_date}</td>
           <td>{s.guest_count} guest{s.guest_count===1?"":"s"}</td>
           <td style={{textAlign:"right"}}>
@@ -586,7 +604,10 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
         {historyStays.map((s:any)=>(
          <tr key={s.id}>
           <td><strong>{s.guests?.full_name||"Guest"}</strong></td>
-          <td>{nameOf(s.property_id)}<small>Room {s.room_number}</small></td>
+          <td>
+           <strong style={{fontSize:"13px",color:"var(--ink)"}}>Room {s.room_number}</strong>
+           <small style={{display:"block",color:"var(--muted)"}}>{nameOf(s.property_id)}</small>
+          </td>
           <td>{s.check_in_date} → {s.check_out_date}</td>
           <td><span className="hotel-status">{label(s.status)}</span></td>
           <td>{s.feedback?.length>0?s.feedback.map((f:any)=>f.rating+"/5 · "+label(f.status)).join(", "):"—"}</td>
@@ -602,14 +623,18 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {/* DIRECTORY / PROFILES */}
   {guestTab==="profiles"&&<>
    {canManage&&<section className="platform-card">
-    <h2>{guest?"Edit guest":"Add guest profile"}</h2>
+    <h2>{guest?"Edit guest":"Add guest profile centrally"}</h2>
+    <p style={{margin:"0 0 14px 0",fontSize:"12px",color:"var(--muted)"}}>Centrally register customer profiles here. Custom names added here become instantly available for reservations, check-ins, and guest experience across all properties.</p>
     <fieldset className="hotel-form-lock" disabled={busy}>
      <GuestForm guest={guest} save={save} cancel={()=>setGuest(null)}/>
     </fieldset>
    </section>}
    <section className="platform-card">
-    <h2>Guest directory</h2>
-    <p>{canManage?"Latest 100 matching profiles. Search looks across the company directory.":"Guest details require guest PII permission and are limited to stays in this property view."}</p>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+     <h2 style={{margin:0}}>Central Guest Directory</h2>
+     <span style={{fontSize:"12px",color:"var(--muted)"}}>{data.guests?.length||0} profiles</span>
+    </div>
+    <p>{property!=="all"?`Company directory with stay activity for ${nameOf(property)}. Search looks across all registered profiles.`:"Latest 100 matching profiles across your company directory."}</p>
     <div className="platform-table">
      <table>
       <thead>
@@ -618,19 +643,32 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
         <th>Contact</th>
         <th>Tier</th>
         <th>Preferences</th>
+        <th>{property!=="all"?`Stays at ${nameOf(property)}`:"Stay history"}</th>
         <th style={{textAlign:"right"}}>Action</th>
        </tr>
       </thead>
       <tbody>
-       {data.guests.map((g:any)=>(
-        <tr key={g.id}>
-         <td>{g.full_name}</td>
+       {data.guests.map((g:any)=>{
+        const stayCount=stays.filter((s:any)=>s.guest_id===g.id).length;
+        return <tr key={g.id}>
+         <td><strong>{g.full_name}</strong></td>
          <td>{g.email||"—"}<small>{g.phone||""}</small></td>
          <td>{g.vip_tier}</td>
          <td className="hotel-wrap">{g.preferences||"—"}</td>
+         <td>
+          {property!=="all"?(
+           stayCount>0?(
+            <span style={{color:"var(--sage-deep)",fontWeight:600,fontSize:"12px"}}>{stayCount} stay{stayCount===1?"":"s"} at {nameOf(property)}</span>
+           ):(
+            <span style={{color:"var(--muted)",fontSize:"11px"}}>No stays at this property</span>
+           )
+          ):(
+           <span style={{color:"var(--muted)",fontSize:"11px"}}>{stayCount} recorded stay{stayCount===1?"":"s"}</span>
+          )}
+         </td>
          <td style={{textAlign:"right"}}>{canManage&&<button className="button button-outline compact" onClick={()=>{setGuest(g);window.scrollTo({top:0,behavior:"smooth"});}}>Edit</button>}</td>
-        </tr>
-       ))}
+        </tr>;
+       })}
       </tbody>
      </table>
      {!data.guests.length&&<p>No matching guest profiles.</p>}
@@ -750,25 +788,103 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  <Modal
   open={showReserveModal}
   title="Reserve / Check In a Stay"
-  subtitle="Assign a guest to an inspected room and set check-in / departure dates."
+  subtitle="Assign a guest to a room and schedule check-in / departure dates."
   onClose={()=>setShowReserveModal(false)}
+  maxWidth={620}
  >
   {data?(
    <form className="platform-fields" onSubmit={async e=>{
     e.preventDefault();const form=e.currentTarget,fields=Object.fromEntries(new FormData(form));
+    if(reserveGuestMode==="new"&&!fields.guest_name){
+     setError("Please enter the guest full name.");return;
+    }
+    if(reserveGuestMode==="existing"&&!fields.guest_id){
+     setError("Please select a guest from the directory.");return;
+    }
+    if(!fields.room_id){
+     setError("Please select a room.");return;
+    }
     if(await save({action:"stay",...fields})){
      form.reset();
      setShowReserveModal(false);
     }
    }}>
-    <label>Guest<WorkspaceSelect label="Reservation guest" name="guest_id" placeholder="Choose guest" options={data.guests.map((g:any)=>({value:g.id,label:g.full_name}))}/></label>
-    <label>Room<WorkspaceSelect label="Reservation room" name="room_id" placeholder="Choose room" options={roomOptions}/></label>
+    {property==="all"?(
+     <label className="hotel-wide-field">
+      Property
+      <WorkspaceSelect
+       label="Property"
+       value={activeReserveProp}
+       onChange={setModalPropertyId}
+       options={(data.properties||[]).filter((p:any)=>p.is_active).map((p:any)=>({value:p.id,label:p.name}))}
+      />
+     </label>
+    ):(
+     <div className="hotel-wide-field" style={{padding:"8px 12px",background:"var(--canvas)",borderRadius:"6px",border:"1px solid var(--line)",fontSize:"12px",color:"var(--ink)",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+      <span>Property: <strong>{nameOf(property)}</strong></span>
+      <span style={{color:"var(--muted)",fontSize:"11px"}}>Rooms strictly scoped to this property</span>
+     </div>
+    )}
+
+    {/* Guest Profile Mode Selector */}
+    <div className="hotel-wide-field" style={{display:"flex",gap:"8px",marginTop:"4px",marginBottom:"2px"}}>
+     <button
+      type="button"
+      className={`button ${reserveGuestMode==="new"?"button-dark":"button-outline"} compact`}
+      onClick={()=>setReserveGuestMode("new")}
+      style={{display:"inline-flex",alignItems:"center",gap:"5px",fontSize:"12px"}}
+     >
+      <UserPlus size={13}/>
+      <span>+ New Custom Guest</span>
+     </button>
+     <button
+      type="button"
+      className={`button ${reserveGuestMode==="existing"?"button-dark":"button-outline"} compact`}
+      onClick={()=>setReserveGuestMode("existing")}
+      style={{display:"inline-flex",alignItems:"center",gap:"5px",fontSize:"12px"}}
+     >
+      <Users size={13}/>
+      <span>Choose from Central Directory ({data.guests?.length||0})</span>
+     </button>
+    </div>
+
+    {reserveGuestMode==="new"?(
+     <>
+      <label>Guest full name<input name="guest_name" required maxLength={100} placeholder="e.g. John Doe"/></label>
+      <label>Guest tier<WorkspaceSelect label="Guest tier" name="vip_tier" defaultValue="Standard" options={stateOptions(["Standard","Returning","VIP"])}/></label>
+      <label>Email · optional<input name="email" type="email" placeholder="guest@example.com"/></label>
+      <label>Phone · optional<input name="phone" maxLength={40} placeholder="+1 555-0199"/></label>
+     </>
+    ):(
+     <label className="hotel-wide-field">
+      Choose existing guest profile
+      <WorkspaceSelect
+       label="Reservation guest"
+       name="guest_id"
+       placeholder="Choose guest from directory"
+       required={reserveGuestMode==="existing"}
+       options={(data.guests||[]).map((g:any)=>({
+        value:g.id,
+        label:`${g.full_name}${g.vip_tier&&g.vip_tier!=="Standard"?` · ${g.vip_tier}`:""}${g.phone?` · ${g.phone}`:""}`
+       }))}
+      />
+     </label>
+    )}
+
+    <label className="hotel-wide-field">
+     Room {modalRooms.length>0?`(${modalRooms.length} rooms in ${nameOf(activeReserveProp)})`:"(No rooms configured)"}
+     {modalRooms.length>0?(
+      <WorkspaceSelect label="Reservation room" name="room_id" placeholder="Choose room" required options={modalRoomOptions}/>
+     ):(
+      <input disabled value="No rooms configured for this property. Add rooms in Rooms tab." style={{color:"var(--muted)",fontSize:"12px"}}/>
+     )}
+    </label>
     <label>Number of guests<input name="guest_count" type="number" min={1} max={20} defaultValue={1} required/></label>
     <label>Arrival<WorkspaceDateField name="check_in_date" label="Arrival" required/></label>
     <label>Departure<WorkspaceDateField name="check_out_date" label="Departure" required/></label>
     <div style={{display:"flex",justifyContent:"flex-end",gap:"8px",marginTop:"14px",gridColumn:"span 2"}}>
      <button type="button" className="button button-outline" onClick={()=>setShowReserveModal(false)}>Cancel</button>
-     <button className="button button-dark" disabled={busy}>Confirm reservation</button>
+     <button className="button button-dark" disabled={busy||modalRooms.length===0}>Confirm reservation</button>
     </div>
    </form>
   ):(
