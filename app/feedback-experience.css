@@ -137,7 +137,7 @@
 .fi-topic-track i:nth-child(3){background:#be646c}
 .fi-method{margin:18px 0}
 .fi-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
-.fi-chips button{display:flex;align-items:center;gap:12px;padding:9px 14px;border-radius:22px;border:1px solid var(--line);background:var(--canvas);color:var(--ink);font:inherit;font-size:12px;cursor:pointer}
+.fi-chips button{display:flex;align-items:center;gap:12px;padding:9px 14px;border-radius:5px;border:1px solid var(--line);background:var(--canvas);color:var(--ink);font:inherit;font-size:12px;cursor:pointer}
 .fi-chips button[aria-pressed=true]{background:var(--sage-soft);color:var(--sage-deep);border-color:var(--sage)}
 .fi-chips button>span{font-size:11px;font-weight:700}
 .fi-opportunity{display:flex;align-items:center;gap:15px;border-radius:9px;padding:18px;background:var(--sage-soft);color:var(--sage-deep)}
