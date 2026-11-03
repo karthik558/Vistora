@@ -4,7 +4,7 @@
 
 - `/feedback` and unsigned `?property=…` URLs show a generic link-required message. They do not request or disclose a property directory.
 - Public property enumeration is removed from `/api/properties`, including `?public=true`. A verified workspace session is required.
-- Authorized generators obtain an authenticated-encryption token from `POST /api/feedback-links`. Server-side property access and feedback-module permission checks run before generation.
+- Authorized generators obtain a short property-prefixed random token from `POST /api/feedback-links`; only its hash and server-side scope are stored. Server-side property access and feedback-module permission checks run before generation. Existing authenticated-encryption `pf.*` tokens remain valid. See `docs/feedback-questionnaires.md` for the additional migration and rollout.
 - Property, room/touchpoint and preview mode are bound to the token. Guest form metadata, questions and submissions resolve the property from that token. A conflicting submitted property ID is rejected.
 - Guests see the relevant property name/code at the top and have no property selector.
 - Existing random invitation/stay tokens remain supported. Query parameters cannot override their property, guest or room. Expired/used invitations and inactive stays cannot open new public submissions.
@@ -37,7 +37,7 @@
 ## Required production rollout
 
 1. Back up and apply `supabase/migrations/20261103_security_boundaries.sql` after the existing OmniOps, guest automation, granular-rights, feedback-collection and guest-import migrations. The new migration was tested locally; it has **not been applied to the hosted Supabase project**. `schema.sql` includes the same final definitions for fresh installations.
-2. Deploy the application changes with the existing stable `WORKSPACE_ENCRYPTION_KEY`. Do not rotate that key casually: invitations and newly generated property links depend on it. There is no public/default key fallback.
+2. Deploy the application changes with the existing stable `WORKSPACE_ENCRYPTION_KEY`. Do not rotate that key casually: existing encrypted links and integration secrets depend on it. There is no public/default key fallback.
 3. Regenerate previously printed/shared URLs containing only `?property=…`. They are intentionally rejected. Existing opaque invitation/stay links continue to work.
 4. Set `TRUSTED_CLIENT_IP_HEADER` only when the production ingress overwrites that header with the actual client IP. Supported headers are `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip`. Without a trusted header, callers share a conservative quota rather than being allowed to forge individual IP quotas.
 5. The current rate limiter is per process. Multi-instance production deployments need equivalent shared/gateway limits, particularly for login and guest submissions.

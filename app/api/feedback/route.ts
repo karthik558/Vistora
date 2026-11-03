@@ -1,3 +1,4 @@
+import { publicQuestions } from "../../../lib/feedback/questionnaires";
 import {validateAnswers} from "../../../lib/feedbackAnswers";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchFeedbackList,createFeedback,deleteFeedback,updateFeedbackProperty,invalidateDashboardCache } from "../../../lib/services/guestExperienceService";
@@ -14,7 +15,7 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
 export async function POST(request:NextRequest) {
  try {
   const body=await readJson(request);
-  const { db, property, invitation, stay, details } = await resolvePublicFeedbackLink(body.publicToken);
+  const { db, property, invitation, stay, details, questionnaire } = await resolvePublicFeedbackLink(body.publicToken);
   if (details.demo) throw new PlatformError("Preview links cannot save feedback.", 403);
   if (body.propertyId !== undefined && body.propertyId !== property.id) throw new PlatformError("This link belongs to another property.", 403);
   const rating=number(body.rating,"Rating",1,5);
@@ -22,7 +23,7 @@ export async function POST(request:NextRequest) {
   if(!departments.includes(body.department))throw new PlatformError("Choose a valid department.");
   const invitationId = invitation?.id;
   const stayId = stay?.id;
-  const questions=checked(await db.from("feedback_questions").select("id,question_text,question_type,is_required,department,options").eq("organization_id",property.organization_id).eq("is_active",true).or("property_id.is.null,property_id.eq."+property.id));
+  const questions=await publicQuestions(db,property,questionnaire);
   const relevant=questions.filter(q=>!q.department||q.department===body.department);
   let validated;
   try {validated=validateAnswers(relevant,body.answers,body.recommendationScore);}catch(error){throw new PlatformError(error instanceof Error?error.message:"Invalid answers.");}

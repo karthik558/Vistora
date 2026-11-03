@@ -293,9 +293,9 @@ export default function OperationsPage({
           ) : section === "forms" ? (
             <Forms />
           ) : section === "questionnaire" ? (
-            <QuestionnaireBuilder />
+            <QuestionnaireBuilder properties={data.properties} user={user} />
           ) : section === "qr-codes" ? (
-            <QrCodes properties={data.properties} />
+            <QrCodes properties={data.properties} propertyId={selectedProperty} onPropertyChange={setSelectedProperties} />
           ) : section === "reports" ? (
             <Reports data={data} selectedProperty={selectedProperty} dateFilter={dateFilter} />
           ) : (
@@ -1435,36 +1435,46 @@ function exportToExcelCsv(filename: string, headers: string[], rows: (string | n
   URL.revokeObjectURL(url);
 }
 
-function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
+function QrCodes({ properties = [], propertyId, onPropertyChange }: { properties?: PropertyRow[]; propertyId: string; onPropertyChange: (id: string) => void }) {
   const origin = useBrowserOrigin();
   const [qrType, setQrType] = useState<"room" | "dining" | "spa" | "reception" | "general">("room");
   const [identifier, setIdentifier] = useState("Room 302");
   const [label, setLabel] = useState("In-Room Concierge Card");
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(properties[0]?.id || "");
-  const [signedPath, setSignedPath] = useState("");
+  const selectedPropertyId = properties.some(property => property.id === propertyId) ? propertyId : properties[0]?.id || "";
+  const [feedbackUrl, setFeedbackUrl] = useState("");
   const [linkError, setLinkError] = useState("");
+  const [guestFormName, setGuestFormName] = useState("Loading guest questionnaire…");
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [showPrintModal, setShowPrintModal] = useState(false);
 
   const selectedProp = properties.find((p) => p.id === selectedPropertyId);
 
+  useEffect(() => {
+    const controller=new AbortController();setGuestFormName("Loading guest questionnaire…");
+    if(selectedPropertyId)fetch("/api/questionnaires?"+new URLSearchParams({propertyId:selectedPropertyId}),{signal:controller.signal,cache:"no-store"})
+      .then(async response=>{const json=await response.json();if(!response.ok||!json.success)throw new Error();return json;})
+      .then(json=>{if(!controller.signal.aborted)setGuestFormName(json.questionnaires.find((form:any)=>form.is_default)?.name || "Existing / shared questions");})
+      .catch(()=>{if(!controller.signal.aborted)setGuestFormName("Questionnaire setup required");});
+    return()=>controller.abort();
+  },[selectedPropertyId]);
+
   // Generate the property binding on the server; URL parameters are not authorization.
   useEffect(() => {
     const controller = new AbortController();
-    setSignedPath(""); setLinkError("");
+    setFeedbackUrl(""); setLinkError("");
     if (!selectedPropertyId) return;
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch("/api/feedback-links", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ propertyId: selectedPropertyId, room: identifier.trim(), department: qrType === "spa" ? "Spa & Wellness" : qrType === "dining" ? "Food & Beverage" : "Front Desk", demo: false }) });
         const json = await response.json();
         if (!response.ok || !json.success) throw new Error(json.error || "Could not generate a secure feedback link.");
-        if (!controller.signal.aborted) setSignedPath(json.path);
+        if (!controller.signal.aborted) setFeedbackUrl(json.url);
       } catch (error) { if (!controller.signal.aborted) setLinkError((error as Error).message); }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [selectedPropertyId, identifier, qrType]);
-  const url = signedPath && origin ? origin + signedPath : "";
+  const url = feedbackUrl && origin ? feedbackUrl : "";
 
   useEffect(() => {
     if (!origin) return;
@@ -1569,6 +1579,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
                 <button
                   key={item.id}
                   type="button"
+                  aria-pressed={qrType === item.id}
                   onClick={() => {
                     setQrType(item.id as any);
                     setIdentifier(item.defaultId);
@@ -1577,8 +1588,8 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
                   style={{
                     padding: "10px 8px",
                     borderRadius: "6px",
-                    border: qrType === item.id ? "2px solid var(--ink)" : "1px solid var(--line)",
-                    background: qrType === item.id ? "var(--canvas-alt)" : "var(--panel)",
+                    border: "none",
+                    background: "transparent",
                     color: "var(--ink)",
                     fontSize: "11px",
                     fontWeight: qrType === item.id ? 700 : 500,
@@ -1626,7 +1637,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             </label>
             <CustomSelect
               value={selectedPropertyId}
-              onChange={(val) => setSelectedPropertyId(val)}
+              onChange={onPropertyChange}
               placeholder="Select property"
               options={properties.map((p) => ({
                 value: p.id,
@@ -1636,6 +1647,7 @@ function QrCodes({ properties = [] }: { properties?: PropertyRow[] }) {
             />
           </div>
 
+          <p style={{fontSize:12,color:"var(--muted)",marginBottom:16}}>Guest questionnaire: <strong>{guestFormName}</strong>. <Link href="/dashboard/questionnaire">Edit questions and design</Link></p>
           {/* Generated URL Box */}
           <div style={{ marginBottom: "20px" }}>
             <label className="field-label" style={{ display: "block", marginBottom: "6px" }}>

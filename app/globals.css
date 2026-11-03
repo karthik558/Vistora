@@ -3798,21 +3798,21 @@ html[data-theme="dark"] .brand-logo-light,
 .guest-shell .submit-button:disabled,
 [data-theme="dark"] .guest-shell .button-dark.submit-button,
 [data-theme="dark"] .guest-shell .button-dark.submit-button:disabled {
-  background: #254230 !important;
-  border-color: #1c3326 !important;
-  color: #ffffff !important;
+  background: var(--guest-accent, #254230) !important;
+  border-color: var(--guest-accent, #1c3326) !important;
+  color: var(--guest-accent-ink, #ffffff) !important;
   opacity: 1;
   box-shadow: 0 8px 18px rgba(31, 79, 59, 0.18);
 }
 .guest-shell .submit-button:disabled { opacity: 0.72; cursor: not-allowed; }
 .guest-shell .submit-button span,
 [data-theme="dark"] .guest-shell .submit-button,
-[data-theme="dark"] .guest-shell .submit-button span { color: #ffffff !important; }
+[data-theme="dark"] .guest-shell .submit-button span { color: var(--guest-accent-ink, #ffffff) !important; }
 .guest-shell .submit-button:not(:disabled):hover,
 [data-theme="dark"] .guest-shell .button-dark.submit-button:not(:disabled):hover {
-  background: #1a3326 !important;
-  border-color: #1a3326 !important;
-  color: #ffffff !important;
+  background: var(--guest-accent, #1a3326) !important;
+  border-color: var(--guest-accent, #1a3326) !important;
+  color: var(--guest-accent-ink, #ffffff) !important;
 }
 [data-theme="dark"] .guest-shell .guest-card h1,
 [data-theme="dark"] .guest-shell .guest-card legend,

@@ -229,3 +229,14 @@ button:disabled{cursor:not-allowed}
 .app-shell .page-heading-actions { justify-content: flex-end; margin-left: auto; }
 .app-shell :is(.page-heading-actions, .guest-collection-filters, .invitation-filter-controls) > :is(.property-filter-container, .custom-datepicker-container) { flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .app-shell .property-filter-trigger .filter-label { max-width: 180px; }
+
+.questionnaire-settings { padding: 20px; margin-bottom: 20px; }
+.questionnaire-scope, .questionnaire-design { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.questionnaire-settings label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; min-width: 0; }
+.questionnaire-create { margin: 20px 0; }
+.questionnaire-create > div, .questionnaire-design-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.questionnaire-create input { flex: 1 1 200px; }
+.questionnaire-design-actions, .questionnaire-design > p { grid-column: 1 / -1; }
+.questionnaire-settings p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.questionnaire-design input[type="color"] { width: 64px; height: 40px; padding: 3px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
+@media(max-width:700px) { .questionnaire-scope, .questionnaire-design { grid-template-columns:minmax(0,1fr); } }

@@ -1,4 +1,5 @@
 "use client";
+import { contrastRatio } from "../lib/hospitality/config";
 import {multiChoices,toggleMultiChoice} from "../lib/feedbackAnswers";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -89,17 +90,7 @@ export default function FeedbackForm({ publicToken = "" }: { publicToken?: strin
     return ()=>controller.abort();
   },[selectedPropertyId,publicToken,questionsRetry]);
 
-  const activeQuestions = questions.filter((q) => {
-    if (department === "Housekeeping") {
-      // Keep housekeeping simple and focused on cleanliness / room quality
-      const lower = q.question_text.toLowerCase();
-      if (lower.includes("check-in") || lower.includes("arrival") || lower.includes("valet") || lower.includes("dining")) {
-        return false;
-      }
-    }
-    if (!q.department) return true;
-    return q.department === department;
-  });
+  const activeQuestions = questions.filter(q => !q.department || q.department === department);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -225,7 +216,7 @@ export default function FeedbackForm({ publicToken = "" }: { publicToken?: strin
   }
 
   return (
-    <main className="guest-shell">
+    <main className="guest-shell" style={stay?.accentColor ? { "--guest-accent": stay.accentColor, "--guest-accent-ink": contrastRatio(stay.accentColor,"#ffffff") >= 4.5 ? "#ffffff" : "#111827" } as React.CSSProperties : undefined}>
       <div className="guest-card">
         <div className="guest-top">
           <Link href="/" title="Vistora Home" style={{ display: "inline-flex", alignItems: "center" }}>
@@ -285,9 +276,9 @@ export default function FeedbackForm({ publicToken = "" }: { publicToken?: strin
           </div>
         )}
 
-        <h1>How did we make<br /><em>you feel?</em></h1>
+        <h1>{stay?.questionnaireTitle || <>How did we make<br /><em>you feel?</em></>}</h1>
         <p className="guest-intro">
-          Your perspective helps our hospitality team tailor every arrival.
+          {stay?.introduction ?? "Your perspective helps our hospitality team tailor every arrival."}
         </p>
 
         <form onSubmit={handleSubmit}>

@@ -205,7 +205,7 @@ test("Public feedback rejects invalid scores and missing required answers before
  const original=db.serviceDb;
  const {createPropertyFeedbackToken}=require("../lib/feedback/public-links.ts");
  const token=createPropertyFeedbackToken({propertyId:"hotel",room:"",department:"",demo:false});
- const client={from(table){const q={select(){return q;},eq(){return q;},or(){return q;},maybeSingle:async()=>({data:{id:'hotel',organization_id:'org'},error:null}),then(resolve){resolve({data:[{id:'required',question_type:'text',question_text:'Required QA',is_required:true}],error:null});}};return q;}};
+ const client={from(table){const q={select(){return q;},eq(){return q;},or(){return q;},order(){return q;},is(){return q;},maybeSingle:async()=>({data:{id:'hotel',organization_id:'org'},error:null}),then(resolve){resolve({data:[{id:'required',question_type:'text',question_text:'Required QA',is_required:true}],error:null});}};return q;}};
  db.serviceDb=()=>client;
  try{
   for(const rating of [0,6,2.5,'3']){const response=await route.POST(new NextRequest('http://localhost/api/feedback',{method:'POST',headers: {"Content-Type":"application/json"}, body: JSON.stringify({publicToken:token,propertyId:'hotel',department:'Front Desk',rating})}));assert.equal(response.status,400);assert.match((await response.json()).error,/Rating/);}

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Plus,
+  Pencil,
   Trash2,
   Check,
   X,
@@ -24,12 +26,17 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CustomSelect from "./CustomSelect";
+import type { PropertyRow } from "../types/experience";
+import type { WorkspaceUser } from "./Dashboard";
+import type { GuestQuestionnaire } from "../lib/feedback/questionnaires";
+import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
 import { ConfirmDrawer } from "./ConfirmDrawer";
 import { TableLoadingRows } from "./TableLoadingRows";
 
 export interface QuestionData {
   id: string;
   property_id?: string | null;
+  questionnaire_id?: string | null;
   question_text: string;
   question_type:
     | "choice"
@@ -227,7 +234,23 @@ export const QUESTIONNAIRE_TEMPLATES = [
   },
 ];
 
-export default function QuestionnaireBuilder() {
+export default function QuestionnaireBuilder({ properties, user }: { properties: PropertyRow[]; user: WorkspaceUser | null }) {
+  const allowed = user?.isOrganizationAdmin ? null : user?.propertyIds?.length ? user.propertyIds : user?.propertyId ? [user.propertyId] : [];
+  const availableProperties = allowed === null ? properties : properties.filter(property => allowed.includes(property.id));
+  const { singleSelectedId, setSelectedIds } = useSharedPropertyFilter(allowed);
+  const propertyId = singleSelectedId === "all" ? availableProperties[0]?.id || "" : singleSelectedId;
+  const [questionnaires, setQuestionnaires] = useState<GuestQuestionnaire[]>([]);
+  const [questionnaireId, setQuestionnaireId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formTitle, setFormTitle] = useState("");
+  const [formIntroduction, setFormIntroduction] = useState("");
+  const [formColor, setFormColor] = useState("#34553e");
+  const [savingForm, setSavingForm] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<QuestionData | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const selectedForm = questionnaires.find(form => form.id === questionnaireId);
+
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -254,24 +277,56 @@ export default function QuestionnaireBuilder() {
     Record<string, { questionText?: string; options?: string[] }>
   >({});
 
-  async function loadQuestions() {
+  async function loadQuestions(signal?: AbortSignal) {
+    if (!propertyId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/questions?all=true", { cache: "no-store" });
+      const params = new URLSearchParams({ all:"true", propertyId, ...(questionnaireId ? { questionnaireId } : {}) });
+      const res = await fetch("/api/questions?" + params, { cache:"no-store", signal });
       const data = await res.json();
-      if (data.success && data.questions) {
-        setQuestions(data.questions);
-      }
-    } catch {
-      setError("Failed to load questionnaire questions.");
-    } finally {
-      setLoading(false);
-    }
+      if (!res.ok || !data.success) throw new Error(data.error || "Could not load questions.");
+      if (!signal?.aborted) setQuestions(data.questions || []);
+    } catch (error) { if (!signal?.aborted) setError((error as Error).message); }
+    finally { if (!signal?.aborted) setLoading(false); }
   }
-
   useEffect(() => {
-    loadQuestions();
-  }, []);
+    const controller = new AbortController();
+    setQuestionnaireId(""); setQuestionnaires([]); setQuestions([]); setError(null);
+    if (propertyId) fetch("/api/questionnaires?" + new URLSearchParams({ propertyId }), { signal:controller.signal, cache:"no-store" })
+      .then(async response => { const data=await response.json(); if(!response.ok || !data.success) throw new Error(data.error || "Could not load questionnaires."); return data; })
+      .then(data => { if(!controller.signal.aborted) { setQuestionnaires(data.questionnaires); setQuestionnaireId(data.questionnaires.find((form:GuestQuestionnaire)=>form.is_default)?.id || ""); } })
+      .catch(error => { if(!controller.signal.aborted) setError(error.message); });
+    return () => controller.abort();
+  }, [propertyId]);
+  useEffect(() => { const controller=new AbortController(); void loadQuestions(controller.signal); return()=>controller.abort(); }, [propertyId, questionnaireId]);
+  useEffect(() => { setFormName(selectedForm?.name || "");setFormTitle(selectedForm?.title || "");setFormIntroduction(selectedForm?.introduction || "");setFormColor(selectedForm?.accent_color || "#34553e"); }, [selectedForm]);
+  useEffect(() => {
+    if(!showAddModal)return;
+    const previous=document.activeElement as HTMLElement|null;
+    editorRef.current?.querySelector<HTMLInputElement>("#q-text")?.focus();
+    return()=>previous?.focus();
+  },[showAddModal]);
+
+  async function createQuestionnaire(event: React.FormEvent) {
+    event.preventDefault(); if(!propertyId || !newName.trim())return;
+    setSavingForm(true);setError(null);
+    try {
+      const response=await fetch("/api/questionnaires",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({propertyId,name:newName.trim()})});
+      const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||"Could not create questionnaire.");
+      setQuestionnaires(previous=>[...previous,data.questionnaire]);setQuestionnaireId(data.questionnaire.id);setNewName("");setSuccess("Questionnaire created. Add questions, then choose Use for guest links when ready.");
+    }catch(error){setError((error as Error).message);}finally{setSavingForm(false);}
+  }
+  async function saveQuestionnaire(useForGuests=false) {
+    if(!selectedForm)return;setSavingForm(true);setError(null);
+    try{
+      const response=await fetch("/api/questionnaires",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:selectedForm.id,name:formName,title:formTitle,introduction:formIntroduction,accentColor:formColor,...(useForGuests?{isDefault:true}:{})})});
+      const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||"Could not save questionnaire.");
+      setQuestionnaires(previous=>previous.map(form=>form.id===data.questionnaire.id?data.questionnaire:useForGuests?{...form,is_default:false}:form));setSuccess(useForGuests?"This property’s QR codes and feedback links now use this questionnaire.":"Questionnaire design saved.");
+    }catch(error){setError((error as Error).message);}finally{setSavingForm(false);}
+  }
+  function openQuestionEditor(question: QuestionData | null) {
+    setEditingQuestion(question);setQuestionText(question?.question_text || "");setQuestionType(question?.question_type || "choice");setOptionsStr(question?.options?.join(", ") || "");setIsRequired(question?.is_required || false);setTranslationsMap(question?.translations || {});setTranslationText(question?.translations?.th?.questionText || "");setTranslationOptionsStr(question?.translations?.th?.options?.join(", ") || "");setActiveTranslationLang("th");setModalTab("basics");setError(null);setSuccess(null);setShowAddModal(true);
+  }
 
   function handleSaveCurrentTranslationDraft() {
     if (!translationText.trim() && !translationOptionsStr.trim()) return;
@@ -354,9 +409,10 @@ export default function QuestionnaireBuilder() {
       }
 
       const res = await fetch("/api/questions", {
-        method: "POST",
+        method: editingQuestion ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(editingQuestion ? { id: editingQuestion.id } : { propertyId, questionnaireId: questionnaireId || null }),
           questionText: questionText.trim(),
           questionType,
           options,
@@ -370,7 +426,7 @@ export default function QuestionnaireBuilder() {
         throw new Error(data.error || "Failed to add question.");
       }
 
-      setSuccess(`Question "${questionText.trim()}" added successfully.`);
+      setSuccess(`Question "${questionText.trim()}" ${editingQuestion ? "updated" : "added"}.`);
       setShowAddModal(false);
       setQuestionText("");
       setOptionsStr("Seamless & prompt, Standard / acceptable, Delayed");
@@ -399,6 +455,9 @@ export default function QuestionnaireBuilder() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            propertyId,
+            questionnaireId: questionnaireId || null,
+            displayOrder: questions.length + addedCount,
             questionText: q.questionText,
             questionType: q.questionType,
             options: q.options,
@@ -406,9 +465,8 @@ export default function QuestionnaireBuilder() {
           }),
         });
         const data = await res.json();
-        if (data.success) {
-          addedCount++;
-        }
+        if (!res.ok || !data.success) throw new Error(data.error || "Could not apply all template questions. Saved questions are shown below.");
+        addedCount++;
       }
 
       setSuccess(`Template "${template.title}" applied! ${addedCount} questions added to your live questionnaire.`);
@@ -416,6 +474,7 @@ export default function QuestionnaireBuilder() {
       await loadQuestions();
     } catch (err: any) {
       setError(err.message || "Failed to apply questionnaire template.");
+      await loadQuestions();
     } finally {
       setApplyingTemplate(false);
     }
@@ -469,6 +528,21 @@ export default function QuestionnaireBuilder() {
 
   return (
     <div>
+      <section className="panel questionnaire-settings">
+        <div className="questionnaire-scope">
+          <label>Property<CustomSelect ariaLabel="Questionnaire property" value={propertyId} disabled={submitting || applyingTemplate || savingForm} onChange={setSelectedIds} options={availableProperties.map(property=>({value:property.id,label:`${property.name} (${property.code})`}))}/></label>
+          <label>Questionnaire<CustomSelect ariaLabel="Saved questionnaire" value={questionnaireId} disabled={submitting || applyingTemplate || savingForm} onChange={setQuestionnaireId} options={[{value:"",label:"Existing / shared questions"},...questionnaires.map(form=>({value:form.id,label:form.name+(form.is_default?" · Used by guest links":"")}))]}/></label>
+        </div>
+        <form className="questionnaire-create" onSubmit={createQuestionnaire}><label htmlFor="new-questionnaire-name">Create another questionnaire</label><div><input id="new-questionnaire-name" className="auth-input" maxLength={100} required value={newName} onChange={event=>setNewName(event.target.value)} placeholder="e.g. Dining experience"/><button className="button button-outline" disabled={savingForm || !propertyId || !newName.trim()}>Create questionnaire</button></div></form>
+        {selectedForm ? <div className="questionnaire-design">
+          <label>Name<input className="auth-input" maxLength={100} value={formName} onChange={event=>setFormName(event.target.value)}/></label>
+          <label>Guest form title<input className="auth-input" maxLength={160} value={formTitle} onChange={event=>setFormTitle(event.target.value)}/></label>
+          <label>Introduction<textarea className="auth-input" maxLength={500} value={formIntroduction} onChange={event=>setFormIntroduction(event.target.value)}/></label>
+          <label>Accent color<input type="color" value={formColor} onChange={event=>setFormColor(event.target.value)}/></label>
+          <div className="questionnaire-design-actions"><button type="button" className="button button-outline" disabled={savingForm || !formName.trim() || !formTitle.trim()} onClick={()=>void saveQuestionnaire()}>Save questionnaire</button><button type="button" className="button button-dark" disabled={savingForm || !formName.trim() || !formTitle.trim()} onClick={()=>void saveQuestionnaire(true)}>{selectedForm.is_default?"Save guest form":"Use for guest links"}</button></div>
+          <p>{selectedForm.is_default?"This is the guest form for this property. Saved question edits appear on its existing links.":"This is a separate questionnaire. Choose Use for guest links to publish it for this property."}</p>
+        </div> : <p>Existing questions remain available. Create a named questionnaire for this property to save a separate set of questions and design.</p>}
+      </section>
       {/* SYNC & QR BANNER */}
       <div
         className="panel"
@@ -502,21 +576,22 @@ export default function QuestionnaireBuilder() {
           </div>
           <div>
             <strong style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>
-              Live Synchronization with Public Guest Forms & QR Studio
+              Guest forms and QR codes
             </strong>
             <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "var(--muted)", lineHeight: "1.4" }}>
-              All questionnaire items (NPS, 5-Star, Choice pills, Emojis, Stories) configured here immediately appear when guests scan their in-room or dining QR codes.
+              Choose the guest questionnaire for each property. Its QR codes use the saved questions and design.
             </p>
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <a
-            href="/dashboard/operations"
+          <Link
+            href="/dashboard/overview?section=qr-codes"
+            prefetch={false}
             className="button button-outline compact"
             style={{ fontSize: "11px", whiteSpace: "nowrap" }}
           >
             Open QR Studio →
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -556,9 +631,7 @@ export default function QuestionnaireBuilder() {
             type="button"
             className="button button-dark compact"
             onClick={() => {
-              setError(null);
-              setSuccess(null);
-              setShowAddModal(true);
+              openQuestionEditor(null);
             }}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
           >
@@ -652,6 +725,7 @@ export default function QuestionnaireBuilder() {
                       </td>
                       <td>
                         <strong style={{ fontSize: "13px", color: "var(--ink)" }}>{q.question_text}</strong>
+                        {!q.property_id && <small style={{display:"block",fontSize:11,color:"var(--muted)"}}>Shared question · used by properties without a saved guest form</small>}
                       </td>
                       <td>
                         <span
@@ -830,6 +904,7 @@ export default function QuestionnaireBuilder() {
                         </button>
                       </td>
                       <td style={{ textAlign: "right" }}>
+                        <button type="button" className="button button-outline compact" aria-label={`Edit question: ${q.question_text}`} disabled={!q.property_id && !user?.isOrganizationAdmin} onClick={()=>openQuestionEditor(q)}><Pencil size={12}/>Edit</button>{" "}
                         <button
                           type="button"
                           onClick={() => setPendingDelete({ id: q.id, text: q.question_text })}
@@ -864,6 +939,16 @@ export default function QuestionnaireBuilder() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               className="modal-dialog-luxury"
+              ref={editorRef}
+              role="dialog" aria-modal="true" aria-label={editingQuestion ? "Edit question" : "Add custom component"}
+              onKeyDown={event=>{
+                if(event.key==="Escape"&&!submitting)setShowAddModal(false);
+                if(event.key==="Tab"){
+                  const items=editorRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]');
+                  if(!items?.length)return;const first=items[0],last=items[items.length-1];
+                  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+                }
+              }}
               style={{
                 background: "var(--panel)",
                 border: "1px solid var(--line-strong)",
@@ -881,7 +966,7 @@ export default function QuestionnaireBuilder() {
               >
                 <div>
                   <p className="eyebrow" style={{ color: "var(--sage)" }}>Form Builder & Touchpoint Studio</p>
-                  <h2 style={{ fontSize: "18px", margin: "2px 0 0", color: "var(--ink)" }}>Add custom component</h2>
+                  <h2 style={{ fontSize: "18px", margin: "2px 0 0", color: "var(--ink)" }}>{editingQuestion ? "Edit question" : "Add custom component"}</h2>
                 </div>
                 <button
                   type="button"

@@ -29,10 +29,10 @@ function client() {
     guest_invitations: [{ id: 'invite', token_hash: hashToken(inviteToken), organization_id: 'org-a', property_id: propA, status: 'pending', expires_at: new Date(Date.now() + 60000).toISOString(), guest_name: 'Invited guest', room_number: '102' }, { id: 'expired', token_hash: hashToken(expiredToken), property_id: propA, status: 'pending', expires_at: 'invalid' }],
     feedback_questions: [{ id: 'q-a', organization_id: 'org-a', property_id: propA, is_active: true, question_type: 'text', question_text: 'A question', is_required: false }, { id: 'q-b', organization_id: 'org-b', property_id: propB, is_active: true, question_text: 'Private B question' }],
   };
-  return { calls, from(table) {
-    calls.push(table); const filters = [];
-    const values = () => (tables[table] || []).filter(row => filters.every(([key, value]) => row[key] === value));
-    const q = { select() { return q; }, eq(key, value) { filters.push([key, value]); return q; }, or() { return q; }, order() { return q; },
+  return { calls, tables, from(table) {
+    calls.push(table); const filters = []; let inserted = null;
+    const values = () => (tables[table] || []).filter(row => filters.every(([key, value]) => (row[key] ?? null) === value));
+    const q = { insert(value) { inserted = { id: 'new-link', is_active: true, ...value }; (tables[table] ||= []).push(inserted); return q; }, select() { return q; }, is(key, value) { filters.push([key, value]); return q; }, eq(key, value) { filters.push([key, value]); return q; }, or() { return q; }, order() { return q; },
       async maybeSingle() { return { data: values()[0] || null, error: null }; }, async single() { return { data: values()[0] || null, error: null }; },
       then(resolve) { resolve({ data: values(), error: null }); } };
     return q;
@@ -76,14 +76,14 @@ test('Public submission rejects missing, forged, wrong-property and preview toke
 });
 
 test('Only authorized generators can mint property links, and staff cannot select another property', async () => {
-  const mock = client(), original = db.sessionDb; db.sessionDb = () => mock;
+  const mock = client(), original = db.sessionDb, originalService = db.serviceDb; db.sessionDb = () => mock; db.serviceDb = () => mock;
   const generate = (user, propertyId) => db.workspaceContext.run({ user, client: mock }, () => links.POST(post('/api/feedback-links', { propertyId })));
   try {
     assert.equal((await generate(staff, propA)).status, 200);
     assert.equal((await generate(staff, propB)).status, 403);
     assert.equal((await generate({ ...staff, rights: ['module:feedback'] }, propA)).status, 403);
     assert.equal((await generate({ ...staff, rights: ['manage_questionnaire', 'module:hospitality', 'module_access:configured'] }, propA)).status, 403);
-  } finally { db.sessionDb = original; }
+  } finally { db.sessionDb = original; db.serviceDb = originalService; }
 });
 
 test('Every protected API method denies missing sessions and forged display cookies before storage', async () => {
@@ -144,4 +144,44 @@ test('Public submissions and authentication attempts are limited even from loopb
     assert.equal(getClientIp(new Headers({ 'x-real-ip': '198.51.100.19', 'x-forwarded-for': '198.51.100.18' })), '198.51.100.19');
     assert.equal(getClientIp(new Headers({ 'x-real-ip': 'x'.repeat(5000) })), 'unknown');
   } finally { if (original === undefined) delete process.env.TRUSTED_CLIENT_IP_HEADER; else process.env.TRUSTED_CLIENT_IP_HEADER = original; }
+});
+
+test('Short property links retain tenant binding and load only the selected property questionnaire and design', async () => {
+ const { createShortFeedbackLink }=require('../lib/feedback/public-links.ts');
+ const mock=client(),original=db.serviceDb;db.serviceDb=()=>mock;
+ const formA={id:'form-a',property_id:propA,organization_id:'org-a',name:'Dining',title:'How was your meal?',introduction:'Tell our restaurant team.',accent_color:'#334455',is_default:true};
+ mock.tables.feedback_questionnaires=[formA,{...formA,id:'form-b',property_id:propB,organization_id:'org-b',title:'Other tenant form'}];
+ mock.tables.feedback_questions.push({id:'custom-a',questionnaire_id:'form-a',property_id:propA,organization_id:'org-a',is_active:true,question_type:'text',question_text:'Was the meal good?',is_required:false});
+ try{
+  const token=await createShortFeedbackLink(mock,mock.tables.properties[0],{room:'Table 4',department:'Food & Beverage',demo:false});
+  assert.match(token,/^a-[A-Za-z0-9_-]{24}$/);assert.ok(token.length<45);
+  assert.equal(mock.tables.guest_feedback_links[0].token_hash,hashToken(token));assert.ok(!JSON.stringify(mock.tables.guest_feedback_links).includes(token));
+  const resolved=await resolvePublicFeedbackLink(token);
+  assert.equal(resolved.property.id,propA);assert.equal(resolved.details.questionnaireTitle,formA.title);assert.equal(resolved.details.accentColor,formA.accent_color);
+  const response=await questions.GET(new NextRequest('http://localhost/api/questions?public=true&token='+token));
+  assert.deepEqual((await response.json()).questions.map(q=>q.id),['custom-a']);
+  await assert.rejects(resolvePublicFeedbackLink('b-'+token.slice(2)),error=>error.status===404);
+  mock.tables.guest_feedback_links[0].is_active=false;await assert.rejects(resolvePublicFeedbackLink(token),error=>error.status===404);
+ }finally{db.serviceDb=original;}
+});
+
+test('Question edits validate type, options and translations without accepting property changes', () => {
+ const {questionFields}=require('../lib/feedback/question-fields.ts');
+ const fields=questionFields({questionText:' Edited question ',questionType:'choice',options:['Yes','No'],isRequired:true,translations:{th:{questionText:'Translated',options:['One','Two']}},propertyId:propB,questionnaireId:'evil'},true);
+ assert.equal(fields.question_text,'Edited question');assert.equal(fields.question_type,'choice');assert.deepEqual(fields.options,['Yes','No']);assert.equal(fields.is_required,true);assert.equal(fields.translations.th.questionText,'Translated');
+ assert.ok(!('property_id' in fields));assert.ok(!('questionnaire_id' in fields));
+ assert.throws(()=>questionFields({questionType:'invalid'},true));assert.throws(()=>questionFields({options:[null]},true));assert.throws(()=>questionFields({translations:{th:{options:'invalid'}}},true));
+ assert.equal(questionFields({questionText:'Text',questionType:'long_text',options:[]},false).question_type,'long_text');
+});
+
+test('Published links use the canonical site or actual live origin, never a stale localhost setting', () => {
+ const {appOrigin}=require('../lib/platform/appOrigin.ts');
+ const prior={APP_URL:process.env.APP_URL,NEXT_PUBLIC_APP_URL:process.env.NEXT_PUBLIC_APP_URL,NODE_ENV:process.env.NODE_ENV};
+ try{
+  process.env.NODE_ENV='production';process.env.APP_URL='http://localhost:3000';delete process.env.NEXT_PUBLIC_APP_URL;
+  assert.equal(appOrigin('https://vistora.example'),'https://vistora.example');
+  process.env.APP_URL='https://guests.vistora.example/path';assert.equal(appOrigin('https://vistora.example'),'https://guests.vistora.example');
+  process.env.APP_URL='http://localhost:3000';assert.throws(()=>appOrigin('http://localhost:3000'));
+  process.env.NODE_ENV='development';assert.equal(appOrigin('http://localhost:3000'),'http://localhost:3000');
+ }finally{for(const [key,value]of Object.entries(prior)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });

@@ -33,7 +33,7 @@ function client() {
      select(columns) { calls.at(-1).columns = columns; return q; },
      eq(key, value) { filters.push([key, value]); return q; },
      in(key, value) { filters.push([key, value]); return q; },
-     order() { return q; }, or() { return q; },
+     order() { return q; }, or() { return q; }, is() { return q; },
      // Deliberately lower than the API page size to exercise complete pagination.
      async range(start) { return { data: data().slice(start, start + 1), error: null }; },
      async maybeSingle() { return { data: data()[0] || null, error: null }; },

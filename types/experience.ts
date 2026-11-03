@@ -114,6 +114,9 @@ export interface SubmitFeedbackPayload {
 }
 
 export interface GuestStayDetails {
+  questionnaireTitle?: string;
+  introduction?: string;
+  accentColor?: string;
   propertyCode?: string;
   isStayLink?: boolean;
   demo?: boolean;

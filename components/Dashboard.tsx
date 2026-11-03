@@ -93,7 +93,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard/overview", group: "Overview", icon: LayoutDashboard, requiredRight: "view_feedback" },
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "Reports", href: "/dashboard/reports", group: "Overview", icon: FileSpreadsheet, requiredRight: "export_reports" },
-  { label: "Feedback", href: "/dashboard/feedback", group: "Guest experience", icon: Check, requiredRight: "view_feedback" },
+  { label: "Feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
   { label: "Actions", href: "/dashboard/follow-ups", group: "Guest experience", icon: History, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
   { label: "Collect feedback", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },

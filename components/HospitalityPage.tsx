@@ -235,7 +235,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   const response=await fetch("/api/feedback-links",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({propertyId,room})});
   const json=await response.json();
   if(!response.ok||!json.success)throw new Error(json.error||"Could not generate feedback link.");
-  return window.location.origin+json.path;
+  return json.url;
  }
  function openFeedbackForStay(stay:any){
   try{window.open(getStayFeedbackUrl(stay),"_blank","noopener,noreferrer");}catch(error){setError((error as Error).message);}
