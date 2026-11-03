@@ -21,7 +21,6 @@ import {
   Smartphone,
   MessageSquare,
   Link as LinkIcon,
-  Building2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppShell, WorkspaceUser, getClientUser, fetchLatestSession } from "./Dashboard";
@@ -432,37 +431,17 @@ export default function GuestInvitationsPage({
               </div>
             </div>
 
-            <div className="feedback-date-range"><span>Date range</span><CustomDatePicker label="Invitation date range" value={dateRange} onChange={setDateRange} floating/></div>
-            <button type="button" className="button button-outline filter-reset" onClick={() => { setDateRange({ preset: "all", startDate: null, endDate: null }); setSearch(""); setStatusFilter("all"); setSelectedProperties("all"); }}>Clear filters</button>
-            {/* Property Scoping in Filter Bar */}
-            {allowedProperties.length > 1 ? (
-              <div style={{ minWidth: "200px" }}>
-                <PropertyFilter
-                  properties={allowedProperties}
-                  selectedId={selectedPropertyFilter}
-                  selectedIds={selectedProperties}
-                  onChange={(_id, ids) => setSelectedProperties(ids || _id)}
-                  isGlobalAdmin={user?.isOrganizationAdmin === true}
-                />
-              </div>
-            ) : allowedProperties.length === 1 ? (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "6px 12px",
-                  background: "var(--canvas-alt)",
-                  borderRadius: "6px",
-                  border: "1px solid var(--line)",
-                  fontSize: "12px",
-                  color: "var(--ink)",
-                }}
-              >
-                <Building2 size={13} style={{ color: "var(--gold)" }} />
-                <span>{allowedProperties[0].name}</span>
-              </div>
-            ) : null}
+            <div className="invitation-filter-controls">
+              <PropertyFilter
+                properties={allowedProperties}
+                selectedId={selectedPropertyFilter}
+                selectedIds={selectedProperties}
+                onChange={(_id, ids) => setSelectedProperties(ids || _id)}
+                isGlobalAdmin={user?.isOrganizationAdmin === true}
+              />
+              <CustomDatePicker label="Invitation date range" value={dateRange} onChange={setDateRange} floating/>
+              <button type="button" className="button button-outline filter-reset" onClick={() => { setDateRange({ preset: "all", startDate: null, endDate: null }); setSearch(""); setStatusFilter("all"); setSelectedProperties("all"); }}>Clear filters</button>
+            </div>
           </div>
         </div>
 

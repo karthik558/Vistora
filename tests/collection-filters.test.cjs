@@ -54,11 +54,11 @@ test('Property menu stays within its card at either edge and on narrow screens',
     const Filter = load('components/PropertyFilter.tsx', {
       react: { useState: initial => [stateCount++ === 0 ? true : initial, value => { if (typeof value === 'object') style = value; }], useRef: () => ({ current: trigger }), useEffect: fn => effects.push(fn) },
       'lucide-react': icons, 'framer-motion': { motion: { div: 'div' }, AnimatePresence: 'div' },
-    }, { window: { innerWidth: viewport, addEventListener() {}, removeEventListener() {} }, document: { addEventListener() {}, removeEventListener() {} } }).default;
+    }, { window: { getComputedStyle: () => ({ paddingLeft: "20px", paddingRight: "20px" }), innerWidth: viewport, addEventListener() {}, removeEventListener() {} }, document: { addEventListener() {}, removeEventListener() {} } }).default;
     Filter({ properties: [{ id: 'a', name: 'One' }, { id: 'b', name: 'Two' }], onChange() {} });
     effects.forEach(fn => fn());
     assert.ok(style, 'menu has a measured position');
-    assert.ok(anchorLeft + style.left >= cardLeft + 8);
-    assert.ok(anchorLeft + style.left + style.width <= Math.min(cardRight - 8, viewport - 8));
+    assert.ok(anchorLeft + style.left >= cardLeft + 28);
+    assert.ok(anchorLeft + style.left + style.width <= Math.min(cardRight - 28, viewport - 8));
   }
 });

@@ -31,9 +31,11 @@ export default function PropertyFilter({
       const trigger = containerRef.current;
       if (!trigger) return;
       const anchor = trigger.getBoundingClientRect();
-      const boundary = trigger.closest(".platform-card, .panel, .content-wrap")?.getBoundingClientRect();
-      const leftEdge = Math.max(8, (boundary?.left ?? 0) + 8);
-      const rightEdge = Math.min(window.innerWidth - 8, (boundary?.right ?? window.innerWidth) - 8);
+      const container = trigger.closest(".platform-card, .panel, .content-wrap");
+      const boundary = container?.getBoundingClientRect();
+      const padding = container ? window.getComputedStyle(container) : null;
+      const leftEdge = Math.max(8, (boundary?.left ?? 0) + (parseFloat(padding?.paddingLeft || "0") || 0) + 8);
+      const rightEdge = Math.min(window.innerWidth - 8, (boundary?.right ?? window.innerWidth) - (parseFloat(padding?.paddingRight || "0") || 0) - 8);
       const width = Math.min(300, Math.max(0, rightEdge - leftEdge));
       const left = Math.max(leftEdge, Math.min(anchor.left, rightEdge - width));
       setPopoverStyle({ left: left - anchor.left, right: "auto", width, minWidth: 0, maxWidth: width });

@@ -88,8 +88,8 @@ export default function GuestDirectory({ user, properties, history }: {
         <button className="button button-outline compact" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw size={14}/>Refresh</button>
         <div className="guest-collection-filters">
           <div style={{width:190}}><WorkspaceSelect label="Feedback status" value={status} onChange={value => setStatus(value as CollectionStatus)} options={[{value:"pending",label:"Not taken"},{value:"missed",label:"Checkout · Missing"},{value:"reviewed",label:"Checkout · Reviewed"}]}/></div>
-          <div className="feedback-date-range"><span>Date range</span><CustomDatePicker label={dateLabel} value={dateRange} onChange={setDateRange} floating/></div>
           <PropertyFilter properties={allowed === null ? properties : properties.filter(property => allowed.includes(property.id))} selectedId={singleSelectedId} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)} isGlobalAdmin={user.isOrganizationAdmin === true}/>
+          <CustomDatePicker label={dateLabel} value={dateRange} onChange={setDateRange} floating/>
           <button type="button" className="button button-outline filter-reset" onClick={() => { setDateRange({ preset: "all", startDate: null, endDate: null }); setSelectedIds("all"); setSearch(""); }}>Clear filters</button>
         </div>
       </div>

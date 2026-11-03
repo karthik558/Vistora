@@ -227,11 +227,11 @@ export default function OperationsPage({
                     onChange={(_id, ids) => setSelectedProperties(ids || _id)}
                     isGlobalAdmin={isSuperAdminUser}
                   />
-                  <div className="feedback-date-range"><span>Date range</span><CustomDatePicker
+                  <CustomDatePicker
                     floating
                     value={dateFilter}
                     onChange={setDateFilter}
-                  /></div>
+                  />
                   {(section === "feedback" || section === "feedback-collected") && (
                     <button className="button button-outline filter-reset" onClick={() => { setDateFilter({ preset: "all", startDate: null, endDate: null }); setSelectedProperties("all"); setQuery(""); }}>Clear filters</button>
                   )}
@@ -772,7 +772,7 @@ function Directory({
 
       <div className="guest-collection-filters">
         <PropertyFilter properties={data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)}/>
-        <div className="feedback-date-range"><span>Date range</span><CustomDatePicker label="Feedback and invitation date range" value={activityRange} onChange={setActivityRange} floating/></div>
+        <CustomDatePicker label="Feedback and invitation date range" value={activityRange} onChange={setActivityRange} floating/>
         <button type="button" className="button button-outline filter-reset" onClick={() => { setActivityRange({ preset: "all", startDate: null, endDate: null }); setSelectedIds("all"); setQuery(""); setFilterTab("all"); }}>Clear filters</button>
       </div>
       <p>Dates filter when feedback was received or an invitation was created.</p>

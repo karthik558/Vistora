@@ -201,8 +201,8 @@ button:disabled{cursor:not-allowed}
 }
 
 /* Keep feedback filters readable when desktop toolbars wrap. */
-.app-shell .property-filter-container { min-width: 180px; max-width: 100%; flex-shrink: 0; }
-.app-shell .property-filter-trigger { width: 100%; min-height: 40px; }
+.app-shell .property-filter-container { min-width: 0; max-width: 100%; flex: 0 1 auto; }
+.app-shell .property-filter-trigger { min-height: 40px; max-width: 260px; }
 .app-shell .property-filter-trigger .filter-label { flex: 1; min-width: 0; text-align: left; }
 .app-shell .property-filter-trigger > svg { flex-shrink: 0; }
 .feedback-followup-summary { margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 6px; }
@@ -212,17 +212,20 @@ button:disabled{cursor:not-allowed}
   .app-shell .page-heading-actions .property-filter-container { min-width: 0; }
 }
 
-.guest-collection-toolbar, .guest-collection-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.guest-collection-toolbar, .guest-collection-filters, .invitation-filter-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+.guest-collection-filters, .invitation-filter-controls { justify-content: flex-end; margin-left: auto; }
 .guest-collection-toolbar { align-items: flex-end; margin-bottom: 18px; }
 .guest-collection-toolbar > label { flex: 1 1 200px; max-width: 300px; }
 .guest-collection-toolbar > .guest-collection-filters { margin-left: auto; }
-.feedback-date-range { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
-.feedback-date-range > span { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.feedback-date-range > .custom-datepicker-container { min-width: 180px; max-width: 100%; }
-.app-shell .guest-collection-filters .custom-datepicker-trigger { min-height: 40px; width: 100%; }
+.app-shell .guest-collection-filters .custom-datepicker-trigger { min-height: 40px; }
 .app-shell .button.filter-reset { min-height: 40px; padding: 9px 14px; font-size: 12px; color: var(--ink); background: var(--panel); border: 1px solid var(--line-strong); white-space: nowrap; flex-shrink: 0; }
 .app-shell .button.filter-reset:hover { background: var(--canvas-alt); border-color: var(--sage); }
 @media (max-width: 700px) {
   .guest-collection-toolbar > .guest-collection-filters { margin-left: 0; width: 100%; }
   .guest-collection-filters > * { max-width: 100%; }
 }
+
+/* Filter wrappers size to their controls; spacing belongs to the toolbar. */
+.app-shell .page-heading-actions { justify-content: flex-end; margin-left: auto; }
+.app-shell :is(.page-heading-actions, .guest-collection-filters, .invitation-filter-controls) > :is(.property-filter-container, .custom-datepicker-container) { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.app-shell .property-filter-trigger .filter-label { max-width: 180px; }

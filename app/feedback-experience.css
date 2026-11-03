@@ -111,7 +111,6 @@
 /* Feedback intelligence uses existing workspace surfaces and theme tokens. */
 .feedback-intelligence{padding-bottom:50px}
 .fi-eyebrow{font-size:10px;letter-spacing:1.7px;font-weight:700;color:#b2d2bd;margin:0 0 12px}
-.fi-toolbar{display:flex;flex-wrap:wrap;gap:12px}
 .fi-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:24px}
 .fi-summary article{position:relative;padding:22px;border:1px solid var(--line);border-radius:12px;background:var(--surface,#fff);display:flex;flex-direction:column;gap:8px}
 .fi-summary article>svg{position:absolute;right:20px;top:22px;color:var(--sage)}

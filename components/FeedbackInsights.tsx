@@ -48,7 +48,7 @@ export default function FeedbackInsights({ data, user }: { data: DashboardData; 
   const resolved = rows.filter(row => row.status === "resolved").length;
   return <div className="content-wrap feedback-intelligence">
     <DashboardPageHeading eyebrow="Guest experience operations" title="Actions" description="Prioritize guest contact requests and feedback that needs a response.">
-    <div className="fi-toolbar"><PropertyFilter properties={userAllowedPropIds ? data.properties.filter(p => userAllowedPropIds.includes(p.id)) : data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || [id])} isGlobalAdmin={isSuperAdminUser} /><CustomDatePicker value={date} onChange={setDate} /><button className="button button-outline" onClick={() => { setSelectedIds(["all"]); setDate({ preset: "all", startDate: null, endDate: null }); setView("all"); setQuery(""); }}>Reset filters</button></div>
+    <PropertyFilter properties={userAllowedPropIds ? data.properties.filter(p => userAllowedPropIds.includes(p.id)) : data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || [id])} isGlobalAdmin={isSuperAdminUser} /><CustomDatePicker value={date} onChange={setDate} /><button className="button button-outline filter-reset" onClick={() => { setSelectedIds(["all"]); setDate({ preset: "all", startDate: null, endDate: null }); setView("all"); setQuery(""); }}>Clear filters</button>
     </DashboardPageHeading>
     <div className="fi-summary">
       <article><MessageSquareText size={20} /><span>Feedback in this view</span><strong>{rows.length}</strong><small>Matches property, date and search</small></article>
