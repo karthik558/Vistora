@@ -93,6 +93,7 @@ const nav: readonly NavItemConfig[] = [
   { label: "Analytics", href: "/dashboard/analytics", group: "Overview", icon: BarChart3, requiredRight: "view_feedback" },
   { label: "Reports", href: "/dashboard/reports", group: "Overview", icon: FileSpreadsheet, requiredRight: "export_reports" },
   { label: "All feedback", href: "/dashboard/feedback", group: "Guest experience", icon: MessageSquare, requiredRight: "view_feedback" },
+  { label: "Follow-up queue", href: "/dashboard/follow-ups", group: "Guest experience", icon: History, requiredRight: "view_feedback" },
   { label: "Complaints & SLA", href: "/dashboard/complaints", group: "Guest experience", icon: AlertCircle, requiredRight: "manage_complaints" },
   { label: "Guest directory", href: "/dashboard/directory", group: "Guest experience", icon: Users, requiredRight: "view_feedback" },
   { label: "Guest invitations", href: "/dashboard/invitations", group: "Collection", icon: Send, requiredRight: "manage_questionnaire" },
@@ -378,7 +379,7 @@ function StandaloneAppShell({
 
     // Strict organizational role restrictions:
     if (isAnalyst) {
-      return ["Dashboard", "Analytics", "All feedback", "Workspace"].includes(item.label);
+      return ["Dashboard", "Analytics", "Follow-up queue", "All feedback", "Workspace"].includes(item.label);
     }
     if (isReport) {
       return ["Dashboard", "Reports", "Workspace"].includes(item.label);
@@ -545,7 +546,7 @@ function StandaloneAppShell({
                 (active && item.label.toLowerCase() === active.toLowerCase()) ||
                 ((item.label === "Complaints & SLA" || item.label === "Complaints") &&
                   (active?.toLowerCase().includes("complaint") || active?.toLowerCase().includes("sla") || pathname?.includes("/complaints"))) ||
-                (item.label === "All feedback" && (active?.toLowerCase().includes("feedback") || pathname?.includes("/feedback")));
+                (item.label === "All feedback" && (active === "All feedback" || pathname === "/dashboard/feedback"));
               return (
                 <Link
                   key={item.href}
@@ -1380,6 +1381,7 @@ export function FeedbackTable({
   searchQuery: propSearchQuery,
   onSearchChange,
   isDashboard = false,
+  onRecordUpdate,
 }: {
   feedback: FeedbackViewModel[];
   title?: string;
@@ -1387,6 +1389,7 @@ export function FeedbackTable({
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   isDashboard?: boolean;
+  onRecordUpdate?: (record: FeedbackViewModel) => void;
 }) {
   const router = useRouter();
   const [internalQuery, setInternalQuery] = useState("");
@@ -1641,6 +1644,7 @@ export function FeedbackTable({
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "Could not update that record.");
       const updated = json.data as FeedbackViewModel;
+      onRecordUpdate?.(updated);
       setRecords((prev) => prev.map((row) => (row.id === item.id ? { ...row, ...updated } : row)));
       setSelected((current) => (current?.id === item.id ? { ...current, ...updated } : current));
     } catch (err: any) {
@@ -2266,7 +2270,7 @@ export function FeedbackTable({
                 )}
               </div>
 
-              {userRole !== "visitor" && <CasePanel key={selected.id} id={selected.id} />}
+              {userRole !== "visitor" && <CasePanel key={selected.id} id={selected.id} onUpdate={() => router.refresh()} />}
               {/* Resolution Section (RBAC protected) */}
               <div className="drawer-resolution-section">
                 <h3 style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 }}>

@@ -88,9 +88,9 @@ html[data-theme="dark"] :is(.page-heading h1, .panel-heading h2, .panel-heading 
   .drawer-chip-value, .drawer-statement-text, .table-rating, .guest-cell strong) { color: var(--ink) !important; }
 
 html[data-theme="dark"] .button-dark {
-  background: #dde1e7 !important; border-color: #dde1e7 !important; color: #191c21 !important;
+  background: var(--workspace-sidebar, var(--brand-primary)) !important; border-color: var(--workspace-sidebar, var(--brand-primary)) !important; color: #fff !important;
 }
-html[data-theme="dark"] .button-dark:hover { background: #f0f2f5 !important; border-color: #f0f2f5 !important; }
+html[data-theme="dark"] .button-dark:hover { background: color-mix(in srgb, var(--workspace-sidebar, var(--brand-primary)) 88%, #000) !important; border-color: color-mix(in srgb, var(--workspace-sidebar, var(--brand-primary)) 88%, #000) !important; }
 html[data-theme="dark"] .button-dark :is(span, svg) { color: inherit !important; }
 html[data-theme="dark"] :is(.button-outline, .select-button, .panel-action,
   .custom-dropdown-trigger, .custom-datepicker-trigger, .property-filter-trigger,

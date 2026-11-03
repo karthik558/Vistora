@@ -1,99 +1,48 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import ThemeToggle from "../components/ThemeToggle";
-import { ArrowRight, CheckCircle2, MessageCircleMore, ChartNoAxesCombined, TimerReset, Building2 } from "lucide-react";
+import { ArrowRight, ArrowUpRight, MessageSquareText, ScanText, HeartHandshake, QrCode, ClipboardCheck, ShieldCheck, Check, Star } from "lucide-react";
+import FeedbackPreview from "../components/FeedbackPreview";
 
 export const dynamic = "force-dynamic";
+
+const capabilities = [
+  { icon: MessageSquareText, title: "One place for every voice", description: "Bring guest responses into a searchable inbox. Filter by property, date and rating to get straight to what matters." },
+  { icon: ScanText, title: "Find the recurring themes", description: "Explore cleanliness, comfort, service and more. See the actual comments behind each topic and rating." },
+  { icon: HeartHandshake, title: "Make every follow-up count", description: "Prioritize overdue feedback, contact requests and unacknowledged responses in a focused follow-up queue." },
+  { icon: QrCode, title: "Feedback, without the friction", description: "Collect responses with property QR codes, guest invitations and shareable feedback forms." },
+  { icon: ClipboardCheck, title: "Surveys that fit your stay", description: "Build your questionnaire around the guest experience, with ratings and the questions your team needs answered." },
+  { icon: ShieldCheck, title: "Clear ownership. Real progress.", description: "Assign concerns, track response deadlines and keep resolution notes so your team can close the loop." },
+];
 
 export default async function HomePage() {
   const cookieStore = await cookies();
   const userCookie = cookieStore.get("vistora-user")?.value;
   let isLoggedIn = false;
-
   if (userCookie) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(userCookie));
-      if (parsed?.email) isLoggedIn = true;
-    } catch {
-      if (userCookie.includes("@")) isLoggedIn = true;
-    }
+    try { isLoggedIn = !!JSON.parse(decodeURIComponent(userCookie))?.email; } catch { /* Display hint only; workspace routes verify the session. */ }
   }
-
-  return (
-    <main className="landing-shell">
-      <header className="landing-header">
-        <Link href="/" className="landing-logo" title="Vistora Home">
-          <Image src="/vistora_wordmark_green.webp" alt="Vistora" width={140} height={34} className="brand-logo-light" priority />
-          <Image src="/vistora_wordmark_white.webp" alt="Vistora" width={140} height={34} className="brand-logo-dark" priority />
-        </Link>
-        <div className="landing-header-actions">
-          <ThemeToggle />
-          <Link prefetch={true} href={isLoggedIn ? "/dashboard" : "/login"} className="button button-outline compact">
-            {isLoggedIn ? "Dashboard" : "Sign in"}<ArrowRight size={15} />
-          </Link>
-        </div>
-      </header>
-
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <p className="eyebrow">Guest experience operations</p>
-          <h1>Turn every stay into a <em>lasting impression.</em></h1>
-          <p className="landing-copy">
-            One workspace for guest feedback, hotel operations and the teams behind every stay.
-          </p>
-          <div className="landing-actions">
-            <Link prefetch={true} className="button button-dark landing-primary" href={isLoggedIn ? "/dashboard" : "/login"}>
-              {isLoggedIn ? "Open workspace" : "Access workspace"}<ArrowRight size={16} />
-            </Link>
-            <span className="landing-assurance"><CheckCircle2 size={15} /> Built for hospitality teams</span>
-          </div>
-        </div>
-
-        <div className="landing-graph-card" aria-label="Guest experience workflow graph">
-          <div className="landing-graph-head">
-            <div><span>Experience signal</span><strong>From feedback to recommendation</strong></div>
-            <span className="live-pill"><i /> Live workflow</span>
-          </div>
-          <div className="landing-graph-plot">
-            <span className="graph-grid-line line-one" />
-            <span className="graph-grid-line line-two" />
-            <span className="graph-grid-line line-three" />
-            <svg viewBox="0 0 500 200" preserveAspectRatio="none" role="img" aria-label="Rising response workflow curve">
-              <defs>
-                <linearGradient id="signalFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
-                  <stop offset="100%" stopColor="currentColor" stopOpacity="0.01" />
-                </linearGradient>
-              </defs>
-              <path className="landing-area" d="M0 160 C50 155 70 148 100 136 C155 116 195 120 240 104 C290 84 325 72 370 56 C415 38 450 24 480 20 L500 18 L500 200 L0 200 Z" />
-              <path className="landing-line" d="M0 160 C50 155 70 148 100 136 C155 116 195 120 240 104 C290 84 325 72 370 56 C415 38 450 24 480 20 L500 18" />
-            </svg>
-            <span className="graph-marker" style={{ left: "20%", top: "68%" }} title="Feedback captured" />
-            <span className="graph-marker" style={{ left: "48%", top: "52%" }} title="Triage & Understand" />
-            <span className="graph-marker" style={{ left: "74%", top: "28%" }} title="Service Recovery" />
-            <span className="graph-marker marker-active" style={{ left: "96%", top: "10%" }} title="Advocate & Recommend" />
-          </div>
-          <div className="landing-graph-steps">
-            <span><MessageCircleMore size={15} /> Feedback</span>
-            <span><ChartNoAxesCombined size={15} /> Understand</span>
-            <span><TimerReset size={15} /> Recover</span>
-            <span><CheckCircle2 size={15} /> Recommend</span>
-          </div>
-          <div className="landing-insight-row">
-            <div><span>01</span><p><strong>Centralized signals</strong><small>Feedback, forms, and invitations</small></p></div>
-            <div><span>02</span><p><strong>Clear ownership</strong><small>Teams, SLA, and resolution status</small></p></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-modules" aria-label="Explore Vistora">
-        <article><MessageCircleMore size={21} strokeWidth={1.75}/><div><h2>Guest feedback</h2><p>Collect responses, understand ratings and follow up on guest concerns.</p></div></article>
-        <article><Building2 size={21} strokeWidth={1.75}/><div><h2>Hotel operations</h2><p>Coordinate guest stays, room readiness, service jobs and inspections.</p></div></article>
-      </section>
-      <footer className="landing-foot">
-        <span>© 2026 Vistora. All rights reserved.</span>
-      </footer>
-    </main>
-  );
+  const destination = isLoggedIn ? "/dashboard/overview" : "/login";
+  return <main className="vistora-public">
+    <a className="vp-skip" href="#main-content">Skip to content</a>
+    <header className="vp-header"><Link href="/" aria-label="Vistora home"><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={135} height={34} priority /></Link><nav aria-label="Main navigation"><a href="#experience">The experience</a><a href="#features">Features</a><a href="#questions">FAQs</a></nav><Link prefetch={true} href={destination} className="vp-login">{isLoggedIn ? "Your workspace" : "Sign in"}<ArrowUpRight size={16} /></Link></header>
+    <section className="vp-hero" id="main-content">
+      <div className="vp-hero-art" aria-hidden="true" />
+      <div className="vp-hero-copy"><p className="vp-kicker"><span /> THE GUEST EXPERIENCE, REIMAGINED</p><h1>Great stays begin<br />with <em>being heard.</em></h1><p className="vp-lead">Turn guest feedback into thoughtful action.<br />Listen closely. Understand what matters.<br />Give every guest a reason to return.</p><div className="vp-hero-actions"><Link prefetch={true} href={destination} className="vp-button">{isLoggedIn ? "Open your workspace" : "Explore your workspace"}<span><ArrowRight size={18} /></span></Link><a href="#experience" className="vp-text-link">See how it works <ArrowUpRight size={17} /></a></div><div className="vp-hero-note"><ShieldCheck size={17} /> Built around guests. Designed for hospitality teams.</div></div>
+      <div className="vp-floating-card"><span className="vp-float-label"><MessageSquareText size={15} /> EVERY VOICE MATTERS</span><div className="vp-stars" aria-label="Five stars">{[1,2,3,4,5].map(n => <Star key={n} size={17} fill="currentColor" />)}</div><p>A moment of feedback.<br />A better experience tomorrow.</p><div><span className="vp-avatar">V</span><span>Listen. Learn. Follow through.<small>The Vistora approach</small></span><Check size={18} /></div></div>
+      <div className="vp-hero-foot"><span>MORE THAN A FEEDBACK FORM</span><span>Guest voices <i /> Meaningful insights <i /> Thoughtful recovery</span><a href="#experience" aria-label="Discover the experience">↓</a></div>
+    </section>
+    <section className="vp-promise"><span>Made for the moments<br /><strong>that make a stay.</strong></span><div><MessageSquareText />Listen with intention</div><div><ScanText />Understand the details</div><div><HeartHandshake />Respond with care</div></section>
+    <section id="experience" className="vp-section"><div className="vp-section-title"><p className="vp-kicker">THE FULL FEEDBACK JOURNEY</p><h2>Don’t just collect feedback.<br /><em>Do something good with it.</em></h2><p>From the first response to the final resolution,<br />bring your team closer to your guests.</p></div><FeedbackPreview /></section>
+    <section id="features" className="vp-features vp-section"><div className="vp-feature-heading"><div><p className="vp-kicker">PURPOSEFUL BY DESIGN</p><h2>Everything you need<br />to turn listening into loyalty.</h2></div><p>A focused workspace for the people<br />behind exceptional guest experiences.</p></div><div className="vp-feature-grid">{capabilities.map(({icon: Icon, title, description}, index) => <article key={title}><div><Icon size={25} strokeWidth={1.5} /><span>0{index + 1}</span></div><h3>{title}</h3><p>{description}</p></article>)}</div></section>
+    <section className="vp-trust"><div><ShieldCheck size={30} /><p className="vp-kicker">CONFIDENCE IN EVERY CONVERSATION</p><h2>Good hospitality<br />is built on trust.</h2><p>Your team needs a clear picture, and your guests deserve to be heard. Vistora keeps feedback connected to the people who can act on it.</p></div><ul><li><Check /><span><strong>Access with purpose</strong>Workspace permissions and property access keep teams focused on the feedback they’re responsible for.</span></li><li><Check /><span><strong>Insights you can inspect</strong>Read the original comments behind topic counts. Understand how ratings are grouped.</span></li><li><Check /><span><strong>A clear path to resolution</strong>Keep acknowledgements, ownership and case history together, from concern to closure.</span></li></ul></section>
+    <section id="questions" className="vp-section vp-faq"><div><p className="vp-kicker">A FEW HELPFUL ANSWERS</p><h2>A little clarity<br />before you begin.</h2></div><div>{[
+      ["How do guests share their feedback?", "Guests can use your property’s feedback link or QR code, or follow an invitation. They can share ratings, answer your questionnaire and request a follow-up."],
+      ["What happens when a guest needs attention?", "Your team can open the feedback record, acknowledge it, assign ownership and track a resolution. The follow-up queue helps surface overdue cases and guests who requested contact."],
+      ["How are feedback topics identified?", "The Analytics page matches words in guest comments to topics such as cleanliness, room comfort and breakfast. Ratings provide the positive, neutral and low-rated breakdown. This is transparent keyword matching, not AI sentiment analysis."],
+      ["Can I work across multiple properties?", "Yes. Authorized teams can filter feedback by property and date. Access follows the property assignments and permissions in your workspace."],
+    ].map(([q,a]) => <details key={q}><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</div></section>
+    <section className="vp-cta"><p className="vp-kicker">BETTER EXPERIENCES START HERE</p><h2>Your guests have something to say.<br /><em>Make it matter.</em></h2><Link href={destination} className="vp-button">Let’s get listening<span><ArrowRight size={18} /></span></Link></section>
+    <footer className="vp-footer"><Link href="/" aria-label="Vistora home"><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={120} height={30} /></Link><p>Every voice. A better stay.</p><span>© 2026 Vistora</span><a href="#main-content">Back to top ↑</a></footer>
+  </main>;
 }

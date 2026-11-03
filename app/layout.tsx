@@ -20,6 +20,7 @@ import "./platform.css";
 import "./hospitality.css";
 import "./operations.css";
 import "./workspace-ui.css";
+import "./feedback-experience.css";
 
 export const metadata: Metadata = {
   title: "Vistora | Guest Experience Operations",

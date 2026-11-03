@@ -88,9 +88,7 @@ export function computeComplaintBadgeCount(hasUnresolved: boolean | number): num
 }
 
 export function useComplaintBadge(rawComplaintsCount: number = 0) {
-  const [badgeCount, setBadgeCount] = useState<number>(() => {
-    return computeComplaintBadgeCount(rawComplaintsCount);
-  });
+  const [badgeCount, setBadgeCount] = useState<number>(0);
 
   useEffect(() => {
     setBadgeCount(computeComplaintBadgeCount(rawComplaintsCount));

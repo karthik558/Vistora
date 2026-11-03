@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Dashboard, { AppShell, WorkspaceUser } from "./Dashboard";
+import FeedbackInsights from "./FeedbackInsights";
 import OperationsPage from "./OperationsPage";
 import type { DashboardData } from "../types/experience";
 import { FeedbackShellContext } from "./FeedbackShellContext";
@@ -17,7 +18,7 @@ import { hasModuleAccess } from "../lib/auth/modules";
 const FeedbackContext = createContext<{ data: DashboardData; user: WorkspaceUser } | null>(null);
 
 const labels: Record<string, string> = {
-  overview: "Dashboard", feedback: "All feedback", analytics: "Analytics",
+  insights: "Analytics", "follow-ups": "Follow-up queue", overview: "Dashboard", feedback: "All feedback", analytics: "Analytics",
   complaints: "Complaints & SLA", directory: "Guest directory", forms: "Feedback forms",
   questionnaire: "Questionnaire", "qr-codes": "QR codes",
   invitations: "Guest invitations", "audit-log": "Audit log", reports: "Reports",
@@ -80,10 +81,11 @@ export default function FeedbackWorkspacePage({ section: initialSection }: { sec
   if (!Object.hasOwn(feedbackSectionRights, section) || !hasModuleAccess(workspace.user, "feedback") || (!workspace.user.isOrganizationAdmin && !workspace.user.rights?.includes(feedbackSectionRights[section]))) {
     return <div className="content-wrap"><h1>Access restricted</h1><p>You do not have permission to open this section.</p></div>;
   }
+  if (section === "follow-ups") return <FeedbackInsights data={workspace.data} user={workspace.user} />;
   if (section === "invitations") return <GuestInvitationsPage initialUser={workspace.user} properties={workspace.data.properties} />;
   if (section === "audit-log") return <AuditLogPage initialUser={workspace.user} />;
   if (section === "reports") return <ReportsModule user={workspace.user} />;
   return section === "overview"
     ? <Dashboard initialData={workspace.data} initialUser={workspace.user} />
-    : <OperationsPage section={section} data={workspace.data} initialUser={workspace.user} />;
+    : <OperationsPage section={section === "insights" ? "analytics" : section} data={workspace.data} initialUser={workspace.user} />;
 }

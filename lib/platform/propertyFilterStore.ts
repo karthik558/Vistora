@@ -53,9 +53,7 @@ export function matchesPropertyFilter(
 }
 
 export function useSharedPropertyFilter() {
-  const [selectedIds, setSelectedIdsState] = useState<string[]>(() => {
-    return getStoredPropertyFilter();
-  });
+  const [selectedIds, setSelectedIdsState] = useState<string[]>(["all"]);
 
   useEffect(() => {
     // Synchronize on mount from localStorage

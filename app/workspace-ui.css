@@ -187,3 +187,15 @@ button:disabled{cursor:not-allowed}
   body :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea){font-size:16px!important}
   .confirm-actions{flex-wrap:wrap}
 }
+
+/* Primary actions share the workspace sidebar fill. Public/auth pages use its default green. */
+:root { --brand-primary: #213633; }
+.button-dark {
+  background: var(--workspace-sidebar, var(--brand-primary)) !important;
+  border-color: var(--workspace-sidebar, var(--brand-primary)) !important;
+  color: #fff !important;
+}
+.button-dark:hover {
+  background: color-mix(in srgb, var(--workspace-sidebar, var(--brand-primary)) 88%, #000) !important;
+  border-color: color-mix(in srgb, var(--workspace-sidebar, var(--brand-primary)) 88%, #000) !important;
+}

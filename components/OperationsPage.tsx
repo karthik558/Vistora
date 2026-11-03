@@ -39,6 +39,7 @@ import { GuestInvitation } from "../lib/services/invitationsService";
 import CustomDatePicker, { DateRangeFilter, isDateInRange } from "./CustomDatePicker";
 import PropertyFilter from "./PropertyFilter";
 import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
+import FeedbackTopics from "./FeedbackTopics";
 import QuestionnaireBuilder from "./QuestionnaireBuilder";
 import CustomSelect from "./CustomSelect";
 
@@ -270,7 +271,7 @@ export default function OperationsPage({
               data={data}
               selectedProperty={selectedProperty}
               dateFilter={dateFilter}
-              userAllowedPropIds={userAllowedPropIds}
+              filteredFeedback={feedback}
             />
           ) : section === "directory" ? (
             <Directory data={data} query={query} setQuery={setQuery} />
@@ -347,32 +348,13 @@ function Analytics({
   data,
   selectedProperty,
   dateFilter,
-  userAllowedPropIds,
+  filteredFeedback,
 }: {
   data: DashboardData;
   selectedProperty: string | "all";
   dateFilter: DateRangeFilter;
-  userAllowedPropIds?: string[] | null;
+  filteredFeedback: FeedbackViewModel[];
 }) {
-  const filteredFeedback = useMemo(() => {
-    return data.recentFeedback.filter((item) => {
-      if (userAllowedPropIds !== null && userAllowedPropIds !== undefined) {
-        if (!item.propertyId || !userAllowedPropIds.includes(item.propertyId)) {
-          return false;
-        }
-      }
-      if (selectedProperty !== "all") {
-        if (!item.propertyId || item.propertyId !== selectedProperty) {
-          return false;
-        }
-      }
-      if (!isDateInRange(item.createdAt, dateFilter)) {
-        return false;
-      }
-      return true;
-    });
-  }, [data.recentFeedback, selectedProperty, dateFilter, userAllowedPropIds]);
-
   const total = filteredFeedback.length;
   const totalRatingSum = filteredFeedback.reduce((acc, curr) => acc + curr.rating, 0);
   const avgRating = total > 0 ? (totalRatingSum / total).toFixed(2) : "0.0";
@@ -510,6 +492,7 @@ function Analytics({
           })}
         </div>
       </div>
+      <FeedbackTopics feedback={filteredFeedback} />
     </>
   );
 }
