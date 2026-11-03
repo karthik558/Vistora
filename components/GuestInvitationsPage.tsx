@@ -68,12 +68,20 @@ export default function GuestInvitationsPage({
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
+  const userAllowedPropIds = user?.isOrganizationAdmin
+    ? null
+    : user?.propertyIds && user.propertyIds.length > 0
+    ? user.propertyIds
+    : user?.propertyId
+    ? [user.propertyId]
+    : [];
+
   const {
     selectedIds: selectedProperties,
     setSelectedIds: setSelectedProperties,
     isAll: isAllProperties,
     singleSelectedId: selectedPropertyFilter,
-  } = useSharedPropertyFilter();
+  } = useSharedPropertyFilter(userAllowedPropIds);
 
   // Determine property access scope
   const allowedProperties = useMemo(() => {
@@ -429,6 +437,7 @@ export default function GuestInvitationsPage({
                   selectedId={selectedPropertyFilter}
                   selectedIds={selectedProperties}
                   onChange={(_id, ids) => setSelectedProperties(ids || _id)}
+                  isGlobalAdmin={user?.isOrganizationAdmin === true}
                 />
               </div>
             ) : allowedProperties.length === 1 ? (

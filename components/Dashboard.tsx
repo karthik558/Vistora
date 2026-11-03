@@ -351,6 +351,7 @@ function StandaloneAppShell({
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("vistora-user");
+        localStorage.removeItem("vistora_dashboard_property_filter");
       } catch { }
     }
     router.replace("/login");
@@ -747,12 +748,24 @@ export default function Dashboard({
   initialUser?: WorkspaceUser | null;
 }) {
   const [user, setUser] = useState<WorkspaceUser | null>(initialUser || null);
+  const isSuperAdminUser =
+    user?.isOrganizationAdmin === true ||
+    user?.role === "super_admin" ||
+    user?.orgRole === "super_admin";
+  const userAllowedPropIds = isSuperAdminUser
+    ? null
+    : user?.propertyIds?.length
+    ? user.propertyIds
+    : user?.propertyId
+    ? [user.propertyId]
+    : [];
+
   const {
     selectedIds: selectedProperties,
     setSelectedIds: setSelectedProperties,
     isAll: isAllProperties,
     singleSelectedId: selectedProperty,
-  } = useSharedPropertyFilter();
+  } = useSharedPropertyFilter(userAllowedPropIds);
   const [npsFilter, setNpsFilter] = useState<"all" | "promoters" | "passives" | "detractors">("all");
   const [liveFeedback, setLiveFeedback] = useState<FeedbackViewModel[]>(() => initialData?.recentFeedback || []);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
@@ -798,18 +811,9 @@ export default function Dashboard({
 
   const data = initialData;
 
-  const isUserAdmin = !user || user.role === "admin";
-  const userAllowedPropIds = isUserAdmin
-    ? null
-    : user?.propertyIds?.length
-    ? user.propertyIds
-    : user?.propertyId
-    ? [user.propertyId]
-    : [];
-
   // Extract user's department scope (RBAC Granular Boundary)
   const userDeptScope = useMemo(() => {
-    if (!user || user.role === "admin") return null;
+    if (!user || isSuperAdminUser) return null;
     const org = (user as any).orgRole || (user.rights || []).find((r: string) => r.startsWith("org_role:"))?.replace("org_role:", "");
     if (org === "super_admin" || org === "general_manager") return null;
     const match = (user.rights || []).find((r: string) => r.startsWith("dept_scope:"));
@@ -919,8 +923,8 @@ export default function Dashboard({
       : "";
 
   const userRights = new Set(Array.isArray(user?.rights) ? user.rights : []);
-  const canViewFeedback = isUserAdmin || userRights.has("view_feedback");
-  const canExportReports = isUserAdmin || userRights.has("export_reports");
+  const canViewFeedback = isSuperAdminUser || userRights.has("view_feedback");
+  const canExportReports = isSuperAdminUser || userRights.has("export_reports");
 
   return (
     <AppShell complaints={complaints} user={user}>
@@ -949,6 +953,7 @@ export default function Dashboard({
                   selectedId={selectedProperty}
                   selectedIds={selectedProperties}
                   onChange={(_id, ids) => setSelectedProperties(ids || _id)}
+                  isGlobalAdmin={isSuperAdminUser}
                 />
                 <CustomDatePicker
                   value={dateFilter}

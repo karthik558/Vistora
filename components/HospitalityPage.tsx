@@ -170,11 +170,19 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   }
  }
  const [data,setData]=useState<any>(null),[error,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
+ const userAllowedPropIds = user?.isOrganizationAdmin
+   ? null
+   : Array.isArray(user?.propertyIds) && user.propertyIds.length > 0
+   ? user.propertyIds
+   : user?.propertyId
+   ? [user.propertyId]
+   : [];
+
  const {
    selectedIds: selectedProperties,
    setSelectedIds: setSelectedProperties,
    singleSelectedId: property,
- } = useSharedPropertyFilter();
+ } = useSharedPropertyFilter(userAllowedPropIds);
  const [month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
  const [jobView,setJobView]=useState("active");
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
@@ -332,6 +340,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
       window.history.replaceState(null, "", "/dashboard/hospitality?" + params);
     }}
     manageHref="/dashboard/properties?workspace=operations"
+    isGlobalAdmin={user?.isOrganizationAdmin === true}
   />
   {!suiteTabs.includes(tab)&&canImport&&(
    <>

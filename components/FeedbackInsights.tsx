@@ -17,7 +17,16 @@ const views: { id: FollowUpView; label: string }[] = [
 ];
 
 export default function FeedbackInsights({ data, user }: { data: DashboardData; user: WorkspaceUser }) {
-  const { selectedIds, setSelectedIds, matches } = useSharedPropertyFilter();
+  const isSuperAdminUser = user.isOrganizationAdmin || ["super_admin", "general_manager"].includes(user.orgRole || "");
+  const userAllowedPropIds = isSuperAdminUser
+    ? null
+    : user.propertyIds?.length
+    ? user.propertyIds
+    : user.propertyId
+    ? [user.propertyId]
+    : [];
+
+  const { selectedIds, setSelectedIds, matches } = useSharedPropertyFilter(userAllowedPropIds);
   const [date, setDate] = useState<DateRangeFilter>({ preset: "all", startDate: null, endDate: null });
   const [view, setView] = useState<FollowUpView>("all");
   const [query, setQuery] = useState("");
@@ -39,7 +48,7 @@ export default function FeedbackInsights({ data, user }: { data: DashboardData; 
   const resolved = rows.filter(row => row.status === "resolved").length;
   return <div className="content-wrap feedback-intelligence">
     <DashboardPageHeading eyebrow="Guest experience operations" title="Follow-up queue" description="Prioritize guest contact requests and feedback that needs a response.">
-    <div className="fi-toolbar"><PropertyFilter properties={data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || [id])} /><CustomDatePicker value={date} onChange={setDate} /><button className="button button-outline" onClick={() => { setSelectedIds(["all"]); setDate({ preset: "all", startDate: null, endDate: null }); setView("all"); setQuery(""); }}>Reset filters</button></div>
+    <div className="fi-toolbar"><PropertyFilter properties={userAllowedPropIds ? data.properties.filter(p => userAllowedPropIds.includes(p.id)) : data.properties} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || [id])} isGlobalAdmin={isSuperAdminUser} /><CustomDatePicker value={date} onChange={setDate} /><button className="button button-outline" onClick={() => { setSelectedIds(["all"]); setDate({ preset: "all", startDate: null, endDate: null }); setView("all"); setQuery(""); }}>Reset filters</button></div>
     </DashboardPageHeading>
     <div className="fi-summary">
       <article><MessageSquareText size={20} /><span>Feedback in this view</span><strong>{rows.length}</strong><small>Matches property, date and search</small></article>

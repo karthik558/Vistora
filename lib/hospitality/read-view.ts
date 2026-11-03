@@ -10,11 +10,21 @@ export async function hotelReadView(request:NextRequest){
  if(request.nextUrl.searchParams.has("stayLink"))throw new PlatformError("Feedback link access requires a company administrator.",403);
  const readiness=await db.rpc("complaint_schema_ready");
  if(request.nextUrl.searchParams.get("complaints")==="true"&&(readiness.error||readiness.data!==true))throw new PlatformError("Complaint setup is pending. Apply schema section 27 after section 26.",503);
- const property=request.nextUrl.searchParams.get("property")||"all",view=request.nextUrl.searchParams.get("jobs")||"active";
+ const rawProperty=request.nextUrl.searchParams.get("property")||"all",view=request.nextUrl.searchParams.get("jobs")||"active";
  if(!["active","closed"].includes(view))throw new PlatformError("Choose a valid job view.");
  const userPropertyIds = Array.isArray(user.propertyIds) && user.propertyIds.length > 0 ? user.propertyIds : null;
- if(property!=="all" && userPropertyIds && !userPropertyIds.includes(property)) {
-  throw new PlatformError("Access to this property is not authorized.", 403);
+ 
+ // Safe property resolution:
+ // If the user has access to exactly 1 property, always default & scope to that property.
+ // If the user has multiple assigned properties: if requested property is valid, scope to it;
+ // if "all", scope to assigned properties; if an unauthorized/stale property was requested, fallback to "all".
+ let property = rawProperty;
+ if (userPropertyIds && userPropertyIds.length > 0) {
+  if (userPropertyIds.length === 1) {
+   property = userPropertyIds[0];
+  } else if (property !== "all" && !userPropertyIds.includes(property)) {
+   property = "all";
+  }
  }
  const scoped=(query:any)=>{
   if(property!=="all")return query.eq("property_id",property);

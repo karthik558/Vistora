@@ -53,20 +53,32 @@ export default function OperationsPage({
   initialUser?: WorkspaceUser | null;
 }) {
   const [query, setQuery] = useState("");
+  const [user, setUser] = useState<WorkspaceUser | null>(
+    () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
+  );
+  const isSuperAdminUser =
+    user?.isOrganizationAdmin === true ||
+    user?.role === "super_admin" ||
+    user?.orgRole === "super_admin";
+  const userAllowedPropIds: string[] | null = isSuperAdminUser
+    ? null
+    : user?.propertyIds?.length
+    ? user.propertyIds
+    : user?.propertyId
+    ? [user.propertyId]
+    : [];
+
   const {
     selectedIds: selectedProperties,
     setSelectedIds: setSelectedProperties,
     isAll: isAllProperties,
     singleSelectedId: selectedProperty,
-  } = useSharedPropertyFilter();
+  } = useSharedPropertyFilter(userAllowedPropIds);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
     preset: "all",
     startDate: null,
     endDate: null,
   });
-  const [user, setUser] = useState<WorkspaceUser | null>(
-    () => initialUser || (typeof window !== "undefined" ? getClientUser() : null)
-  );
 
   useEffect(() => {
     const local = getClientUser();
@@ -97,17 +109,9 @@ export default function OperationsPage({
     }
   }
 
-  const userAllowedPropIds: string[] | null = isUserAdmin
-    ? null
-    : user?.propertyIds?.length
-    ? user.propertyIds
-    : user?.propertyId
-    ? [user.propertyId]
-    : [];
-
   // Extract user's department scope (RBAC Granular Boundary)
   const userDeptScope = useMemo(() => {
-    if (!user || user.role === "admin") return null;
+    if (!user || isSuperAdminUser) return null;
     const org = (user as any).orgRole || (user.rights || []).find((r: string) => r.startsWith("org_role:"))?.replace("org_role:", "");
     if (org === "super_admin" || org === "general_manager") return null;
     const match = (user.rights || []).find((r: string) => r.startsWith("dept_scope:"));
@@ -215,6 +219,7 @@ export default function OperationsPage({
                     selectedId={selectedProperty}
                     selectedIds={selectedProperties}
                     onChange={(_id, ids) => setSelectedProperties(ids || _id)}
+                    isGlobalAdmin={isSuperAdminUser}
                   />
                   <CustomDatePicker
                     value={dateFilter}

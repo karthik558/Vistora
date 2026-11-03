@@ -607,3 +607,103 @@ test("Granular view vs manage rights enforce read-only and write boundaries",asy
   db.sessionDb=originalSession;
  }
 });
+
+test("Single-property users automatically default to their assigned property and sanitize filters", async () => {
+  const { sanitizePropertyFilter, matchesPropertyFilter } = require("../lib/platform/propertyFilterStore.ts");
+  const { hotelReadView } = require("../lib/hospitality/read-view.ts");
+  const db = require("../lib/platform/db.ts");
+  const { NextRequest } = require("next/server");
+
+  // 1. Single property user MUST always be sanitized to their single property, never "all"
+  assert.deepEqual(sanitizePropertyFilter(["all"], ["prop-single"]), ["prop-single"]);
+  assert.deepEqual(sanitizePropertyFilter(["other-prop"], ["prop-single"]), ["prop-single"]);
+  assert.deepEqual(sanitizePropertyFilter([], ["prop-single"]), ["prop-single"]);
+  assert.deepEqual(sanitizePropertyFilter(["prop-single"], ["prop-single"]), ["prop-single"]);
+
+  // 2. Multi-property staff can select "all" (assigned) or valid subsets, discarding invalid
+  assert.deepEqual(sanitizePropertyFilter(["all"], ["p1", "p2"]), ["all"]);
+  assert.deepEqual(sanitizePropertyFilter(["p1"], ["p1", "p2"]), ["p1"]);
+  assert.deepEqual(sanitizePropertyFilter(["p1", "other"], ["p1", "p2"]), ["p1"]);
+  assert.deepEqual(sanitizePropertyFilter(["other"], ["p1", "p2"]), ["all"]);
+
+  // 3. Super admin retains unrestricted access
+  assert.deepEqual(sanitizePropertyFilter(["all"], null), ["all"]);
+  assert.deepEqual(sanitizePropertyFilter(["any-prop"], null), ["any-prop"]);
+
+  // 4. matchesPropertyFilter handles single property and all
+  assert.equal(matchesPropertyFilter("prop-single", ["prop-single"]), true);
+  assert.equal(matchesPropertyFilter("other-prop", ["prop-single"]), false);
+  assert.equal(matchesPropertyFilter("any", ["all"]), true);
+
+  // 5. hotelReadView safely scopes single-property users without throwing 403 on "all" or stale property
+  const singlePropUser = {
+    id: "staff-1",
+    fullName: "Hotel Staff",
+    email: "staff@hotel.com",
+    role: "receptionist",
+    organizationId: "org-1",
+    isOrganizationAdmin: false,
+    propertyIds: ["prop-single"],
+    rights: ["module:hospitality"],
+    accessToken: "test-token",
+  };
+
+  const queries = [];
+  const mockClient = {
+    rpc(fn) {
+      if (fn === "workspace_module") return Promise.resolve({ data: true, error: null });
+      if (fn === "complaint_schema_ready") return Promise.resolve({ data: true, error: null });
+      return Promise.resolve({ data: null, error: null });
+    },
+    from(table) {
+      const q = {
+        select(cols, opts) {
+          if (opts?.count) q._isCount = true;
+          return q;
+        },
+        eq(col, val) {
+          queries.push({ table, op: "eq", col, val });
+          return q;
+        },
+        in(col, vals) {
+          queries.push({ table, op: "in", col, vals });
+          return q;
+        },
+        not() { return q; },
+        order() { return q; },
+        limit() { return q; },
+        single() { return Promise.resolve({ data: { id: "prop-single", name: "Prop Single" }, error: null }); },
+        then(resolve) {
+          if (q._isCount) resolve({ count: 5, error: null });
+          else if (table === "properties") resolve({ data: [{ id: "prop-single", name: "Single Hotel", is_active: true }], error: null });
+          else resolve({ data: [], error: null });
+        },
+      };
+      return q;
+    },
+  };
+
+  const orig = db.sessionDb;
+  db.sessionDb = () => mockClient;
+  try {
+    // When requesting property="all", single-property user must automatically resolve to prop-single without 403
+    queries.length = 0;
+    const res = await db.workspaceContext.run({ user: singlePropUser, client: mockClient }, () =>
+      hotelReadView(new NextRequest("http://localhost/api/hospitality?property=all"))
+    );
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.success, true);
+    // Verified queries scoped to prop-single
+    assert.ok(queries.some(q => q.op === "eq" && q.col === "property_id" && q.val === "prop-single"));
+
+    // When requesting stale unauthorized property, single-property user also resolves safely
+    queries.length = 0;
+    const resStale = await db.workspaceContext.run({ user: singlePropUser, client: mockClient }, () =>
+      hotelReadView(new NextRequest("http://localhost/api/hospitality?property=stale-other-id"))
+    );
+    assert.equal(resStale.status, 200);
+  } finally {
+    db.sessionDb = orig;
+  }
+});

@@ -455,12 +455,22 @@ export async function getDashboardData(
     // 1. Fetch properties concurrently
     const propPromise = supabase.from("properties").select("*").order("name");
 
+    // Safe property resolution for multi-tenant isolation
+    let effectivePropertyId = propertyId;
+    if (allowedPropertyIds && allowedPropertyIds.length > 0) {
+      if (allowedPropertyIds.length === 1) {
+        effectivePropertyId = allowedPropertyIds[0];
+      } else if (propertyId !== "all" && !allowedPropertyIds.includes(propertyId)) {
+        effectivePropertyId = "all";
+      }
+    }
+
     // Fetch every feedback page under the caller's RLS session.
     let query=supabase.from("feedback").select("*").order("created_at",{ascending:false}).order("id",{ascending:false});
-    if(propertyId!=="all")query=query.eq("property_id",propertyId);
+    if(effectivePropertyId!=="all")query=query.eq("property_id",effectivePropertyId);
     const restricted=allowedPropertyIds!==null&&allowedPropertyIds!==undefined;
     if(restricted)query=query.in("property_id",allowedPropertyIds);
-    const denied=restricted&&(!allowedPropertyIds.length||(propertyId!=="all"&&!allowedPropertyIds.includes(propertyId)));
+    const denied=restricted&&(!allowedPropertyIds.length||(effectivePropertyId!=="all"&&!allowedPropertyIds.includes(effectivePropertyId)));
     const [propRes,rows]=await Promise.all([propPromise,denied?Promise.resolve([]):pagedRows<FeedbackRow>(query)]);
 
     if (propRes.error) {

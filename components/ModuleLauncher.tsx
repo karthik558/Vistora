@@ -21,7 +21,7 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
  const feedbackHref=user.isOrganizationAdmin||user.rights?.includes("view_feedback")?"/dashboard/overview":user.rights?.includes("manage_complaints")?"/dashboard/complaints":user.rights?.includes("manage_questionnaire")?"/dashboard/forms":user.rights?.includes("export_reports")?"/dashboard/reports":"/dashboard/audit-log";
  async function logout(){
   setBusy(true);setError("");
-  try{const response=await fetch("/api/auth/logout",{method:"POST"});if(!response.ok)throw new Error("Could not sign out. Try again.");localStorage.removeItem("vistora-user");router.replace("/login");router.refresh();}
+  try{const response=await fetch("/api/auth/logout",{method:"POST"});if(!response.ok)throw new Error("Could not sign out. Try again.");localStorage.removeItem("vistora-user");localStorage.removeItem("vistora_dashboard_property_filter");router.replace("/login");router.refresh();}
   catch(error){setError((error as Error).message);setBusy(false);}
  }
  return <main className="module-launcher">

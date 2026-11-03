@@ -37,6 +37,14 @@ export default function LoginForm() {
       if (typeof window !== "undefined" && data.user) {
         try {
           localStorage.setItem("vistora-user", JSON.stringify(data.user));
+          const u = data.user;
+          const isGlobal = u.isOrganizationAdmin === true || u.role === "super_admin" || u.orgRole === "super_admin";
+          const pIds = Array.isArray(u.propertyIds) && u.propertyIds.length > 0 ? u.propertyIds : (u.propertyId ? [u.propertyId] : []);
+          if (!isGlobal && pIds.length === 1) {
+            localStorage.setItem("vistora_dashboard_property_filter", JSON.stringify([pIds[0]]));
+          } else {
+            localStorage.removeItem("vistora_dashboard_property_filter");
+          }
         } catch {}
       }
 
