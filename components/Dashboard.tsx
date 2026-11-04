@@ -699,7 +699,7 @@ function StandaloneAppShell({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {isMobileOverview&&<a href="#mobile-attention-title" className="topbar-icon-btn" aria-label="View service alerts"><BellRing size={19}/></a>}
+              {isMobileOverview&&<a href="#mobile-attention-title" className="mobile-overview-alerts" aria-label="View service alerts"><BellRing size={19}/></a>}
               <ThemeToggle />
               {!isAdministration&&workspaceArea==="feedback"&&<NotificationCenter />}
             </div>

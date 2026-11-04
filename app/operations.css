@@ -1399,3 +1399,10 @@ html[data-theme="dark"] .mobile-overview-tile.tone-violet{--tile-bg:#30273f;--ti
 @media(max-width:768px){.mobile-operations-home{padding:18px 16px 26px}.is-mobile-overview .topbar{background:var(--panel)}.mobile-operations-tiles{gap:12px}.mobile-overview-tile{padding:14px;min-height:178px}.mobile-attention-heading{padding:12px 14px}}
 @media(max-width:350px){.mobile-overview-tile{padding:12px}.mobile-attention-heading{flex-wrap:wrap}.mobile-attention-heading>a{margin-left:39px;min-height:32px}}
 .mobile-attention{scroll-margin-top:88px}
+
+/* Center the alert icon in the same control frame as the theme toggle. */
+.mobile-overview-alerts{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);box-shadow:none;text-decoration:none}
+.mobile-overview-alerts>svg{display:block;flex-shrink:0}
+.mobile-overview-alerts:hover{background:var(--canvas-alt);border-color:var(--line-strong)}
+.mobile-overview-alerts:focus-visible{outline:2px solid var(--module-accent);outline-offset:3px}
+@media(max-width:768px){.mobile-overview-alerts{flex-basis:44px;width:44px;height:44px}}

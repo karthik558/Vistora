@@ -262,4 +262,4 @@ button:disabled{cursor:not-allowed}
  .app-shell .mobile-menu-btn{min-width:44px;min-height:44px}
  .app-shell .mobile-bottom-navbar .mobile-nav-tab{min-height:56px;padding-top:9px;padding-bottom:8px}
 }
-@media(max-width:768px){.app-shell .platform-page :is(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),textarea){font-size:16px;min-height:44px}.is-mobile-overview .topbar .topbar-icon-btn{min-width:44px;min-height:44px}}
+@media(max-width:768px){.app-shell .platform-page :is(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),textarea){font-size:16px;min-height:44px}}
