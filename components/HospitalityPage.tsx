@@ -1,7 +1,7 @@
 "use client";
 import {FormEvent,useEffect,useRef,useState} from "react";
 import Link from "next/link";
-import {useSearchParams} from "next/navigation";
+import {useRouter,useSearchParams} from "next/navigation";
 import QRCode from "qrcode";
 import RoomManagerModal from "./RoomManagerModal";
 import GuestImportsPage from "./GuestImportsPage";
@@ -158,7 +158,14 @@ function GuestForm({guest,save,cancel}:{guest:any;save:Save;cancel:()=>void}){
 export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const appearance=useAppearance();
  const query=useSearchParams();
+ const router=useRouter();
  const section=query.get("section");
+ useEffect(()=>{
+  if((!section||section==="Overview")&&window.matchMedia("(max-width: 768px)").matches){
+   const params=new URLSearchParams(window.location.search);params.delete("section");
+   router.replace("/dashboard/hospitality/mobile"+(params.size?"?"+params.toString():""));
+  }
+ },[section,router]);
  const [tab,setTabState]=useState<Tab>(tabs.includes(section as Tab)?section as Tab:"Overview");
  useEffect(()=>{setTabState(tabs.includes(section as Tab)?section as Tab:"Overview");},[section,user.isOrganizationAdmin]);
  function setTab(next:Tab){

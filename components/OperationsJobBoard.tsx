@@ -102,7 +102,7 @@ export default function OperationsJobBoard({
     assignee: string;
   } | null>(null);
   const [dept, setDept] = useState("all"),
-    [view, setView] = useState(initialView && ["all", "history", "resolved", "escalated"].includes(initialView) ? initialView : user.isOrganizationAdmin ? "all" : "mine"),
+    [view, setView] = useState(initialView && ["all", "history", "resolved", "escalated", "mine", "overdue"].includes(initialView) ? initialView : user.isOrganizationAdmin ? "all" : "mine"),
     [search, setSearch] = useState(""),
     [now, setNow] = useState(Date.now()),
     [urgent, setUrgent] = useState<Job | null>(null),

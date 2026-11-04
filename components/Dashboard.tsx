@@ -205,6 +205,7 @@ function StandaloneAppShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isMobileOverview = pathname === "/dashboard/hospitality/mobile";
   const searchParams=useSearchParams();
   const appearance=useAppearance();
   const isAdministration=isAdministrationPath(pathname||"");
@@ -370,7 +371,7 @@ function StandaloneAppShell({
 
   const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
-    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,"Guest imports":Upload,Rooms:Building2,Cleaning:BrushCleaning,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing})[section],adminOnly:false})),
+    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:section==="Overview"&&(isMobile||isMobileOverview)?"/dashboard/hospitality/mobile":"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,"Guest imports":Upload,Rooms:Building2,Cleaning:BrushCleaning,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing})[section],adminOnly:false})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {
@@ -427,7 +428,7 @@ function StandaloneAppShell({
   const initials = getUserInitials(currentUser?.fullName, currentUser?.email);
 
   return (
-    <div className={`app-shell ${desktopSidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
+    <div className={`app-shell ${isMobileOverview ? "is-mobile-overview" : ""} ${desktopSidebarCollapsed ? "sidebar-collapsed" : ""}`} data-module={activeModule} data-workspace={isAdministration?"administration":workspaceArea} style={{...themedAccentTokens(appearance.config.colors[activeModule]),...sidebarTokens(appearance.config.colors[isAdministration?"administration":workspaceArea==="operations"?"property":"feedback"],appearance.dark)} as React.CSSProperties}>
       {/* Remove the backdrop immediately on close so it cannot intercept a quick reopen. */}
       {isMobile&&mobileNavOpen&&<div className="sidebar-mobile-backdrop" onClick={()=>setMobileNavOpen(false)} aria-hidden="true"/>}
 
@@ -551,7 +552,7 @@ function StandaloneAppShell({
 
         {/* Workspace Navigation - Streamlined Flat List */}
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          <Link href="/dashboard" className="nav-item module-switch-link" title={isAdministration?"Back to workspace":"Switch module"}><ArrowLeftRight size={16}/><span className="nav-label">{isAdministration?"Back to workspace":"Switch module"}</span></Link>
+          <Link href="/dashboard?modules=1" className="nav-item module-switch-link" title={isAdministration?"Back to workspace":"Switch module"}><ArrowLeftRight size={16}/><span className="nav-label">{isAdministration?"Back to workspace":"Switch module"}</span></Link>
           {visibleNav.length === 0 ? (
             <div style={{ padding: "28px 16px", color: "#a4c7b3", fontSize: "12px", textAlign: "center", lineHeight: "1.5" }}>
               No operational rights assigned. Contact an administrator to configure module access.
@@ -561,7 +562,7 @@ function StandaloneAppShell({
               const Icon = item.icon;
               const isActive = isAdministration&&searchParams.get("adminSection")?searchParams.get("adminSection")===item.href.split("/")[2]:workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?
                 (searchParams.get("section")==="feedback-collected"?"feedback":searchParams.get("section"))===feedbackSection(item.href):item.href.startsWith("/dashboard/hospitality")?
-                pathname==="/dashboard/hospitality"&&(searchParams.get("section")||"Overview")===(item.href.includes("?")?decodeURIComponent(item.href.split("section=")[1]):"Overview"):
+                (pathname==="/dashboard/hospitality"||isMobileOverview)&&(isMobileOverview?"Overview":searchParams.get("section")||"Overview")===(item.label==="Hotel operations"?"Overview":item.label):
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname?.startsWith(item.href)) ||
                 active === item.label ||
@@ -589,7 +590,7 @@ function StandaloneAppShell({
                     style={{ flexShrink: 0, opacity: isActive ? 1 : 0.85 }}
                     aria-hidden="true"
                   />
-                  <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
+                  <span className="nav-label" style={{ flex: 1 }}>{isMobile&&item.label==="Hotel operations"?"Overview":item.label}</span>
                   {(item.label === "Complaints & SLA" || item.label === "Complaints") && unreadComplaints > 0 && (
                     <span className="nav-count" aria-label={`${unreadComplaints} unread update`}>
                       {unreadComplaints}
@@ -690,14 +691,15 @@ function StandaloneAppShell({
               >
                 {mobileNavOpen ? <X size={19} strokeWidth={2} /> : <Menu size={19} strokeWidth={2} />}
               </button>
-              <div className="breadcrumbs">
+              {isMobileOverview ? <Link href="/dashboard/hospitality/mobile" className="mobile-overview-brand" aria-label="Service overview"><Image src="/vistora_wordmark_green.webp" alt="Vistora" width={112} height={28} className="brand-logo-light"/><Image src="/vistora_wordmark_white.webp" alt="Vistora" width={112} height={28} className="brand-logo-dark"/></Link> : <div className="breadcrumbs">
                 <span>{isAdministration?"Workspace administration":workspaceArea==="operations"?"Hotel operations":"Feedback"}</span>
                 <b>/</b>
                 <strong>{active}</strong>
-              </div>
+              </div>}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {isMobileOverview&&<a href="#mobile-attention-title" className="topbar-icon-btn" aria-label="View service alerts"><BellRing size={19}/></a>}
               <ThemeToggle />
               {!isAdministration&&workspaceArea==="feedback"&&<NotificationCenter />}
             </div>
@@ -710,7 +712,7 @@ function StandaloneAppShell({
       <nav className="mobile-bottom-navbar" aria-label="Mobile workspace navigation">
         {(isAdministration?visibleNav:workspaceArea==="operations"?["Hotel operations","Service jobs","Cleaning","Complaints"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item):["Dashboard","Feedback","Complaints & SLA","Analytics"].map(label=>visibleNav.find(item=>item.label===label)).filter((item):item is NavItemConfig=>!!item)).map(item=>{
           const Icon=item.icon;
-          const selected=workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?(searchParams.get("section")==="feedback-collected"?"feedback":searchParams.get("section"))===feedbackSection(item.href):(item.href==="/dashboard/feedback"&&pathname==="/dashboard/feedback-collected")||pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
+          const selected=workspaceArea==="operations"&&item.href.startsWith("/dashboard/hospitality")?(pathname==="/dashboard/hospitality"||isMobileOverview)&&(isMobileOverview?"Overview":searchParams.get("section")||"Overview")===(item.label==="Hotel operations"?"Overview":item.label):workspaceArea==="feedback"&&searchParams.get("section")&&feedbackSection(item.href)?(searchParams.get("section")==="feedback-collected"?"feedback":searchParams.get("section"))===feedbackSection(item.href):(item.href==="/dashboard/feedback"&&pathname==="/dashboard/feedback-collected")||pathname===item.href.split("?")[0]&&(isAdministration||workspaceArea!=="operations"||(searchParams.get("section")||"Overview")===(item.href.includes("section=")?decodeURIComponent(item.href.split("section=")[1]):"Overview"));
           return <Link key={item.href} href={scopedHref(item.href)} prefetch={workspaceArea === "feedback" && feedbackSection(item.href) ? false : true} className={`mobile-nav-tab ${selected?"active":""}`} onClick={()=>setMobileNavOpen(false)}><Icon size={19} strokeWidth={selected?2.2:1.75}/><span>{item.label==="Hotel operations"?"Overview":item.label==="Complaints & SLA"?"SLA":item.label}</span></Link>;
         })}
         <button type="button" className={`mobile-nav-tab ${mobileNavOpen?"active":""}`} onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-controls="workspace-sidebar" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen?"Close menu":"Open workspace menu"}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}<span>{mobileNavOpen?"Close":"Menu"}</span></button>

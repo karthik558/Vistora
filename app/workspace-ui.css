@@ -246,3 +246,20 @@ button:disabled{cursor:not-allowed}
 .qr-touchpoints { display:flex; flex-wrap:wrap; gap:8px; }
 .qr-touchpoints .qr-touchpoint { min-height:40px; padding:9px 12px; border-radius:6px; font-size:12px; }
 .qr-touchpoints .qr-touchpoint[aria-pressed="true"] { color:var(--sage-deep); border-color:var(--sage-deep); font-weight:700; background:transparent; }
+
+/* Shared phone ergonomics without changing desktop tables or navigation. */
+@media(max-width:768px){
+ .app-shell .content-wrap{padding-inline:16px}
+ .app-shell .page-heading{align-items:flex-start;gap:16px}
+ .app-shell .page-heading h1{font-size:25px;line-height:1.2}
+ .app-shell :is(.button,.platform-tabs button,.platform-tabs a){min-height:44px;height:auto;padding:10px 13px}
+ .app-shell :is(.platform-card,.platform-toolbar){padding:18px 16px}
+ .app-shell :is(.platform-actions,.form-card-actions){flex-wrap:wrap;gap:10px}
+ .app-shell .platform-fields{grid-template-columns:minmax(0,1fr);gap:16px}
+ .app-shell .platform-table :is(th,td){padding-block:13px}
+ .app-shell .workspace-select .custom-select-trigger{min-height:44px!important}
+ .app-shell .topbar .theme-toggle-btn{width:44px!important;height:44px!important;min-height:44px!important;flex-basis:44px}
+ .app-shell .mobile-menu-btn{min-width:44px;min-height:44px}
+ .app-shell .mobile-bottom-navbar .mobile-nav-tab{min-height:56px;padding-top:9px;padding-bottom:8px}
+}
+@media(max-width:768px){.app-shell .platform-page :is(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),textarea){font-size:16px;min-height:44px}.is-mobile-overview .topbar .topbar-icon-btn{min-width:44px;min-height:44px}}
