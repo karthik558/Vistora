@@ -445,7 +445,8 @@ function Analytics({
         </div>
       </section>
 
-      <div className="panel analytics-panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
+      <div className="analytics-sections">
+      <div className="panel analytics-panel" style={{ overflow: "hidden" }}>
         <div className="panel-heading">
           <div>
             <h2>Rating distribution</h2>
@@ -468,7 +469,7 @@ function Analytics({
         </div>
       </div>
 
-      <div className="panel" style={{ overflow: "hidden", borderRadius: "8px" }}>
+      <div className="panel" style={{ overflow: "hidden" }}>
         <div className="panel-heading">
           <div>
             <h2>Department signal</h2>
@@ -508,6 +509,7 @@ function Analytics({
         </div>
       </div>
       <FeedbackTopics feedback={filteredFeedback} />
+      </div>
     </>
   );
 }

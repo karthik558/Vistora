@@ -370,7 +370,7 @@ function StandaloneAppShell({
 
   const sharedNav=["Team & users","Settings","Workspace","Properties","Role mapping"];
   const operationNav:NavItemConfig[]=[
-    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,"Guest imports":Upload,Rooms:Building2,Cleaning:BrushCleaning,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing,"Cost controls":Wallet})[section],adminOnly:section==="Cost controls"})),
+    ...operationTabs.map(section=>({label:section==="Overview"?"Hotel operations":section,href:"/dashboard/hospitality"+(section==="Overview"?"":"?section="+encodeURIComponent(section)),group:"Operations",icon:({Overview:LayoutDashboard,Guests:Users,"Guest imports":Upload,Rooms:Building2,Cleaning:BrushCleaning,Complaints:MessageSquare,"Service jobs":ClipboardList,Maintenance:Wrench,Concierge:Luggage,Breakfast:Utensils,Inspections:ShieldCheck,"Guest services":BellRing})[section],adminOnly:false})),
   ];
   const moduleNav=isAdministration?nav.filter(item=>sharedNav.includes(item.label)):workspaceArea==="operations"?operationNav:nav.filter(item=>item.label!=="Hotel operations"&&!sharedNav.includes(item.label));
   const visibleNav = moduleNav.filter((item) => {

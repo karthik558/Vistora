@@ -11,7 +11,7 @@ export default function FeedbackTopics({ feedback }: { feedback: FeedbackViewMod
   const topics = useMemo(() => summarizeTopics(feedback), [feedback]);
   const visible = feedback.filter(row => matchesTopic(row, topic));
   const topOpportunity = [...topics].filter(item => item.negative > 0).sort((a, b) => b.negative - a.negative)[0];
-  return <div className="feedback-intelligence">
+  return <div className="feedback-intelligence feedback-topics">
     <section className="fi-panel"><div className="fi-section-heading"><div><h2>Feedback topics</h2></div><span>Click a topic to explore its feedback <ArrowUpRight size={16} /></span></div>
       <div className="fi-topics">{topics.map(item => <button key={item.id} aria-pressed={topic === item.id} onClick={() => setTopic(topic === item.id ? "all" : item.id)}><span>{item.label}<ArrowUpRight size={16} /></span><strong>{item.count}<small> mentions</small></strong><div className="fi-topic-track" aria-hidden="true"><i style={{ width: `${item.count ? item.positive / item.count * 100 : 0}%` }} /><i style={{ width: `${item.count ? (item.count - item.positive - item.negative) / item.count * 100 : 0}%` }} /><i style={{ width: `${item.count ? item.negative / item.count * 100 : 0}%` }} /></div><small>{item.average === null ? "No matching comments yet" : `${item.average.toFixed(1)}/5 · ${item.positive} positive · ${item.negative} low-rated`}</small></button>)}</div>
       <p className="fi-method">Topics use keyword matching in guest comments; a comment may appear in several topics. Positive = 4–5 stars, neutral = 3, low-rated = 1–2. These are ratings, not inferred sentiment.</p>

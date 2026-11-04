@@ -14,7 +14,7 @@
   min-width: 0;
   min-height: 40px;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 8px 10px;
   background: var(--canvas);
   color: var(--ink);
@@ -302,7 +302,7 @@ html[data-theme="dark"]
 .ops-room {
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--workspace-card-radius);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -616,7 +616,7 @@ html[data-theme="dark"]
   padding: 24px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--workspace-card-radius);
   box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
 }
@@ -724,7 +724,7 @@ html[data-theme="dark"]
   padding: 20px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--workspace-card-radius);
   box-shadow: var(--shadow-xs);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }

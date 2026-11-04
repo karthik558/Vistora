@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import WorkspaceSelect from "./WorkspaceSelect";
 import { useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, useReducedMotion } from "framer-motion";
@@ -92,6 +93,8 @@ export default function OperationsJobBoard({
   error?: string;
   clearError?: () => void;
 }) {
+  const params = useSearchParams();
+  const initialView = params.get("jobs");
   const [cancel, setCancel] = useState<Job | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [assignment, setAssignment] = useState<{
@@ -99,7 +102,7 @@ export default function OperationsJobBoard({
     assignee: string;
   } | null>(null);
   const [dept, setDept] = useState("all"),
-    [view, setView] = useState(user.isOrganizationAdmin ? "all" : "mine"),
+    [view, setView] = useState(initialView && ["all", "history", "resolved", "escalated"].includes(initialView) ? initialView : user.isOrganizationAdmin ? "all" : "mine"),
     [search, setSearch] = useState(""),
     [now, setNow] = useState(Date.now()),
     [urgent, setUrgent] = useState<Job | null>(null),
@@ -165,14 +168,15 @@ export default function OperationsJobBoard({
   const filtered = data.jobs
     .filter(
       (j) =>
-        (view === "history"
+        (view === "resolved" ? j.status === "completed" : view === "history"
           ? ["completed", "cancelled"].includes(j.status)
           : !["completed", "cancelled"].includes(j.status)) &&
         (dept === "all" || j.department === dept) &&
         (view === "all" ||
-          view === "history" ||
+          view === "history" || view === "resolved" ||
           (view === "mine" && j.assigned_to === user.id) ||
           (view === "overdue" && Date.parse(j.due_at) < now) ||
+          (view === "escalated" && (j.escalation_level || 0) > 0) ||
           (view === "unassigned" && !j.assigned_to)) &&
         (!search ||
           [
@@ -186,7 +190,7 @@ export default function OperationsJobBoard({
             .includes(search.toLowerCase())),
     )
     .sort((a, b) => {
-      if (view === "history")
+      if (view === "history" || view === "resolved")
         return (
           Date.parse(b.completed_at || b.updated_at || b.created_at) -
           Date.parse(a.completed_at || a.updated_at || a.created_at)
@@ -373,6 +377,8 @@ export default function OperationsJobBoard({
               { value: "overdue", label: "Overdue" },
               { value: "unassigned", label: "Unassigned" },
               { value: "history", label: "Recent closed jobs" },
+              { value: "resolved", label: "Recently resolved" },
+              { value: "escalated", label: "Escalated" },
             ]}
           />
         </div>

@@ -8,7 +8,6 @@ import GuestImportsPage from "./GuestImportsPage";
 import DailyImportModal from "./DailyImportModal";
 import {AppShell,WorkspaceUser} from "./Dashboard";
 import WorkspaceSelect from "./WorkspaceSelect";
-import WorkspaceDateField from "./WorkspaceDateField";
 import DashboardPageHeading from "./DashboardPageHeading";
 import PropertyFilter from "./PropertyFilter";
 import { useSharedPropertyFilter } from "../lib/platform/propertyFilterStore";
@@ -17,7 +16,7 @@ import OperationsSuite from "./OperationsSuite";
 import {operationTabs} from "../lib/omniops/types";
 import {canManageServiceJobs} from "../lib/operations/access";
 import {useAppearance} from "./AppearanceProvider";
-import {hospitalityConfig,money,ModuleName} from "../lib/hospitality/config";
+import {hospitalityConfig,ModuleName} from "../lib/hospitality/config";
 import {
  BedDouble,Users,ClipboardList,ClipboardCheck,RefreshCw,
  Plus,QrCode,ExternalLink,LogOut,X,Check,Search,Calendar,UserPlus,Building2,Upload,Layers,
@@ -160,8 +159,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
  const appearance=useAppearance();
  const query=useSearchParams();
  const section=query.get("section");
- const [tab,setTabState]=useState<Tab>(tabs.includes(section as Tab)&&(user.isOrganizationAdmin||section!=="Cost controls")?section as Tab:"Overview");
- useEffect(()=>{setTabState(tabs.includes(section as Tab)&&(user.isOrganizationAdmin||section!=="Cost controls")?section as Tab:"Overview");},[section,user.isOrganizationAdmin]);
+ const [tab,setTabState]=useState<Tab>(tabs.includes(section as Tab)?section as Tab:"Overview");
+ useEffect(()=>{setTabState(tabs.includes(section as Tab)?section as Tab:"Overview");},[section,user.isOrganizationAdmin]);
  function setTab(next:Tab){
   setTabState(next);
   if(typeof window!=="undefined"){
@@ -184,7 +183,8 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
    setSelectedIds: setSelectedProperties,
    singleSelectedId: property,
  } = useSharedPropertyFilter(userAllowedPropIds);
- const [month,setMonth]=useState(new Date().toISOString().slice(0,7)),[search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
+ const month=new Date().toISOString().slice(0,7);
+ const [search,setSearch]=useState(""),[guest,setGuest]=useState<any>(null);
  const [jobView,setJobView]=useState("active");
  const [guestTab,setGuestTab]=useState<"in_house"|"reserved"|"history"|"profiles">("in_house");
  const [showRoomManagerModal,setShowRoomManagerModal]=useState(false);
@@ -204,8 +204,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   }catch(error){if(ticket===sequence.current)setError((error as Error).message);}
   finally{if(ticket===sequence.current)setLoading(false);}
  }
-  useEffect(()=>{const timer=setTimeout(()=>load(),search?200:0);return()=>clearTimeout(timer);},[property,month,search,jobView]);
- useEffect(()=>{if(tab==="Complaints"&&!data?.complaintsReady){load();}},[tab]);
+  useEffect(()=>{const timer=setTimeout(()=>load(),search?200:0);return()=>clearTimeout(timer);},[property,month,search,jobView,tab]);
  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden&&!busy&&!suiteTabs.includes(tab))load();},30000);return()=>clearInterval(timer);},[property,month,search,jobView,tab,busy]);
 
  async function save(body:any,method="POST"){
@@ -273,8 +272,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   Rooms:"Configure rooms for each property, track readiness, and generate room feedback codes.",
   Complaints:"Log an issue, route it to the right department and follow every escalation.",
   "Service jobs":"Coordinate guest requests and service work across your properties.",
-  Inspections:"Review room checks and follow up on readiness issues.",
-  "Cost controls":"Review operating costs, approvals and monthly budgets."
+  Inspections:"Review room checks and follow up on readiness issues."
  };
  const sectionKey=(tab==="Guests"||tab==="Guest imports")?"guests":tab==="Rooms"?"property":tab==="Inspections"?"compliance":"operations";
  const enabled=tab==="Overview"||config.modules[sectionKey as keyof typeof config.modules]!==false;
@@ -328,17 +326,17 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   {!suiteTabs.includes(tab)&&<button className="button button-ghost compact" disabled={loading} onClick={()=>{void load();if(tab==="Guest imports")setImportRevision(value=>value+1);}}><RefreshCw size={14}/>Refresh</button>}
  </DashboardPageHeading>
 
- {!canManage&&tab!=="Guest imports"&&<p className="platform-notice">{canAttend?"You can log complaints and attend your assigned work. Inventory, stays and costs remain administrator-only.":"Read-only access to your assigned properties. Ask an administrator for complaint intake and assigned work permission."}</p>}
+ {!canManage&&tab!=="Guest imports"&&<p className="platform-notice">{canAttend?"You can log complaints and attend your assigned work. Inventory and stays require management permission.":"Read-only access to your assigned properties. Ask an administrator for complaint intake and assigned work permission."}</p>}
  {error&&<p role="alert" className="platform-notice">{error}</p>}{message&&<p role="status" className="hotel-success">{message}</p>}
   {loading&&!data&&!suiteTabs.includes(tab)&&<p role="status">Loading hotel operations…</p>}
-  <div hidden={!enabled||(!suiteTabs.includes(tab)&&!(tab==="Complaints"&&canManage))}>
+  {enabled&&(suiteTabs.includes(tab)||(tab==="Complaints"&&canManage))&&<div>
     <OperationsSuite user={user} property={property} view={tab==="Complaints"?"Recovery":suiteTabs.includes(tab)?tab:"Overview"}/>
-  </div>
- {data&&<>{(tab==="Guests"||tab==="Cost controls")&&<div className="hotel-filter">{tab==="Guests"&&<label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label>}{tab==="Cost controls"&&<label>Ledger month<WorkspaceDateField label="Ledger month" mode="month" value={month} onChange={value=>{if(value)setMonth(value);}} required/></label>}</div>}
+  </div>}
+ {data&&<>{tab==="Guests"&&<div className="hotel-filter"><label>Find a guest<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search guest name"/></label></div>}
  {!enabled?<section className="platform-card"><h2>Module disabled</h2><p>Existing records are retained. Enable this module in workspace Settings to continue.</p>{canManage&&<Link className="button button-dark" href="/dashboard">Open workspace</Link>}</section>:<>
  {(tab==="Complaints")&&<div className="hotel-filter"><label>Service board view<WorkspaceSelect label="Service board view" value={jobView} onChange={setJobView} options={[{value:"active",label:"Open and in progress"},{value:"closed",label:"Completed and cancelled"}]}/></label></div>}
   {tab==="Complaints"&&<ComplaintBoard data={data} user={user} save={save} busy={busy}/>}
- {tab==="Guest imports"&&(canImport?<GuestImportsPage property={property} properties={data.properties||[]} revision={importRevision}/>:<p>Guest import permission is required.</p>)}
+ {tab==="Guest imports"&&(canImport?<GuestImportsPage user={user} property={property} properties={data.properties||[]} revision={importRevision}/>:<p>Guest import permission is required.</p>)}
  {tab==="Guests"&&<>
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:"12px",borderBottom:"1px solid var(--line)",marginBottom:"20px",paddingBottom:"6px"}}>
    <nav className="platform-tabs" aria-label="Guest views" style={{borderBottom:"none",marginBottom:0,paddingBottom:0}}>
@@ -749,9 +747,7 @@ export default function HospitalityPage({user}:{user:WorkspaceUser}){
   </section>
  </>}
 
- {tab==="Cost controls"&&canManage&&<><section className="platform-card"><h2>Companywide monthly budget</h2><p>{month} · All properties · Pending decisions reserve budget immediately.</p><div className="platform-stats">{[["Hard limit",data.budget.limit],["Approved",data.budget.approved],["Pending",data.budget.pending],["Remaining",data.budget.remaining]].map(([title,amount])=><article key={String(title)} className="platform-stat"><span>{title}</span><strong className="hotel-money">{money(Number(amount),data.budget.currency)}</strong></article>)}</div>{data.budget.limit===0&&<p className="platform-notice">Costs are blocked until an administrator sets positive monthly and per-expense limits in Settings.</p>}</section>
- <section className="platform-card"><h2>Record an operating cost</h2><p>Records current-month spending only. Select the current month to add an expense. Amounts above the auto-approval threshold need an explicit decision.</p><form className="platform-fields" onSubmit={submit("cost")}><label>Property{propertySelect()}</label><label>Category<WorkspaceSelect name="category" label="Cost category" defaultValue="supplies" options={stateOptions(["supplies","maintenance","guest_recovery","other"])}/></label><label>Amount · {config.currency}<input name="amount" inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" required/></label><label className="hotel-wide-field">Description<input name="description" maxLength={300} required/></label><button className="button button-dark" disabled={busy||!config.monthlyBudgetMinor||!config.perExpenseLimitMinor||month!==new Date().toISOString().slice(0,7)}>Record cost</button></form></section>
- <section className="platform-card"><h2>Cost approvals &amp; ledger</h2><p>Latest 100 entries for the selected property and month. Final decisions are retained.</p><div className="platform-table"><table><thead><tr><th>Description</th><th>Property</th><th>Amount</th><th>Date</th><th>State</th><th>Decision</th></tr></thead><tbody>{data.costs.map((c:any)=><tr key={c.id}><td>{c.description}<small>{label(c.category)}</small></td><td>{nameOf(c.property_id)}</td><td>{money(Number(c.amount_minor),c.currency)}</td><td>{c.expense_date}</td><td>{c.status}</td><td>{c.status==="pending"&&<div className="platform-actions"><button className="button button-dark compact" disabled={busy} onClick={()=>save({action:"cost",id:c.id,status:"approved"},"PATCH")}>Approve</button><button className="button button-ghost compact" disabled={busy} onClick={()=>save({action:"cost",id:c.id,status:"rejected"},"PATCH")}>Reject</button></div>}</td></tr>)}</tbody></table></div></section></>}
+
  </>}
  </>}
 

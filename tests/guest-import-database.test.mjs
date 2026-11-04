@@ -24,14 +24,21 @@ BEGIN
  rows:=jsonb_build_array(
  jsonb_build_object('guest_name','Alex','room_number','101','check_in_date',current_date,'check_out_date',current_date+3,'guest_count',1),
  jsonb_build_object('guest_name','Bea','room_number','102','check_in_date',current_date,'check_out_date',current_date+3,'guest_count',1));
- preview:=import_guest_report(f.property_id,rows,'partial',f.request_id);
+ preview:=import_guest_report_with_source(f.property_id,rows,'partial',f.request_id,'occupancy.csv');
  IF (preview->'imported'->>'staysCreated')::int<>2 OR EXISTS(SELECT 1 FROM stays WHERE property_id=f.property_id) OR EXISTS(SELECT 1 FROM guests WHERE organization_id=f.org) THEN RAISE EXCEPTION 'Preview leaked mutations'; END IF;
- result:=import_guest_report(f.property_id,rows,'partial',f.request_id,preview->>'token');
+ result:=import_guest_report_with_source(f.property_id,rows,'partial',f.request_id,'occupancy.csv',preview->>'token');
+ IF (SELECT source_name FROM guest_imports WHERE id=f.request_id)<>'occupancy.csv' THEN RAISE EXCEPTION 'Report file name missing'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(result->'changes') c WHERE c->>'stay_id' IS NULL OR NOT EXISTS(SELECT 1 FROM stays WHERE id=(c->>'stay_id')::uuid AND property_id=f.property_id AND room_number=c->>'room_number')) THEN RAISE EXCEPTION 'Report stay identity missing or wrong'; END IF;
+ BEGIN
+  PERFORM import_guest_report_with_source(f.property_id,rows,'partial',f.request_id,'different.csv',preview->>'token');
+  RAISE EXCEPTION 'Changed file accepted on retry';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='Changed file accepted on retry' THEN RAISE; END IF; END;
  IF (SELECT count(*) FROM stays WHERE property_id=f.property_id AND status='active')<>2 THEN RAISE EXCEPTION 'Arrival check-ins failed'; END IF;
  IF import_guest_report(f.property_id,rows,'partial',f.request_id,preview->>'token')<>result THEN RAISE EXCEPTION 'Retry not idempotent'; END IF;
  request:=gen_random_uuid();
  preview:=import_guest_report(f.property_id,rows,'full',request);
  result:=import_guest_report(f.property_id,rows,'full',request,preview->>'token');
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(result->'changes') c WHERE c->>'stay_id' IS NULL OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements((SELECT gi.result FROM guest_imports gi WHERE gi.id=f.request_id)->'changes') old WHERE old->>'stay_id'=c->>'stay_id')) THEN RAISE EXCEPTION 'Reimport changed stay identity'; END IF;
  IF (result->'imported'->>'staysCreated')::int<>0 OR (result->'imported'->>'checkedOut')::int<>0 OR (result->'changes'->0->>'action')<>'Still in house' THEN RAISE EXCEPTION 'Repeated report not deduplicated'; END IF;
  rows:=jsonb_build_array((rows->0)||'{"email":"alex@test.local"}'::jsonb); request:=gen_random_uuid();
  preview:=import_guest_report(f.property_id,rows,'partial',request);

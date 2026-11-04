@@ -41,7 +41,7 @@ export default function OperationsSuite(props: Props) {
   );
   return (
     <QueryClientProvider client={client}>
-      <Suite {...props} />
+      <Suite key={props.property} {...props} />
     </QueryClientProvider>
   );
 }

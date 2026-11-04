@@ -11,7 +11,6 @@ export const operationTabs = [
   "Breakfast",
   "Inspections",
   "Guest services",
-  "Cost controls",
 ] as const;
 export type OperationTab = (typeof operationTabs)[number];
 export const departments = [

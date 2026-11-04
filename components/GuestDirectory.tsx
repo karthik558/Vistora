@@ -12,11 +12,11 @@ import CustomDatePicker, { isDateInRange, type DateRangeFilter } from "./CustomD
 import WorkspaceSelect from "./WorkspaceSelect";
 import PropertyFilter from "./PropertyFilter";
 
-export default function GuestDirectory({ user, properties, history }: {
-  user: WorkspaceUser; properties: PropertyRow[]; history: React.ReactNode;
+export default function GuestDirectory({ user, properties, history, importId }: {
+  user: WorkspaceUser; properties: Pick<PropertyRow, "id" | "name">[]; history?: React.ReactNode; importId?: string;
 }) {
   const [view, setView] = useState<"directory" | "history">("directory");
-  const [status, setStatus] = useState<CollectionStatus>("pending");
+  const [status, setStatus] = useState<CollectionStatus>(importId ? "all" : "pending");
   const [dateRange, setDateRange] = useState<DateRangeFilter>({ preset: "all", startDate: null, endDate: null });
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -28,9 +28,9 @@ export default function GuestDirectory({ user, properties, history }: {
   const allowed = user.isOrganizationAdmin ? null : user.propertyIds?.length ? user.propertyIds : user.propertyId ? [user.propertyId] : [];
   const { selectedIds, singleSelectedId, setSelectedIds } = useSharedPropertyFilter(allowed);
   const query = useQuery<{ guests: InHouseGuest[]; canTakeFeedback: boolean }>({
-    queryKey: ["feedback-collection-directory", user.organizationId, user.id, user.rights, status],
+    queryKey: ["feedback-collection-directory", user.organizationId, user.id, user.rights, status, importId],
     queryFn: async ({ signal }) => {
-      const response = await fetch("/api/guest-directory?" + new URLSearchParams({ status }), { signal, cache: "no-store" });
+      const response = await fetch("/api/guest-directory?" + new URLSearchParams({ status, ...(importId ? { importId } : {}) }), { signal, cache: "no-store" });
       const json = await response.json();
       if (!response.ok || !json.success) throw new Error(json.error || "Could not load in-house guests.");
       return json;
@@ -76,24 +76,24 @@ export default function GuestDirectory({ user, properties, history }: {
   const dateLabel = status === "collected" ? "Feedback date range" : ["missed", "reviewed"].includes(status) ? "Checkout date range" : "Check-in date range";
   const formatTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
   return <div className="platform-page guest-collection-page">
-    <header className="page-heading"><div><h1>Collect feedback</h1><p className="subheading">Collect feedback once per stay and follow up on missed checkouts.</p></div></header>
+    {!importId && <><header className="page-heading"><div><h1>Collect feedback</h1><p className="subheading">Collect feedback once per stay and follow up on missed checkouts.</p></div></header>
     <nav className="platform-tabs" aria-label="Guest directory views">
       {([['pending', 'In-house · Not taken'], ['missed', 'Checked out · Missing feedback']] as const).map(([value, label]) => <button key={value} aria-current={view === "directory" && status === value ? "page" : undefined} onClick={() => { setStatus(value); setView("directory"); }}>{label}</button>)}
       <Link href="/dashboard/feedback">Collected feedback</Link>
       <button aria-current={view === "history" ? "page" : undefined} onClick={() => setView("history")}>Feedback &amp; invitations</button>
-    </nav>
+    </nav></>}
     {view === "history" ? history : <section className="platform-card">
       <div className="guest-collection-toolbar">
         <label style={{flex:"1 1 200px",maxWidth:300}}>Find a guest<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Guest, room, or property"/></label>
         <button className="button button-outline compact" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw size={14}/>Refresh</button>
         <div className="guest-collection-filters">
-          <div style={{width:190}}><WorkspaceSelect label="Feedback status" value={status} onChange={value => setStatus(value as CollectionStatus)} options={[{value:"pending",label:"Not taken"},{value:"missed",label:"Checkout · Missing"},{value:"reviewed",label:"Checkout · Reviewed"}]}/></div>
+          <div style={{width:190}}><WorkspaceSelect label="Feedback status" value={status} onChange={value => setStatus(value as CollectionStatus)} options={[{value:"all",label:"All statuses"},{value:"collected",label:"Feedback collected"},{value:"pending",label:"Not taken"},{value:"missed",label:"Checkout · Missing"},{value:"reviewed",label:"Checkout · Reviewed"}]}/></div>
           <PropertyFilter properties={allowed === null ? properties : properties.filter(property => allowed.includes(property.id))} selectedId={singleSelectedId} selectedIds={selectedIds} onChange={(id, ids) => setSelectedIds(ids || id)} isGlobalAdmin={user.isOrganizationAdmin === true}/>
           <CustomDatePicker label={dateLabel} value={dateRange} onChange={setDateRange} floating/>
           <button type="button" className="button button-outline filter-reset" onClick={() => { setDateRange({ preset: "all", startDate: null, endDate: null }); setSelectedIds("all"); setSearch(""); }}>Clear filters</button>
         </div>
       </div>
-      <p>{status === "pending" ? "In-house guests awaiting feedback. Filter by check-in date range." : "Guests who checked out without feedback. Filter by checkout date range and record the follow-up outcome."} {dateRange.preset === "all" ? "Showing all dates, including checkouts without a recorded time." : "Showing the selected range. Clear filters to see all dates."}</p>
+      <p>{status === "all" || status === "collected" ? "Status is synchronized with saved guest feedback and follow-up reviews." : status === "pending" ? "In-house guests awaiting feedback. Filter by check-in date range." : "Guests who checked out without feedback. Filter by checkout date range and record the follow-up outcome."} {dateRange.preset === "all" ? "Showing all dates, including checkouts without a recorded time." : "Showing the selected range. Clear filters to see all dates."}</p>
       {(error || query.error) && <p role="alert" className="platform-notice">{error || query.error?.message}</p>}
       {query.isPending ? <p role="status">Loading guests…</p> : !query.error && <>
         {!query.data?.canTakeFeedback && <p>Guest names and personal feedback links require guest-data permission.</p>}

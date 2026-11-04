@@ -2,8 +2,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import {useRouter} from "next/navigation";
-import {useState} from "react";
-import {ArrowRight,Building2,MessageSquare,LogOut,Settings,Users,LayoutGrid,FileText,History,FileSpreadsheet,Upload} from "lucide-react";
+import {useEffect,useState} from "react";
+import {ArrowRight,Building2,MessageSquare,LogOut,Settings,Users,LayoutGrid,FileText,History,FileSpreadsheet,Upload,Smartphone} from "lucide-react";
 import type {WorkspaceUser} from "./Dashboard";
 import ThemeToggle from "./ThemeToggle";
 import WorkspaceAccount from "./WorkspaceAccount";
@@ -18,6 +18,9 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
  const feedbackAccess=hasModuleAccess(user,"feedback")&&(user.isOrganizationAdmin||user.rights?.some(right=>["view_feedback","manage_complaints","manage_questionnaire","export_reports","view_audit_log"].includes(right)));
  const hotelAccess=hasModuleAccess(user,"hospitality");
  const importAccess=hotelAccess&&(user.isOrganizationAdmin||user.rights?.includes("import_guests"));
+ useEffect(()=>{
+  if(hotelAccess && window.matchMedia("(max-width: 767px)").matches && !new URLSearchParams(window.location.search).has("modules")) router.replace("/dashboard/hospitality/mobile");
+ },[hotelAccess,router]);
  const displayName=user.fullName||user.email;
  const feedbackHref=user.isOrganizationAdmin||user.rights?.includes("view_feedback")?"/dashboard/overview":user.rights?.includes("manage_complaints")?"/dashboard/complaints":user.rights?.includes("manage_questionnaire")?"/dashboard/forms":user.rights?.includes("export_reports")?"/dashboard/reports":"/dashboard/audit-log";
  async function logout(){
@@ -34,6 +37,7 @@ export default function ModuleLauncher({user}:{user:WorkspaceUser}){
     {hotelAccess&&<Link href="/dashboard/hospitality" className="module-launcher-card" style={themedAccentTokens(config.colors.property)}><div className="module-card-visual"><Building2 size={36} strokeWidth={1.5}/></div><div className="module-card-copy"><h2>Hotel operations</h2><p>Guest stays, room readiness, service jobs and inspections.</p><span className="module-card-action">Open hotel operations<ArrowRight size={17}/></span></div></Link>}
     {importAccess&&<Link href="/dashboard/hospitality?section=Guest%20imports" className="module-launcher-card" style={themedAccentTokens(config.colors.administration)}><div className="module-card-visual"><Upload size={36} strokeWidth={1.5}/></div><div className="module-card-copy"><h2>Guest imports</h2><p>Import occupancy reports, review arrivals and departures, and track import history.</p><span className="module-card-action">Open guest imports<ArrowRight size={17}/></span></div></Link>}
    </div>
+   {hotelAccess&&<section className="launcher-mobile-overview" aria-labelledby="mobile-overview-title"><Smartphone size={22} strokeWidth={1.75}/><div><h2 id="mobile-overview-title">Mobile service overview</h2><p>Service requests and guest feedback at a glance, optimized for phones.</p></div><Link className="button button-outline" href="/dashboard/hospitality/mobile">Open overview<ArrowRight size={16}/></Link></section>}
    {!feedbackAccess&&!hotelAccess&&<p className="platform-notice">No modules are assigned to your account. Contact your administrator.</p>}
    {(canOpenSettings(user)||canOpenTeam(user)||canOpenProperties(user)||canOpenWorkspace(user)||canOpenAuditLog(user)||canOpenRoleMapping(user))&&<section className="launcher-administration" aria-labelledby="launcher-administration-title">
     <h2 id="launcher-administration-title">Workspace administration</h2>

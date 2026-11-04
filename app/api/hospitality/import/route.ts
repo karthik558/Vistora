@@ -17,16 +17,16 @@ export const POST = withWorkspace(async (request: NextRequest) => {
   const allowed = user.propertyIds?.length ? user.propertyIds : [user.propertyId];
   if (!user.isOrganizationAdmin && !allowed.includes(body.property_id)) throw new PlatformError("Access to this property is not authorized.", 403);
   if (body.commit && !body.preview_token) throw new PlatformError("Review the report before importing.");
-  const response = await workspaceDb().rpc("import_guest_report", {
+  const response = await workspaceDb().rpc("import_guest_report_with_source", {
     p_property: body.property_id, p_records: body.records, p_mode: body.mode,
-    p_request: body.request_id, p_preview_token: body.commit ? body.preview_token : null,
+    p_request: body.request_id, p_source_name: body.source_name, p_preview_token: body.commit ? body.preview_token : null,
   });
-  if (response.error?.code === "PGRST202") throw new PlatformError("Apply the guest report reconciliation migration before importing.", 503);
+  if (response.error?.code === "PGRST202") throw new PlatformError("Apply supabase/migrations/20261104_import_form_sync.sql after the guest report and feedback collection migrations before importing.", 503);
   return NextResponse.json(checked(response));
 });
 export const GET = withWorkspace(async (request: NextRequest) => {
   authorize();
-  let query = workspaceDb().from("guest_imports").select("id,property_id,mode,created_at,result").order("created_at", { ascending: false }).limit(30);
+  let query = workspaceDb().from("guest_imports").select("id,property_id,mode,source_name,created_at,result").order("created_at", { ascending: false }).limit(30);
   const property = request.nextUrl.searchParams.get("property");
   if (property && property !== "all") query = query.eq("property_id", property);
   return NextResponse.json({ imports: checked(await query) });

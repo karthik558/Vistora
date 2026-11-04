@@ -27,7 +27,7 @@ function client() {
    return {data:{success:true,guests:values.map(row=>({id:row.id,feedbackCount:row.feedback[0].count,guestName:user.isOrganizationAdmin || user.rights.includes('view_guest_pii') ? row.guests.full_name : 'Guest'})),canTakeFeedback:user.isOrganizationAdmin || user.rights.includes('view_guest_pii')},error:null};
  }, from(table) {
    const filters = []; calls.push({ table, filters });
-   let values = table === 'stays' ? rows : table === 'properties' ? [{ id: 'prop-1', organization_id: 'org-1', name: 'Hotel One', is_active: true }, { id: 'prop-2', organization_id: 'org-1', is_active: true }] : [];
+   let values = table === 'guest_imports' ? [{ id: '11111111-1111-4111-8111-111111111111', result: { changes: [{ stay_id: 'stay-2' }] } }] : table === 'stays' ? rows : table === 'properties' ? [{ id: 'prop-1', organization_id: 'org-1', name: 'Hotel One', is_active: true }, { id: 'prop-2', organization_id: 'org-1', is_active: true }] : [];
    const data = () => values.filter(row => filters.every(([key, value]) => Array.isArray(value) ? value.includes(row[key]) : row[key] === value));
    const q = {
      select(columns) { calls.at(-1).columns = columns; return q; },
@@ -36,6 +36,7 @@ function client() {
      order() { return q; }, or() { return q; }, is() { return q; },
      // Deliberately lower than the API page size to exercise complete pagination.
      async range(start) { return { data: data().slice(start, start + 1), error: null }; },
+     async single() { return { data: data()[0] || null, error: null }; },
      async maybeSingle() { return { data: data()[0] || null, error: null }; },
      then(resolve) { resolve({ data: data(), error: null }); },
    }; return q;
@@ -97,4 +98,20 @@ test('Directory validates dates and collection states before database access', a
  const result = await request(admin, 'GET', undefined, '?day=2026-11-03&status=collected');
  assert.deepEqual(result.mock.calls[0], {rpc:'feedback_collection_directory',args:{p_day:'2026-11-03',p_status:'collected'}});
  assert.deepEqual(result.json.guests.map(row=>row.id), ['stay-2']);
+});
+
+test('Report forms use exact stay IDs and expose current collection status after a submission', async () => {
+ const url = '?status=all&importId=11111111-1111-4111-8111-111111111111';
+ const first = await request(admin, 'GET', undefined, url);
+ assert.equal(first.response.status, 200);
+ assert.deepEqual(first.json.guests.map(row => row.id), ['stay-2']);
+ assert.equal(first.json.guests[0].feedbackCount, 1);
+ rows[1].feedback[0].count = 2;
+ try {
+  const updated = await request(admin, 'GET', undefined, url);
+  assert.equal(updated.json.guests[0].feedbackCount, 2);
+  const scoped = await request(staff, 'GET', undefined, url);
+  assert.deepEqual(scoped.json.guests, []);
+ } finally { rows[1].feedback[0].count = 1; }
+ assert.equal((await request(admin, 'GET', undefined, '?importId=invalid')).response.status, 400);
 });

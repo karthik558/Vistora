@@ -359,7 +359,7 @@ test('Daily import API requires authorization, scopes one property and requires 
  const original = db.sessionDb;
  db.sessionDb = () => client;
  const staff = { id: 'staff', organizationId: 'org', isOrganizationAdmin: false, rights: ['module:hospitality', 'import_guests'], propertyIds: ['prop-1'] };
- const body = { property_id: 'prop-1', request_id: 'request-1', mode: 'partial', records: [{ guest_name: 'Test', room_number: '101' }] };
+ const body = { property_id: 'prop-1', request_id: 'request-1', mode: 'partial', source_name: 'occupancy.csv', records: [{ guest_name: 'Test', room_number: '101' }] };
  const post = (user, data) => db.workspaceContext.run({ user, client }, () => route.POST(new NextRequest('http://localhost/api/hospitality/import', { method: 'POST', headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) })));
  try {
   assert.equal((await post({ ...staff, rights: ['module:hospitality'] }, body)).status, 403);
@@ -367,7 +367,8 @@ test('Daily import API requires authorization, scopes one property and requires 
   assert.equal((await post(staff, { ...body, commit: true })).status, 400);
   assert.equal(calls.length, 0);
   assert.equal((await post(staff, body)).status, 200);
-  assert.equal(calls[0].name, 'import_guest_report');
+  assert.equal(calls[0].name, 'import_guest_report_with_source');
+  assert.equal(calls[0].args.p_source_name, 'occupancy.csv');
   assert.equal(calls[0].args.p_property, 'prop-1');
   assert.equal(calls[0].args.p_preview_token, null);
   assert.equal((await post(staff, { ...body, commit: true, preview_token: 'review-token' })).status, 200);

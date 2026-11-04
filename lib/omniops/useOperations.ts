@@ -30,7 +30,6 @@ export function useOperations(property: string, organizationId: string) {
       }),
     staleTime: 60000,
     gcTime: 300000,
-    placeholderData: (previousData) => previousData,
     refetchInterval: 30000,
     retry: 1,
   });
@@ -147,6 +146,12 @@ export function useOperations(property: string, organizationId: string) {
         );
         for (const table of [
           "service_jobs",
+          "stays",
+          "guest_imports",
+          "feedback",
+          "folio_entries",
+          "incident_compensations",
+          "room_cleaning_runs",
           "hotel_rooms",
           "room_inspections",
           "luggage_logs",

@@ -47,30 +47,27 @@ export const GET=withWorkspace(async(request:NextRequest)=>{
   list(db.from("hotel_rooms").select("id",{count:"exact",head:true}),propertyId),
   list(db.from("stays").select("id",{count:"exact",head:true}).eq("status","active").not("room_id","is",null),propertyId),
   list(db.from("hotel_rooms").select("id",{count:"exact",head:true}).in("status",["dirty","out_of_service"]),propertyId),
-  list(db.from("service_jobs").select("id",{count:"exact",head:true}).in("status",["open","in_progress"]),propertyId),
-  list(db.from("operating_costs").select("id",{count:"exact",head:true}).eq("status","pending"),propertyId)
+  list(db.from("service_jobs").select("id",{count:"exact",head:true}).in("status",["open","in_progress"]),propertyId)
  ]);
  counts.forEach(result=>{if(result.error&&["42P01","PGRST205"].includes(result.error.code)||!result.error&&result.count===null)throw new PlatformError("Hotel operations setup is pending. Apply section 20 onward in supabase/schema.sql.",503);checked({data:true,error:result.error});});
- const metrics=Object.fromEntries(["guests","rooms","inHouse","roomsNeedService","openJobs","pendingCosts"].map((key,i)=>[key,counts[i].count]));
+ const metrics=Object.fromEntries(["guests","rooms","inHouse","roomsNeedService","openJobs"].map((key,i)=>[key,counts[i].count]));
  if(request.nextUrl.searchParams.get("summary")==="true")return NextResponse.json({success:true,metrics,config});
  let guestsQuery=db.from("guests").select("id,full_name,email,phone,vip_tier,preferences,created_at").order("created_at",{ascending:false}).limit(100);
  const search=request.nextUrl.searchParams.get("search")?.trim().slice(0,100);if(search)guestsQuery=guestsQuery.ilike("full_name","%"+search.replace(/[%_\\]/g,"\\$&")+"%");
- const [properties,guests,rooms,stays,jobs,inspections,costs,activity,budget,members,feedback]=await Promise.all([
+ const [properties,guests,rooms,stays,jobs,inspections,activity,members,feedback]=await Promise.all([
   db.from("properties").select("id,name,is_active").order("name"),
   guestsQuery,
   list(db.from("hotel_rooms").select("*").order("room_number").limit(200),propertyId),
   list(db.from("stays").select("id,property_id,guest_id,room_id,room_number,guest_count,check_in_date,check_out_date,status,public_token,guests(id,full_name,email,phone,vip_tier,preferences),feedback(id,rating,status)").not("room_id","is",null).order("created_at",{ascending:false}).limit(100),propertyId),
   list((request.nextUrl.searchParams.get("complaints")==="true"?db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)").not("issue_type","is",null):db.from("service_jobs").select("*,assignee:profiles!assigned_to(full_name)")).in("status",jobView==="active"?["open","in_progress"]:["completed","cancelled"]).order("due_at",{ascending:jobView==="active"}).limit(100),propertyId),
   list(db.from("room_inspections").select("*").order("created_at",{ascending:false}).limit(100),propertyId),
-  list(db.from("operating_costs").select("*").gte("expense_date",month+"-01").lt("expense_date",new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,10)).order("created_at",{ascending:false}).limit(100),propertyId),
   db.from("hotel_activity").select("*").order("created_at",{ascending:false}).limit(50),
-  db.rpc("hotel_budget_snapshot",{p_month:month+"-01"}),
   db.from("organization_members").select("user_id,role").eq("is_active",true),
   list(db.from("feedback").select("id,property_id,room_number,department,rating").neq("status","resolved").order("created_at",{ascending:false}).limit(100),propertyId)
  ]);
  const memberRows=checked(members);
  const team=memberRows.length?checked(await db.from("profiles").select("id,full_name,property_id,property_ids").in("id",memberRows.map(m=>m.user_id))):[];
- return NextResponse.json({success:true,metrics,config,complaintsReady:readiness.data===true,properties:checked(properties),guests:checked(guests),rooms:checked(rooms),stays:checked(stays),jobs:checked(jobs),inspections:checked(inspections),costs:checked(costs),activity:checked(activity),budget:checked(budget),feedback:checked(feedback),team:team.map(p=>({...p,isAdmin:memberRows.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
+ return NextResponse.json({success:true,metrics,config,complaintsReady:readiness.data===true,properties:checked(properties),guests:checked(guests),rooms:checked(rooms),stays:checked(stays),jobs:checked(jobs),inspections:checked(inspections),costs:[],activity:checked(activity),budget:null,feedback:checked(feedback),team:team.map(p=>({...p,isAdmin:memberRows.some(m=>m.user_id===p.id&&["owner","admin"].includes(m.role))}))},{headers:{"Cache-Control":"no-store"}});
 });
 export const POST=withWorkspace(async(request:NextRequest)=>{
  const b=await readJson(request),db=workspaceDb(),user=workspaceUser();

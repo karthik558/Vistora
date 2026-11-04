@@ -3,6 +3,7 @@ import { readJson, withWorkspace, text } from "../../../lib/platform/http";
 import { checked, PlatformError, workspaceDb, workspaceUser } from "../../../lib/platform/db";
 import { hasModuleAccess } from "../../../lib/auth/modules";
 import { canTakeStayFeedback } from "../../../lib/feedback/guest-directory";
+import { uuid } from "../../../lib/omniops/validation";
 import { logAuditEvent } from "../../../lib/services/auditLogService";
 
 function context() {
@@ -24,6 +25,13 @@ export const GET = withWorkspace(async (request: NextRequest) => {
   if (!["pending", "collected", "missed", "reviewed", "all"].includes(status)) throw new PlatformError("Choose a valid collection status.");
   if (propertyIds?.length === 0) return NextResponse.json({ success: true, guests: [], canTakeFeedback: false }, { headers });
   const result = rpcResult(await db.rpc("feedback_collection_directory", { p_day: day, p_status: status }));
+  const importId = request.nextUrl.searchParams.get("importId");
+  if (importId) {
+    // RLS also enforces hotel import permission and property access.
+    const report = checked(await db.from("guest_imports").select("result").eq("id", uuid(importId, "Import")).single());
+    const ids = new Set((report.result?.changes || []).map((change: { stay_id?: string }) => change.stay_id).filter(Boolean));
+    result.guests = result.guests.filter((guest: { id: string }) => ids.has(guest.id));
+  }
   return NextResponse.json(result, { headers });
 }, "view_feedback");
 
@@ -40,6 +48,7 @@ export const POST = withWorkspace(async (request: NextRequest) => {
     .eq("id", stayId).eq("organization_id", user.organizationId).eq("status", "active");
   if (propertyIds) query = query.in("property_id", propertyIds);
   const stay = checked(await query.maybeSingle());
+  if (!stay) throw new PlatformError("This stay is no longer active.", 404);
   const property = Array.isArray(stay.properties) ? stay.properties[0] : stay.properties;
   if (!property?.is_active) throw new PlatformError("This property's feedback form is unavailable.");
   await logAuditEvent({ actorName: user.fullName, actorEmail: user.email, actorRole: user.role,

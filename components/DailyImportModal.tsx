@@ -285,6 +285,7 @@ export default function DailyImportModal({
           property_id: selectedPropIds[0],
           mode: activeTab === "manual" ? "partial" : importMode,
           request_id: requestId.current,
+          source_name: activeTab === "manual" ? "Manual entry" : fileName || "Occupancy report",
           commit,
           preview_token: review?.token,
           records: recordsToImport.map((r) => ({
