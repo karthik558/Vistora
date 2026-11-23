@@ -119,6 +119,72 @@ test('Forged access tokens are verified by the identity provider; revoked member
   } finally { db.sessionDb = originalSession; db.serviceDb = originalService; }
 });
 
+test('Password sign-in reuses the verified identity and responds before writing the audit event', async () => {
+  const supabase = require('@supabase/supabase-js');
+  const next = require('next/server');
+  const login = require('../app/api/auth/login/route.ts');
+  const originals = [supabase.createClient, next.after, db.sessionDb, db.serviceDb, audit.logAuditEvent];
+  const pending = [], auditEntries = [], calls = [];
+  const identity = { id: 'staff', email: 'staff@example.test', user_metadata: { full_name: 'Staff' } };
+  const profile = { id: identity.id, organization_id: 'org-a', full_name: 'Staff', role: 'staff', property_id: propA };
+  let membership = { user_id: identity.id, organization_id: 'org-a', is_active: true, role: 'member' };
+  supabase.createClient = () => ({ auth: { signInWithPassword: async ({ password }) => {
+    calls.push('password');
+    if (password !== 'correct-password') return { data: { user: null, session: null }, error: {} };
+    return { data: { user: identity, session: { access_token: 'access', refresh_token: 'refresh', expires_in: 3600 } }, error: null };
+  } } });
+  db.sessionDb = token => {
+    assert.equal(token, 'access');
+    return {
+      auth: { getUser: async () => { calls.push('verify'); return { data: { user: identity }, error: null }; } },
+      from: table => {
+        assert.equal(table, 'properties');
+        calls.push(table);
+        return { select: async () => ({ data: [{ id: propA }, { id: propB }], error: null }) };
+      },
+    };
+  };
+  db.serviceDb = () => {
+    const mock = client();
+    mock.tables.profiles = [profile];
+    mock.tables.organization_members = membership ? [membership] : [];
+    return mock;
+  };
+  next.after = callback => pending.push(callback);
+  audit.logAuditEvent = async entry => { auditEntries.push(entry); };
+  const signIn = (password = 'correct-password') => login.POST(post('/api/auth/login', { email: identity.email, password }, { 'x-real-ip': '192.0.2.1' }));
+  try {
+    const response = await signIn();
+    const result = await response.json();
+    assert.deepEqual(calls, ['password']);
+    assert.equal(result.needsOnboarding, false);
+    assert.deepEqual(result.user.propertyIds, [propA]);
+    assert.equal(result.user.accessToken, undefined);
+    assert.equal(response.cookies.get('sb-access-token').httpOnly, true);
+    assert.equal(response.cookies.get('sb-refresh-token').value, 'refresh');
+    assert.equal(auditEntries.length, 0);
+    assert.equal(pending.length, 1);
+    await pending.shift()();
+    assert.equal(auditEntries[0].actorEmail, identity.email);
+    assert.equal(auditEntries[0].organizationId, 'org-a');
+    assert.equal(auditEntries[0].ip, '192.0.2.1');
+
+    membership.role = 'owner';
+    assert.deepEqual((await (await signIn()).json()).user.propertyIds, [propA, propB]);
+    assert.deepEqual(calls.splice(0), ['password', 'password', 'properties']);
+    assert.equal(pending.length, 1);
+    membership = null;
+    assert.equal((await (await signIn()).json()).needsOnboarding, true);
+    const denied = await signIn('wrong-password');
+    assert.equal(denied.status, 401);
+    assert.equal(denied.cookies.get('sb-access-token'), undefined);
+    assert.equal(pending.length, 1);
+    assert.deepEqual(calls, ['password', 'password']);
+  } finally {
+    [supabase.createClient, next.after, db.sessionDb, db.serviceDb, audit.logAuditEvent] = originals;
+  }
+});
+
 test('Request policy rejects cross-origin, opaque and malformed browser mutations; bounded JSON rejects oversized and invalid bodies', async () => {
   for (const origin of ['https://evil.example', 'null', 'not a URL', 'https://localhost']) assert.equal(isAllowedMutation(post('/api/feedback', {}, { origin })), false);
   assert.equal(isAllowedMutation(post('/api/feedback', {}, { origin: 'http://localhost' })), true);

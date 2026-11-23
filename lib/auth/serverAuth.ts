@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import { checked, PlatformError, serviceDb, sessionDb, workspaceContext } from "../platform/db";
 import {effectiveModuleRights} from "./modules";
 
@@ -18,10 +19,15 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
   if (error || !data.user) {
     return null;
   }
+  return getWorkspaceUserForIdentity(data.user, token);
+}
+
+// The identity and token must come from a successful Supabase Auth response.
+export async function getWorkspaceUserForIdentity(identity: Pick<User, "id" | "email">, token: string): Promise<VerifiedUser | null> {
   const db = serviceDb();
   const [profileResult, memberResult] = await Promise.all([
-    db.from("profiles").select("*").eq("id", data.user.id).maybeSingle(),
-    db.from("organization_members").select("organization_id, role").eq("user_id", data.user.id).eq("is_active", true).maybeSingle(),
+    db.from("profiles").select("*").eq("id", identity.id).maybeSingle(),
+    db.from("organization_members").select("organization_id, role").eq("user_id", identity.id).eq("is_active", true).maybeSingle(),
   ]);
   const { data: profile, error: profileError } = profileResult;
   if (profileError) checked({data: profile, error: profileError});
@@ -33,16 +39,17 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Verifi
   const rights = Array.isArray(profile.rights) ? profile.rights.filter((r: unknown) => typeof r === "string") : [];
   const orgRole = rights.find((r: string) => r.startsWith("org_role:"))?.slice(9) || profile.role;
   const isSuperAdmin = membership.role === "owner" || profile.role === "super_admin" || orgRole === "super_admin";
-  const { data: properties, error: propError } = await sessionDb(token).from("properties").select("id");
-  if (propError) checked({data: properties, error: propError});
-  const allPropertyIds = (properties || []).map(p => p.id);
-  const assignedPropertyIds: string[] = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
+  let effectivePropertyIds: string[] = Array.isArray(profile.property_ids) && profile.property_ids.length > 0
     ? profile.property_ids
     : (profile.property_id ? [profile.property_id] : []);
-  const effectivePropertyIds: string[] = isSuperAdmin ? allPropertyIds : assignedPropertyIds;
+  if (isSuperAdmin) {
+    const { data: properties, error: propError } = await sessionDb(token).from("properties").select("id");
+    if (propError) checked({data: properties, error: propError});
+    effectivePropertyIds = (properties || []).map(p => p.id);
+  }
 
   const verified: VerifiedUser = {
-    id: data.user.id, email: data.user.email || "", fullName: profile.full_name,
+    id: identity.id, email: identity.email || "", fullName: profile.full_name,
     role: orgRole || (isSuperAdmin ? "super_admin" : profile.role), orgRole,
     organizationId: membership.organization_id, isOrganizationAdmin: isSuperAdmin, accessToken: token,
     propertyId: effectivePropertyIds[0] || profile.property_id || null, propertyIds: effectivePropertyIds, rights:effectiveModuleRights(rights,isSuperAdmin)
